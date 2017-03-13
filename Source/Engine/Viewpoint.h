@@ -39,6 +39,6 @@ public:
 		viewMat = glm::translate(viewMat, -position);
 #endif
 		// proj
-		projMat = glm::perspectiveFov(fov, width, height, nearPlane, farPlane);
+		projMat = glm::perspectiveFov(fov / width * height, width, height, nearPlane, farPlane);
 	}
 };

@@ -42,9 +42,26 @@ public:
 		SDL_FreeSurface(image);
 	}
 
-	void Bind(GLuint textureUnit)
+	void AllocateForFrameBuffer(int width, int height, GLint internalFormat, GLenum format, GLenum type)
 	{
-		glActiveTexture(textureUnit);
+		if (textureID)
+			glDeleteTextures(1, &textureID);
+		glGenTextures(1, &textureID);
+		glBindTexture(GL_TEXTURE_2D, textureID);
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	}
+
+	void AttachToFrameBuffer(GLenum attachment)
+	{
+		glFramebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, textureID, 0);
+	}
+
+	void Bind(GLuint textureUnitOffset)
+	{
+		glActiveTexture(GL_TEXTURE0 + textureUnitOffset);
 		glBindTexture(GL_TEXTURE_2D, textureID);
 	}
 

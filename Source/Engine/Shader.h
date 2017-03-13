@@ -20,6 +20,11 @@ public:
 	static const GLuint diffuseTexUnit = 0;
 	static const GLuint normalTexUnit = 1;
 
+	static const GLuint gPositionTexUnit = 0;
+	static const GLuint gNormalTexUnit = 1;
+	static const GLuint gAlbedoSpecTexUnit = 2;
+	static const GLuint gDepthStencilTexUnit = 3;
+
 	GLuint programID;
 
 	GLint positionIdx;
@@ -117,9 +122,15 @@ public:
 		BindUniformBlock("RenderMatrices", renderMatricesBP);
 
 		// set texture unit
-		Use();
+		Use(); // must use program here
+		// geometry pass
 		SetTextureUnit("diffuseTex", diffuseTexUnit);
 		SetTextureUnit("normalTex", normalTexUnit);
+		// light pass
+		SetTextureUnit("gPositionTex", gPositionTexUnit);
+		SetTextureUnit("gNormalTex", gNormalTexUnit);
+		SetTextureUnit("gAlbedoSpecTex", gAlbedoSpecTexUnit);
+		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
 
 		// delete shader
 		glDeleteShader(vertexID);

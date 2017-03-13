@@ -1,23 +1,37 @@
 #version 330 core
 
-in vec3 inPosition;
-in vec3 inNormal;
-in vec2 inTexCoords;
+in vec3 position;
+in vec3 normal;
+in vec3 tangent;
+in vec2 texCoords;
 
-out vec3 fragWorldPos;
-out vec3 fragWorldNormal;
-out vec2 fragTexCoords;
+out VS_OUT
+{
+	vec3 position;
+	vec3 normal;
+	vec3 tangent;
+	vec2 texCoords;
+} vs_out;
 
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
+layout(std140) uniform RenderMatrices
+{
+	mat4 viewMat;
+	mat4 projMat;
+};
+
+uniform mat4 modelMat;
+uniform mat3 normalMat;
 
 void main()
 {
-	vec4 worldPos = model * vec4(inPosition, 1.0f);
-	outWorldPos = worldPos.xyz;
-	gl_Position = projection * view * worldPos;
-	outTexCoords = inTexCoords;
-	mat3 normalMat = transpose(inverse(mat(model)));
-	outWorldNormal = normalMat * inNormal;
+	vec4 worldPos = modelMat * vec4(position, 1.0f);
+	gl_Position = projMat * viewMat * worldPos;
+	vs_out.position = (viewMat * worldPos).xyz;
+	
+	// we can do this because mat3(viewMat) is guaranteed to be orthogonal (no scale)
+	mat3 viewNormalMat = mat3(viewMat) * normalMat;
+	
+	vs_out.normal = viewNormalMat * normal;
+	vs_out.tangent = viewNormalMat * tangent;
+	vs_out.texCoords = texCoords;
 }

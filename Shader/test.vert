@@ -15,19 +15,19 @@ out VS_OUT
 
 layout(std140) uniform RenderMatrices
 {
-	mat4 view;
-	mat4 projection;
+	mat4 viewMat;
+	mat4 projMat;
 };
 
-uniform mat4 model;
+uniform mat4 modelMat;
 uniform mat3 normalMat;
 
 void main()
 {
 	
 	//gl_Position = vec4(inPosition.x, inPosition.y, 0, 1);
-	vec4 worldPos = model * vec4(position, 1.0f);
-	gl_Position = projection * view * worldPos;
+	vec4 worldPos = modelMat * vec4(position, 1.0f);
+	gl_Position = projMat * viewMat * worldPos;
 	//gl_Position.xy = inPosition.xy * 0.5f;
 	//gl_Position.zw = vec2(0, 1);
 	vs_out.position = worldPos.xyz;
