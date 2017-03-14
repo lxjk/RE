@@ -7,7 +7,7 @@ in vec2 texCoords;
 
 out VS_OUT
 {
-	vec3 position;
+	//vec3 position;
 	vec3 normal;
 	vec3 tangent;
 	vec2 texCoords;
@@ -24,14 +24,17 @@ uniform mat3 normalMat;
 
 void main()
 {
-	vec4 worldPos = modelMat * vec4(position, 1.0f);
-	gl_Position = projMat * viewMat * worldPos;
-	vs_out.position = (viewMat * worldPos).xyz;
+	// output everything in view space
+	
+	vec4 posVS = viewMat * modelMat * vec4(position, 1.0f);
+	gl_Position = projMat * posVS;
+	
+	//vs_out.position = posVS.xyz;
 	
 	// we can do this because mat3(viewMat) is guaranteed to be orthogonal (no scale)
-	mat3 viewNormalMat = mat3(viewMat) * normalMat;
-	
+	mat3 viewNormalMat = mat3(viewMat) * normalMat;	
 	vs_out.normal = viewNormalMat * normal;
 	vs_out.tangent = viewNormalMat * tangent;
+	
 	vs_out.texCoords = texCoords;
 }

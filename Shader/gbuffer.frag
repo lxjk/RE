@@ -2,13 +2,13 @@
 
 in VS_OUT
 {
-	vec3 position;
+	//vec3 position;
 	vec3 normal;
 	vec3 tangent;
 	vec2 texCoords;
 } fs_in;
 
-out vec3 gPosition;
+//out vec3 gPosition;
 out vec3 gNormal;
 out vec4 gAlbedoSpec;
 
@@ -17,7 +17,7 @@ uniform sampler2D normalTex;
 
 void main() 
 {
-	gPosition = fs_in.position;
+	//gPosition = fs_in.position;
 	
 	vec3 faceNormal = normalize(fs_in.normal);
 	vec3 faceTangent = normalize(fs_in.tangent);

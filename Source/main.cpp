@@ -44,7 +44,8 @@ GLuint gUBO_Matrices = 0;
 
 // frame buffer
 GLuint gBuffer = 0;
-Texture2D gPositionTex, gNormalTex, gAlbedoSpecTex, gDepthStencilTex;
+//Texture2D gPositionTex;
+Texture2D gNormalTex, gAlbedoSpecTex, gDepthStencilTex;
 
 // shader
 Shader gTestShader;
@@ -348,20 +349,20 @@ void SetupFrameBuffers()
 	glGenFramebuffers(1, &gBuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
 	// position
-	gPositionTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
-	gPositionTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+	//gPositionTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
+	//gPositionTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 	// normal
 	//gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
 	gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
-	gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
+	gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 	// albedo + spec
 	gAlbedoSpecTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
-	gAlbedoSpecTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT2);
+	gAlbedoSpecTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
 	// depth
 	gDepthStencilTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
 	gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 
-	GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+	GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 	glDrawBuffers(_countof(attachments), attachments);
 
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -573,7 +574,7 @@ void LightPass(const Viewpoint& mainViewpoint)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	// bind textures
-	gPositionTex.Bind(Shader::gPositionTexUnit);
+	//gPositionTex.Bind(Shader::gPositionTexUnit);
 	gNormalTex.Bind(Shader::gNormalTexUnit);
 	gAlbedoSpecTex.Bind(Shader::gAlbedoSpecTexUnit);
 	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);

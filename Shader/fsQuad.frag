@@ -2,8 +2,7 @@
 
 in VS_OUT
 {
-	vec3 position;
-	vec3 viewDir;
+	vec3 positionVS;
 	vec2 texCoords;
 } fs_in;
 

@@ -14,8 +14,7 @@ struct Light
 
 in VS_OUT
 {
-	vec3 position;
-	vec3 viewDir;
+	vec3 positionVS;
 	vec2 texCoords;
 } fs_in;
 
@@ -62,7 +61,12 @@ vec3 GetPosition(float depth)
 {
 	float ndcZ = depth * 2.f - 1.f;
 	float viewZ = projMat[3][2] / (projMat[2][3] * ndcZ - projMat[2][2]);
-	return -fs_in.viewDir * viewZ;
+	return fs_in.positionVS / fs_in.positionVS.z * viewZ;
+	
+	// ref:
+	// https://www.khronos.org/opengl/wiki/Compute_eye_space_from_window_space
+	// https://mynameismjp.wordpress.com/2010/09/05/position-from-depth-3/
+	// https://mynameismjp.wordpress.com/2010/03/22/attack-of-the-depth-buffer/
 }
 
 void main() 
@@ -70,8 +74,8 @@ void main()
 	vec3 normal = normalize(texture(gNormalTex, fs_in.texCoords).rgb * 2.0f - 1.0f);
 	float depth = texture(gDepthStencilTex, fs_in.texCoords).r;
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
-	vec3 position = texture(gPositionTex, fs_in.texCoords).rgb;
-	//vec3 position = GetPosition(depth);
+	//vec3 rposition = texture(gPositionTex, fs_in.texCoords).rgb;
+	vec3 position = GetPosition(depth);
 	//vec3 view = normalize(viewPos - position);
 	vec3 view = normalize(-position);
 	vec3 result = vec3(0,0,0);
@@ -81,7 +85,7 @@ void main()
 	}
 	//result += CalcPointLight(lights[0], normal, position, view);
 	color = vec4(result, 1.0f);
-	//color = vec4((rposition - position), 1.0f);
+	//color = vec4(abs((rposition - position) / rposition) * 100, 1.0f);
 	//color = vec4(normal, 1.0f);
 	gl_FragDepth = depth;
 }
