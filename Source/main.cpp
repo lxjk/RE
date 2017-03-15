@@ -56,6 +56,7 @@ Shader gFSQuadShader;
 // mesh data
 MeshData gCubeMeshData;
 MeshData gSphereMeshData;
+MeshData gIcosahedronMeshData;
 MeshData gQuadMeshData;
 
 // mesh
@@ -209,19 +210,21 @@ void MakeCube()
 	}
 }
 
-void MakeSphere()
+void MakeSphere(MeshData& meshData, int div)
 {
-	std::vector<Vertex>& sphereVert = gSphereMeshData.vertices;
-	std::vector<GLuint>& sphereIdx = gSphereMeshData.indices;
+	std::vector<Vertex>& vertList = meshData.vertices;
+	std::vector<GLuint>& idxList = meshData.indices;
 	
-	int div = 32;
 	int latDiv = div / 2 + 1;
 
-	sphereVert.reserve(2 + (div+1) * (latDiv - 2));
-	sphereIdx.reserve(div * ((latDiv - 2) * 2 + 2) * 3);
+	int vertCount = 2 + (div + 1) * (latDiv - 2);
+	int idxCount = div * ((latDiv - 3) * 2 + 2) * 3;
+
+	vertList.reserve(vertCount);
+	idxList.reserve(idxCount);
 	
 	// add first vert
-	sphereVert.push_back(Vertex(glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)));
+	vertList.push_back(Vertex(glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)));
 	int prevRingStart = 0;
 	int curRingStart = 1;
 	// add rings
@@ -241,7 +244,7 @@ void MakeSphere()
 			float sinLon = glm::sin(lonAngle);
 			glm::vec3 pos(cosLon * cosLat, sinLat, sinLon * cosLat);
 			glm::vec3 tangent(sinLon, 0, -cosLon);
-			sphereVert.push_back(Vertex(pos, pos, tangent, glm::vec2(lonRatio, latRatio)));
+			vertList.push_back(Vertex(pos, pos, tangent, glm::vec2(lonRatio, latRatio)));
 		}
 		// add idx on a ring with prev ring
 		for (int iLon = 0; iLon < div; ++iLon)
@@ -250,38 +253,186 @@ void MakeSphere()
 			if (iLat == 1)
 			{
 				// first ring
-				sphereIdx.push_back(prevRingStart);
-				sphereIdx.push_back(curRingStart + next);
-				sphereIdx.push_back(curRingStart + iLon);			
+				idxList.push_back(prevRingStart);
+				idxList.push_back(curRingStart + next);
+				idxList.push_back(curRingStart + iLon);			
 			}
 			else
 			{
-				sphereIdx.push_back(prevRingStart + iLon);
-				sphereIdx.push_back(curRingStart + next);
-				sphereIdx.push_back(curRingStart + iLon);
-				sphereIdx.push_back(prevRingStart + iLon);
-				sphereIdx.push_back(prevRingStart + next);
-				sphereIdx.push_back(curRingStart + next);
+				idxList.push_back(prevRingStart + iLon);
+				idxList.push_back(curRingStart + next);
+				idxList.push_back(curRingStart + iLon);
+				idxList.push_back(prevRingStart + iLon);
+				idxList.push_back(prevRingStart + next);
+				idxList.push_back(curRingStart + next);
 			}
 		}
 		prevRingStart = curRingStart;
 		curRingStart += (div+1);
 	}
 	// add last vert
-	sphereVert.push_back(Vertex(glm::vec3(0, -1, 0), glm::vec3(0, -1, 0), glm::vec3(1, 0, 0), glm::vec2(1, 1)));
+	vertList.push_back(Vertex(glm::vec3(0, -1, 0), glm::vec3(0, -1, 0), glm::vec3(1, 0, 0), glm::vec2(1, 1)));
 	// add idx for last ring
 	for (int iLon = 0; iLon < div; ++iLon)
 	{
 		int next = (iLon + 1);
-		sphereIdx.push_back(prevRingStart + iLon);
-		sphereIdx.push_back(prevRingStart + next);
-		sphereIdx.push_back(curRingStart);
+		idxList.push_back(prevRingStart + iLon);
+		idxList.push_back(prevRingStart + next);
+		idxList.push_back(curRingStart);
 	}
 
-	assert(sphereVert.size() == (2 + (div+1) * (latDiv - 2)));
-	assert(sphereIdx.size() == (div * ((latDiv - 3) * 2 + 2)) * 3);
+	assert(vertList.size() == vertCount);
+	assert(idxList.size() == idxCount);
 }
 
+glm::vec3 GetTangent(glm::vec3 normal)
+{
+	glm::vec3 up(0, 1, 0);
+	glm::vec3 tangent = glm::cross(up, normal);
+	if (glm::dot(tangent, tangent) < 0.00001f)
+		return glm::vec3(1, 0, 0);
+	return glm::normalize(tangent);
+}
+
+int FineNewVert(const std::vector<glm::ivec3>& newVertTable, int i0, int i1)
+{
+	for (int i = 0; i < newVertTable.size(); ++i)
+	{
+		if ((newVertTable[i].x == i0 && newVertTable[i].y == i1) ||
+			(newVertTable[i].x == i1 && newVertTable[i].y == i0))
+			return newVertTable[i].z;
+	}
+	return -1;
+}
+
+void MakeIcosahedron(MeshData& meshData, int tesLevel)
+{
+	std::vector<Vertex>& vertList = meshData.vertices;
+	std::vector<GLuint>& idxList = meshData.indices;
+
+	vertList.empty();
+	idxList.empty();
+
+	int tesPower = 1 << (2 * tesLevel); // = 4 ^ tes
+	vertList.reserve(10 * tesPower + 2); // 12 + 30 + 30 * 4 + ... + 30 * 4 ^ (tes-1) = 12 + 30 * (4 ^ tes - 1) / (4 - 1) = 10 * 4 ^ tes + 2
+	idxList.reserve(60 * tesPower);
+
+	static const float t = (1.f + sqrt(5.f)) * 0.5f;
+	static const float s = 1.f / sqrt(1.f + t*t);
+
+	glm::vec3 originVert[12] =
+	{
+		glm::vec3(1, t, 0) * s,
+		glm::vec3(-1, t, 0) * s,
+		glm::vec3(-1, -t, 0) * s,
+		glm::vec3(1, -t, 0) * s,
+		glm::vec3(t, 0, 1) * s,
+		glm::vec3(t, 0, -1) * s,
+		glm::vec3(-t, 0, -1) * s,
+		glm::vec3(-t, 0, 1) * s,
+		glm::vec3(0, 1, t) * s,
+		glm::vec3(0, -1, t) * s,
+		glm::vec3(0, -1, -t) * s,
+		glm::vec3(0, 1, -t) * s,
+	};
+	
+	int originIdx[60]
+	{
+		0, 8, 4,
+		0, 4, 5,
+		0, 5, 11,
+		0, 11, 1,
+		0, 1, 8,
+		1, 11, 6,
+		1, 6, 7,
+		1, 7, 8,
+		2, 9, 7,
+		2, 7, 6,
+		2, 6, 10,
+		2, 10, 3,
+		2, 3, 9,
+		3, 10, 5,
+		3, 5, 4,
+		3, 4, 9,
+		4, 8, 9,
+		5, 10, 11,
+		6, 11, 10,
+		7, 9, 8,
+	};
+
+	for (int i = 0; i < 12; ++i)
+	{
+		vertList.push_back(Vertex(originVert[i], originVert[i], GetTangent(originVert[i]), glm::vec2(0, 0)));
+	}
+
+	for (int i = 0; i < 60; ++i)
+		idxList.push_back(originIdx[i]);
+
+	for (int tesIdx = 0; tesIdx < tesLevel; ++tesIdx)
+	{
+		int idxCount = idxList.size();
+		int newVertStartIdx = vertList.size();
+
+		int newVertCount = idxCount / 2;
+		std::vector<glm::ivec3> newVertTable;
+		newVertTable.reserve(newVertCount);
+
+		for (int faceIdx = 0; faceIdx < idxCount; faceIdx += 3)
+		{
+			int i0 = idxList[faceIdx + 0];
+			int i1 = idxList[faceIdx + 1];
+			int i2 = idxList[faceIdx + 2];
+			glm::vec3 v0 = vertList[i0].position;
+			glm::vec3 v1 = vertList[i1].position;
+			glm::vec3 v2 = vertList[i2].position;
+			// new idx
+			int i3 = FineNewVert(newVertTable, i0, i1);
+			int i4 = FineNewVert(newVertTable, i1, i2);
+			int i5 = FineNewVert(newVertTable, i2, i0);
+			// new vert
+			if (i3 < 0)
+			{
+				glm::vec3 v3 = glm::normalize((v0 + v1) * 0.5f);
+				vertList.push_back(Vertex(v3, v3, GetTangent(v3), glm::vec2(0, 0)));
+				i3 = newVertStartIdx;
+				++newVertStartIdx;
+				newVertTable.push_back(glm::ivec3(i0, i1, i3));
+			}
+			if (i4 < 0)
+			{
+				glm::vec3 v4 = glm::normalize((v1 + v2) * 0.5f);
+				vertList.push_back(Vertex(v4, v4, GetTangent(v4), glm::vec2(0, 0)));
+				i4 = newVertStartIdx;
+				++newVertStartIdx;
+				newVertTable.push_back(glm::ivec3(i1, i2, i4));
+			}
+			if (i5 < 0)
+			{
+				glm::vec3 v5 = glm::normalize((v2 + v0) * 0.5f);
+				vertList.push_back(Vertex(v5, v5, GetTangent(v5), glm::vec2(0, 0)));
+				i5 = newVertStartIdx;
+				++newVertStartIdx;
+				newVertTable.push_back(glm::ivec3(i2, i0, i5));
+			}
+
+			// change origin idx
+			idxList[faceIdx + 0] = i0;
+			idxList[faceIdx + 1] = i3;
+			idxList[faceIdx + 2] = i5;
+			// add idx
+			idxList.push_back(i3);
+			idxList.push_back(i1);
+			idxList.push_back(i4);
+			idxList.push_back(i3);
+			idxList.push_back(i4);
+			idxList.push_back(i5);
+			idxList.push_back(i5);
+			idxList.push_back(i4);
+			idxList.push_back(i2);
+		}
+	}
+
+}
 
 void MakeQuad()
 {
@@ -392,13 +543,14 @@ bool initGL()
 
 	// mesh
 	MakeCube();
-	MakeSphere();
+	MakeSphere(gSphereMeshData, 32);
+	MakeIcosahedron(gIcosahedronMeshData, 2);
 	MakeQuad();
 
 	// model
 	gCubeMesh.Init(&gCubeMeshData, &gBufferShader);
 	gSphereMesh.Init(&gSphereMeshData, &gBufferShader);
-	gLightDebugMesh.Init(&gSphereMeshData, &gLightDebugShader);
+	gLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugShader);
 	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadShader);
 
 	// texture
