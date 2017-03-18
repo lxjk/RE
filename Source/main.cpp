@@ -56,6 +56,7 @@ Shader gFSQuadShader;
 // mesh data
 MeshData gCubeMeshData;
 MeshData gSphereMeshData;
+MeshData gConeMeshData;
 MeshData gIcosahedronMeshData;
 MeshData gQuadMeshData;
 
@@ -294,7 +295,103 @@ glm::vec3 GetTangent(glm::vec3 normal)
 	return glm::normalize(tangent);
 }
 
-int FineNewVert(const std::vector<glm::ivec3>& newVertTable, int i0, int i1)
+void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
+{
+	std::vector<Vertex>& vertList = meshData.vertices;
+	std::vector<GLuint>& idxList = meshData.indices;
+
+	glm::vec3 mainAxis(0, 0, -1);
+	glm::vec3 secAxis(0, 1, 0);
+	glm::vec3 thrAxis = glm::cross(mainAxis, secAxis);
+
+	static const float normScaler = 1.f / sqrt(2.f);
+
+	// first vert = level 0
+	vertList.push_back(Vertex(glm::vec3(0, 0, 0), -mainAxis, thrAxis, glm::vec2(0, 0)));
+	int prevRingStart = 0;
+	int curRingStart = 1;
+
+	int ringVertCount = firstRingVertCount;
+	for (int levelIdx = 1; levelIdx <= level; ++levelIdx)
+	{
+		float mainAxisValue = (float)levelIdx / (float)(level);
+		// vert
+		for (int ringIdx = 0; ringIdx <= ringVertCount; ++ringIdx)
+		{
+			float ratio = (float)ringIdx / (float)ringVertCount;
+			float angle = ratio * 2 * glm::pi<float>();
+			float cosA = glm::cos(angle);
+			float sinA = glm::sin(angle);
+			glm::vec3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA) * mainAxisValue;
+			glm::vec3 normal = (-mainAxis + secAxis * cosA + thrAxis * sinA) * normScaler;
+			glm::vec3 tangent = secAxis * sinA + thrAxis * -cosA;
+ 
+			vertList.push_back(Vertex(pos, normal, tangent, glm::vec2(ratio, mainAxisValue)));
+		}
+
+		// idx
+		if (levelIdx == 1)
+		{
+			for (int ringIdx = 1; ringIdx <= ringVertCount; ++ringIdx)
+			{
+				idxList.push_back(prevRingStart);
+				idxList.push_back(curRingStart + ringIdx);
+				idxList.push_back(curRingStart + ringIdx - 1);
+			}
+		}
+		else
+		{
+			for (int ringIdx = 2; ringIdx <= ringVertCount; ringIdx += 2)
+			{
+				int prevRingIdx = ringIdx / 2;
+				idxList.push_back(prevRingStart + prevRingIdx - 1);
+				idxList.push_back(curRingStart + ringIdx - 1);
+				idxList.push_back(curRingStart + ringIdx - 2);
+				idxList.push_back(prevRingStart + prevRingIdx - 1);
+				idxList.push_back(prevRingStart + prevRingIdx);
+				idxList.push_back(curRingStart + ringIdx - 1);
+				idxList.push_back(prevRingStart + prevRingIdx);
+				idxList.push_back(curRingStart + ringIdx);
+				idxList.push_back(curRingStart + ringIdx - 1);
+			}
+		}
+
+		prevRingStart = curRingStart;
+		curRingStart += (ringVertCount+1);
+
+		if (levelIdx < level)
+			ringVertCount *= 2;
+	}
+
+	// bottom
+	for (int ringIdx = 0; ringIdx <= ringVertCount; ++ringIdx)
+	{
+		float ratio = (float)ringIdx / (float)ringVertCount;
+		float angle = ratio * 2 * glm::pi<float>();
+		float cosA = glm::cos(angle);
+		float sinA = glm::sin(angle);
+		glm::vec3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA);
+		glm::vec3 tangent = secAxis * sinA + thrAxis * -cosA;
+
+		vertList.push_back(Vertex(pos, mainAxis, tangent, glm::vec2(ratio, 1)));
+	}
+
+	prevRingStart = curRingStart;
+	curRingStart += (ringVertCount + 1);
+
+	// final vert
+	vertList.push_back(Vertex(mainAxis, mainAxis, thrAxis, glm::vec2(0, 0)));
+
+	// idx
+	for (int ringIdx = 1; ringIdx <= ringVertCount; ++ringIdx)
+	{
+		idxList.push_back(prevRingStart + ringIdx - 1);
+		idxList.push_back(prevRingStart + ringIdx);
+		idxList.push_back(curRingStart);
+	}
+}
+
+int FindNewVert(const std::vector<glm::ivec3>& newVertTable, int i0, int i1)
 {
 	for (int i = 0; i < newVertTable.size(); ++i)
 	{
@@ -320,7 +417,7 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 	static const float t = (1.f + sqrt(5.f)) * 0.5f;
 	static const float s = 1.f / sqrt(1.f + t*t);
 
-	glm::vec3 originVert[12] =
+	static const glm::vec3 originVert[12] =
 	{
 		glm::vec3(1, t, 0) * s,
 		glm::vec3(-1, t, 0) * s,
@@ -336,7 +433,7 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 		glm::vec3(0, 1, -t) * s,
 	};
 	
-	int originIdx[60]
+	static const int originIdx[60]
 	{
 		0, 8, 4,
 		0, 4, 5,
@@ -386,9 +483,9 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 			glm::vec3 v1 = vertList[i1].position;
 			glm::vec3 v2 = vertList[i2].position;
 			// new idx
-			int i3 = FineNewVert(newVertTable, i0, i1);
-			int i4 = FineNewVert(newVertTable, i1, i2);
-			int i5 = FineNewVert(newVertTable, i2, i0);
+			int i3 = FindNewVert(newVertTable, i0, i1);
+			int i4 = FindNewVert(newVertTable, i1, i2);
+			int i5 = FindNewVert(newVertTable, i2, i0);
 			// new vert
 			if (i3 < 0)
 			{
@@ -545,12 +642,13 @@ bool initGL()
 	MakeCube();
 	MakeSphere(gSphereMeshData, 32);
 	MakeIcosahedron(gIcosahedronMeshData, 2);
+	MakeCone(gConeMeshData, 16, 2);
 	MakeQuad();
 
 	// model
 	gCubeMesh.Init(&gCubeMeshData, &gBufferShader);
 	gSphereMesh.Init(&gSphereMeshData, &gBufferShader);
-	gLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugShader);
+	gLightDebugMesh.Init(&gConeMeshData, &gLightDebugShader);
 	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadShader);
 
 	// texture

@@ -36,6 +36,21 @@ uniform float specPower;
 //uniform vec3 viewPos;
 uniform Light lights[LIGHT_COUNT];
 
+vec3 CalcLight(vec3 light, vec3 normal, vec3 view, vec3 colorDiff, vec3 colorSpec, vec3 colorAmb, float attenuation)
+{
+	vec3 halfVec = normalize(light + view);
+	
+	vec4 albedoSpec = texture(gAlbedoSpecTex, fs_in.texCoords);
+	
+	vec3 ambient = colorAmb * attenuation  * albedoSpec.a; // hack! using spec to exclude pixel we don't draw on
+	vec3 diff = albedoSpec.rgb * max(dot(normal, light), 0.f) * colorDiff * attenuation;
+	vec3 spec = pow(max(dot(normal, halfVec), 0.f), specPower) * colorSpec * attenuation * albedoSpec.a;
+	//spec = vec3(0,0,0);
+	
+	//return vec3(specV, specV, specV);
+	return ambient + diff + spec;
+}
+
 vec3 CalcPointLight(Light lightData, vec3 normal, vec3 pos, vec3 view)
 {
 	vec3 light = vec3(viewMat * vec4(lightData.position, 1.f)) - pos;
@@ -44,17 +59,16 @@ vec3 CalcPointLight(Light lightData, vec3 normal, vec3 pos, vec3 view)
 	float attenuation = 1.f - attRatio * attRatio;
 	//float attenuation = 1.f;
 	light /= dist;
-	vec3 halfVec = normalize(light + view);
-	
-	vec4 albedoSpec = texture(gAlbedoSpecTex, fs_in.texCoords);
-	
-	vec3 ambient = lightData.ambient * attenuation  * albedoSpec.a; // hack! using spec to exclude pixel we don't draw on
-	vec3 diff = albedoSpec.rgb * max(dot(normal, light), 0.f) * lightData.diffuse * attenuation;
-	vec3 spec = pow(max(dot(normal, halfVec), 0.f), specPower) * lightData.specular * attenuation * albedoSpec.a;
-	//spec = vec3(0,0,0);
-	
-	//return vec3(specV, specV, specV);
-	return ambient + diff + spec;
+
+	return CalcLight(light, normal, view, lightData.diffuse, lightData.specular, lightData.ambient, attenuation);
+}
+
+vec3 CalcDirectionalLight(Light lightData, vec3 normal, vec3 pos, vec3 view)
+{
+	vec3 light = lightData.direction;
+	float attenuation = 1.f;
+
+	return CalcLight(light, normal, view, lightData.diffuse, lightData.specular, lightData.ambient, attenuation);
 }
 
 vec3 GetPosition(float depth)
