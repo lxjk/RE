@@ -44,18 +44,22 @@ SDL_GLContext gContext;
 GLuint gUBO_Matrices = 0;
 
 // frame buffer
-GLuint gBuffer = 0;
+GLuint gGBuffer = 0;
 //Texture2D gPositionTex;
 Texture2D gNormalTex, gAlbedoSpecTex, gDepthStencilTex;
 
+GLuint gSceneBuffer = 0;
+Texture2D gSceneColorTex;
+
 // shader
 Shader gTestShader;
-Shader gBufferShader;
+Shader gGBufferShader;
 Shader gPrepassShader;
 Shader gDirectionalLightShader;
 Shader gPointLightShader;
 Shader gLightDebugShader;
 Shader gFSQuadShader;
+Shader gToneMapShader;
 
 // mesh data
 MeshData gCubeMeshData;
@@ -69,9 +73,12 @@ Mesh gCubeMesh;
 Mesh gSphereMesh;
 Mesh gLightDebugMesh;
 Mesh gFSQuadMesh;
+
 Mesh gDirectionalLightMesh;
 Mesh gPointLightMesh;
 Mesh gPointLightPrepassMesh;
+
+Mesh gToneMapMesh;
 
 // texture
 Texture2D gDiffuseMap;
@@ -167,7 +174,9 @@ struct RenderState
 };
 
 // Render state
-RenderState gGBufferState, gDirectionalLightState, gPointLightPrepassState, gPointLightState, gDebugForwardState;
+RenderState gGBufferState, gDebugForwardState;
+RenderState gDirectionalLightState, gPointLightPrepassState, gPointLightState;
+RenderState gPostProcessState, gPostProcessFinishState;
 
 // input
 float gMouseWheel;
@@ -175,10 +184,6 @@ const Uint8* gKeyStates;
 
 bool init();
 bool initGL();
-
-//Shader loading utility programs
-void printProgramLog(GLuint program);
-void printShaderLog(GLuint shader);
 
 bool init()
 {
@@ -256,485 +261,96 @@ bool init()
 	return true;
 }
 
-void MakeCube()
-{
-	std::vector<Vertex>& cubeVert = gCubeMeshData.vertices;
-	std::vector<GLuint>& cubeIdx = gCubeMeshData.indices;
-	glm::vec2 uv[4] =
-	{
-		glm::vec2(0, 0),
-		glm::vec2(0, 1),
-		glm::vec2(1, 1),
-		glm::vec2(1, 0)
-	};
-	glm::vec3 normal[6] =
-	{
-		glm::vec3(1, 0, 0),
-		glm::vec3(0, 1, 0),
-		glm::vec3(0, 0, 1),
-		glm::vec3(-1, 0, 0),
-		glm::vec3(0, -1, 0),
-		glm::vec3(0, 0, -1),
-	};
-	glm::vec3 up[6] =
-	{
-		glm::vec3(0, 1, 0),
-		glm::vec3(0, 0, -1),
-		glm::vec3(0, 1, 0),
-		glm::vec3(0, 1, 0),
-		glm::vec3(0, 0, 1),
-		glm::vec3(0, 1, 0),
-	};
-	cubeVert.reserve(24);
-	cubeIdx.reserve(36);
-	// +x -> +y -> +z -> -x -> -y -> -z
-	for (int i = 0; i < 6; ++i)
-	{
-		glm::vec3 right = glm::cross(up[i], normal[i]);
-		for (int j = 0; j < 4; ++j)
-		{
-			glm::vec2 ext = uv[j] * 2.f - 1.f;
-			cubeVert.push_back(Vertex(normal[i] + ext.x * right - ext.y * up[i], normal[i], right, uv[j]));
-		}
-		cubeIdx.push_back(i * 4 + 0);
-		cubeIdx.push_back(i * 4 + 1);
-		cubeIdx.push_back(i * 4 + 2);
-		cubeIdx.push_back(i * 4 + 0);
-		cubeIdx.push_back(i * 4 + 2);
-		cubeIdx.push_back(i * 4 + 3);
-	}
-}
-
-void MakeSphere(MeshData& meshData, int div)
-{
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
-	
-	int latDiv = div / 2 + 1;
-
-	int vertCount = 2 + (div + 1) * (latDiv - 2);
-	int idxCount = div * ((latDiv - 3) * 2 + 2) * 3;
-
-	vertList.reserve(vertCount);
-	idxList.reserve(idxCount);
-	
-	// add first vert
-	vertList.push_back(Vertex(glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)));
-	int prevRingStart = 0;
-	int curRingStart = 1;
-	// add rings
-	for (int iLat = 1; iLat < latDiv - 1; ++iLat)
-	{
-		// (-1, 1)
-		float latRatio = (float)iLat / (float)(latDiv - 1);
-		float latAngle = (1 - latRatio * 2) * 0.5f * glm::pi<float>();
-		float cosLat = glm::cos(latAngle);
-		float sinLat = glm::sin(latAngle);
-		// add vert on a ring
-		for (int iLon = 0; iLon < div+1; ++iLon)
-		{
-			float lonRatio = (float)iLon / (float)div;
-			float lonAngle = lonRatio * 2 * PI;
-			float cosLon = glm::cos(lonAngle);
-			float sinLon = glm::sin(lonAngle);
-			glm::vec3 pos(cosLon * cosLat, sinLat, sinLon * cosLat);
-			glm::vec3 tangent(sinLon, 0, -cosLon);
-			vertList.push_back(Vertex(pos, pos, tangent, glm::vec2(lonRatio, latRatio)));
-		}
-		// add idx on a ring with prev ring
-		for (int iLon = 0; iLon < div; ++iLon)
-		{
-			int next = iLon+1;
-			if (iLat == 1)
-			{
-				// first ring
-				idxList.push_back(prevRingStart);
-				idxList.push_back(curRingStart + next);
-				idxList.push_back(curRingStart + iLon);			
-			}
-			else
-			{
-				idxList.push_back(prevRingStart + iLon);
-				idxList.push_back(curRingStart + next);
-				idxList.push_back(curRingStart + iLon);
-				idxList.push_back(prevRingStart + iLon);
-				idxList.push_back(prevRingStart + next);
-				idxList.push_back(curRingStart + next);
-			}
-		}
-		prevRingStart = curRingStart;
-		curRingStart += (div+1);
-	}
-	// add last vert
-	vertList.push_back(Vertex(glm::vec3(0, -1, 0), glm::vec3(0, -1, 0), glm::vec3(1, 0, 0), glm::vec2(1, 1)));
-	// add idx for last ring
-	for (int iLon = 0; iLon < div; ++iLon)
-	{
-		int next = (iLon + 1);
-		idxList.push_back(prevRingStart + iLon);
-		idxList.push_back(prevRingStart + next);
-		idxList.push_back(curRingStart);
-	}
-
-	assert(vertList.size() == vertCount);
-	assert(idxList.size() == idxCount);
-}
-
-glm::vec3 GetTangent(glm::vec3 normal)
-{
-	glm::vec3 up(0, 1, 0);
-	glm::vec3 tangent = glm::cross(up, normal);
-	if (glm::dot(tangent, tangent) < KINDA_SMALL_NUMBER)
-		return glm::vec3(1, 0, 0);
-	return glm::normalize(tangent);
-}
-
-void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
-{
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
-
-	glm::vec3 mainAxis(0, 0, -1);
-	glm::vec3 secAxis(0, 1, 0);
-	glm::vec3 thrAxis = glm::cross(mainAxis, secAxis);
-
-	static const float normScaler = 1.f / sqrt(2.f);
-
-	// first vert = level 0
-	vertList.push_back(Vertex(glm::vec3(0, 0, 0), -mainAxis, thrAxis, glm::vec2(0, 0)));
-	int prevRingStart = 0;
-	int curRingStart = 1;
-
-	int ringVertCount = firstRingVertCount;
-	for (int levelIdx = 1; levelIdx <= level; ++levelIdx)
-	{
-		float mainAxisValue = (float)levelIdx / (float)(level);
-		// vert
-		for (int ringIdx = 0; ringIdx <= ringVertCount; ++ringIdx)
-		{
-			float ratio = (float)ringIdx / (float)ringVertCount;
-			float angle = ratio * 2 * PI;
-			float cosA = glm::cos(angle);
-			float sinA = glm::sin(angle);
-			glm::vec3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA) * mainAxisValue;
-			glm::vec3 normal = (-mainAxis + secAxis * cosA + thrAxis * sinA) * normScaler;
-			glm::vec3 tangent = secAxis * sinA + thrAxis * -cosA;
- 
-			vertList.push_back(Vertex(pos, normal, tangent, glm::vec2(ratio, mainAxisValue)));
-		}
-
-		// idx
-		if (levelIdx == 1)
-		{
-			for (int ringIdx = 1; ringIdx <= ringVertCount; ++ringIdx)
-			{
-				idxList.push_back(prevRingStart);
-				idxList.push_back(curRingStart + ringIdx);
-				idxList.push_back(curRingStart + ringIdx - 1);
-			}
-		}
-		else
-		{
-			for (int ringIdx = 2; ringIdx <= ringVertCount; ringIdx += 2)
-			{
-				int prevRingIdx = ringIdx / 2;
-				idxList.push_back(prevRingStart + prevRingIdx - 1);
-				idxList.push_back(curRingStart + ringIdx - 1);
-				idxList.push_back(curRingStart + ringIdx - 2);
-				idxList.push_back(prevRingStart + prevRingIdx - 1);
-				idxList.push_back(prevRingStart + prevRingIdx);
-				idxList.push_back(curRingStart + ringIdx - 1);
-				idxList.push_back(prevRingStart + prevRingIdx);
-				idxList.push_back(curRingStart + ringIdx);
-				idxList.push_back(curRingStart + ringIdx - 1);
-			}
-		}
-
-		prevRingStart = curRingStart;
-		curRingStart += (ringVertCount+1);
-
-		if (levelIdx < level)
-			ringVertCount *= 2;
-	}
-
-	// bottom
-	for (int ringIdx = 0; ringIdx <= ringVertCount; ++ringIdx)
-	{
-		float ratio = (float)ringIdx / (float)ringVertCount;
-		float angle = ratio * 2 * PI;
-		float cosA = glm::cos(angle);
-		float sinA = glm::sin(angle);
-		glm::vec3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA);
-		glm::vec3 tangent = secAxis * sinA + thrAxis * -cosA;
-
-		vertList.push_back(Vertex(pos, mainAxis, tangent, glm::vec2(ratio, 1)));
-	}
-
-	prevRingStart = curRingStart;
-	curRingStart += (ringVertCount + 1);
-
-	// final vert
-	vertList.push_back(Vertex(mainAxis, mainAxis, thrAxis, glm::vec2(0, 0)));
-
-	// idx
-	for (int ringIdx = 1; ringIdx <= ringVertCount; ++ringIdx)
-	{
-		idxList.push_back(prevRingStart + ringIdx - 1);
-		idxList.push_back(prevRingStart + ringIdx);
-		idxList.push_back(curRingStart);
-	}
-}
-
-int FindNewVert(const std::vector<glm::ivec3>& newVertTable, int i0, int i1)
-{
-	for (int i = 0; i < newVertTable.size(); ++i)
-	{
-		if ((newVertTable[i].x == i0 && newVertTable[i].y == i1) ||
-			(newVertTable[i].x == i1 && newVertTable[i].y == i0))
-			return newVertTable[i].z;
-	}
-	return -1;
-}
-
-void MakeIcosahedron(MeshData& meshData, int tesLevel)
-{
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
-
-	vertList.empty();
-	idxList.empty();
-
-	int tesPower = 1 << (2 * tesLevel); // = 4 ^ tes
-	vertList.reserve(10 * tesPower + 2); // 12 + 30 + 30 * 4 + ... + 30 * 4 ^ (tes-1) = 12 + 30 * (4 ^ tes - 1) / (4 - 1) = 10 * 4 ^ tes + 2
-	idxList.reserve(60 * tesPower);
-
-	static const float t = (1.f + sqrt(5.f)) * 0.5f;
-	static const float s = 1.f / sqrt(1.f + t*t);
-
-	static const glm::vec3 originVert[12] =
-	{
-		glm::vec3(1, t, 0) * s,
-		glm::vec3(-1, t, 0) * s,
-		glm::vec3(-1, -t, 0) * s,
-		glm::vec3(1, -t, 0) * s,
-		glm::vec3(t, 0, 1) * s,
-		glm::vec3(t, 0, -1) * s,
-		glm::vec3(-t, 0, -1) * s,
-		glm::vec3(-t, 0, 1) * s,
-		glm::vec3(0, 1, t) * s,
-		glm::vec3(0, -1, t) * s,
-		glm::vec3(0, -1, -t) * s,
-		glm::vec3(0, 1, -t) * s,
-	};
-	
-	static const int originIdx[60]
-	{
-		0, 8, 4,
-		0, 4, 5,
-		0, 5, 11,
-		0, 11, 1,
-		0, 1, 8,
-		1, 11, 6,
-		1, 6, 7,
-		1, 7, 8,
-		2, 9, 7,
-		2, 7, 6,
-		2, 6, 10,
-		2, 10, 3,
-		2, 3, 9,
-		3, 10, 5,
-		3, 5, 4,
-		3, 4, 9,
-		4, 8, 9,
-		5, 10, 11,
-		6, 11, 10,
-		7, 9, 8,
-	};
-
-	for (int i = 0; i < 12; ++i)
-	{
-		vertList.push_back(Vertex(originVert[i], originVert[i], GetTangent(originVert[i]), glm::vec2(0, 0)));
-	}
-
-	for (int i = 0; i < 60; ++i)
-		idxList.push_back(originIdx[i]);
-
-	for (int tesIdx = 0; tesIdx < tesLevel; ++tesIdx)
-	{
-		int idxCount = idxList.size();
-		int newVertStartIdx = vertList.size();
-
-		int newVertCount = idxCount / 2;
-		std::vector<glm::ivec3> newVertTable;
-		newVertTable.reserve(newVertCount);
-
-		for (int faceIdx = 0; faceIdx < idxCount; faceIdx += 3)
-		{
-			int i0 = idxList[faceIdx + 0];
-			int i1 = idxList[faceIdx + 1];
-			int i2 = idxList[faceIdx + 2];
-			glm::vec3 v0 = vertList[i0].position;
-			glm::vec3 v1 = vertList[i1].position;
-			glm::vec3 v2 = vertList[i2].position;
-			// new idx
-			int i3 = FindNewVert(newVertTable, i0, i1);
-			int i4 = FindNewVert(newVertTable, i1, i2);
-			int i5 = FindNewVert(newVertTable, i2, i0);
-			// new vert
-			if (i3 < 0)
-			{
-				glm::vec3 v3 = glm::normalize((v0 + v1) * 0.5f);
-				vertList.push_back(Vertex(v3, v3, GetTangent(v3), glm::vec2(0, 0)));
-				i3 = newVertStartIdx;
-				++newVertStartIdx;
-				newVertTable.push_back(glm::ivec3(i0, i1, i3));
-			}
-			if (i4 < 0)
-			{
-				glm::vec3 v4 = glm::normalize((v1 + v2) * 0.5f);
-				vertList.push_back(Vertex(v4, v4, GetTangent(v4), glm::vec2(0, 0)));
-				i4 = newVertStartIdx;
-				++newVertStartIdx;
-				newVertTable.push_back(glm::ivec3(i1, i2, i4));
-			}
-			if (i5 < 0)
-			{
-				glm::vec3 v5 = glm::normalize((v2 + v0) * 0.5f);
-				vertList.push_back(Vertex(v5, v5, GetTangent(v5), glm::vec2(0, 0)));
-				i5 = newVertStartIdx;
-				++newVertStartIdx;
-				newVertTable.push_back(glm::ivec3(i2, i0, i5));
-			}
-
-			// change origin idx
-			idxList[faceIdx + 0] = i0;
-			idxList[faceIdx + 1] = i3;
-			idxList[faceIdx + 2] = i5;
-			// add idx
-			idxList.push_back(i3);
-			idxList.push_back(i1);
-			idxList.push_back(i4);
-			idxList.push_back(i3);
-			idxList.push_back(i4);
-			idxList.push_back(i5);
-			idxList.push_back(i5);
-			idxList.push_back(i4);
-			idxList.push_back(i2);
-		}
-	}
-
-}
-
-void MakeQuad()
-{
-	std::vector<Vertex>& quadVert = gQuadMeshData.vertices;
-	std::vector<GLuint>& quadIdx = gQuadMeshData.indices;
-
-	quadVert.reserve(4);
-	quadIdx.reserve(6);
-
-	quadVert.push_back(Vertex(glm::vec3(-1, 1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)));
-	quadVert.push_back(Vertex(glm::vec3(-1, -1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(0, 0)));
-	quadVert.push_back(Vertex(glm::vec3(1, -1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(1, 0)));
-	quadVert.push_back(Vertex(glm::vec3(1, 1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(1, 1)));
-
-	quadIdx.push_back(0);
-	quadIdx.push_back(1);
-	quadIdx.push_back(2);
-	quadIdx.push_back(0);
-	quadIdx.push_back(2);
-	quadIdx.push_back(3);
-}
-
 void MakeLights()
 {
 	// directional lights
 	memset(gDirectionalLights, 0, sizeof(Light) * DIRECTIONAL_LIGHT_COUNT);
 
 	gDirectionalLights[0].direction = glm::normalize(glm::vec3(0, -1, -2));
-	gDirectionalLights[0].ambient = glm::vec3(0.02f, 0.02f, 0.02f);
-	gDirectionalLights[0].diffuse = glm::vec3(1.f, 1.f, 1.f);
-	gDirectionalLights[0].specular = glm::vec3(1.f, 1.f, 1.f);
+	gDirectionalLights[0].color = glm::vec3(0.1f, 0.1f, 0.1f);
+	gDirectionalLights[0].intensity = 1;
 
 	// point lights
 	int plIdx = 0;
-	//gPointLights.push_back(Light());
-	//plIdx = gPointLights.size() - 1;
-	//gPointLights[plIdx].position = glm::vec3(0, 10, 10);
-	//gPointLights[plIdx].ambient = glm::vec3(0.02f, 0.02f, 0.02f);
-	//gPointLights[plIdx].diffuse = glm::vec3(1.f, 1.f, 1.f);
-	//gPointLights[plIdx].specular = glm::vec3(1.f, 1.f, 1.f);
-	//gPointLights[plIdx].radius = 20.f;
+	gPointLights.push_back(Light());
+	plIdx = gPointLights.size() - 1;
+	gPointLights[plIdx].position = glm::vec3(0, 10, 10);
+	gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 1.f);
+	gPointLights[plIdx].intensity = 1;
+	gPointLights[plIdx].radius = 20.f;
 
 	gPointLights.push_back(Light());
 	plIdx = gPointLights.size() - 1;
 	gPointLights[plIdx].position = glm::vec3(0, 3, 3);
-	gPointLights[plIdx].ambient = glm::vec3(0.02f, 0.02f, 0.f);
-	gPointLights[plIdx].diffuse = glm::vec3(1.f, 1.f, 0.f);
-	gPointLights[plIdx].specular = glm::vec3(1.f, 1.f, 0.f);
+	gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 0.f);
+	gPointLights[plIdx].intensity = 10;
 	gPointLights[plIdx].radius = 6.f;
 
 	gPointLights.push_back(Light());
 	plIdx = gPointLights.size() - 1;
 	gPointLights[plIdx].position = glm::vec3(10, 2, 0);
-	gPointLights[plIdx].ambient = glm::vec3(0.f, 0.02f, 0.f);
-	gPointLights[plIdx].diffuse = glm::vec3(0.f, 1.f, 0.f);
-	gPointLights[plIdx].specular = glm::vec3(0.f, 1.f, 0.f);
+	gPointLights[plIdx].color = glm::vec3(0.f, 1.f, 0.f);
+	gPointLights[plIdx].intensity = 5;
 	gPointLights[plIdx].radius = 10.f;	
-}
-
-void AllocateFrameBufferTexture(GLuint& textureID, int width, int height, GLint internalFormat, GLenum format, GLenum type)
-{
-	if (textureID)
-		glDeleteTextures(1, &textureID);
-	glGenTextures(1, &textureID);
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 }
 
 void SetupFrameBuffers()
 {
 	// G-Buffer
-	// position(RGB)
-	// normal(RGB)
-	// color(RGB) + spec(A)
-	glGenFramebuffers(1, &gBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-	// position
-	//gPositionTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
-	//gPositionTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
-	// normal
-	//gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
-	gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
-	gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
-	// albedo + spec
-	gAlbedoSpecTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
-	gAlbedoSpecTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
-	// depth
-	gDepthStencilTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
-	gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
+	{
+		// position(RGB)
+		// normal(RGB)
+		// color(RGB) + spec(A)
+		glGenFramebuffers(1, &gGBuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
+		// position
+		//gPositionTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
+		//gPositionTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+		// normal
+		//gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
+		gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
+		gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+		// albedo + spec
+		gAlbedoSpecTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
+		gAlbedoSpecTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
+		// depth
+		gDepthStencilTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
+		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 
-	GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-	glDrawBuffers(_countof(attachments), attachments);
+		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+		glDrawBuffers(_countof(attachments), attachments);
 
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		printf("Error: Frame buffer not complete!\n");
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			printf("Error: G Buffer not complete!\n");
+	}
+
+
+	// Scene Buffer
+	{
+		glGenFramebuffers(1, &gSceneBuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
+		// HDR scene color
+		gSceneColorTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+		gSceneColorTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+		// re-use g-buffer depth
+		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
+
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			printf("Error: Scene Buffer not complete!\n");
+	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void SetupRenderStates()
 {
+	// directional light
 	{
 		RenderState& s = gDirectionalLightState;
-		// depth always pass, write depth
-		s.bDepthTest = true;
-		s.depthTestFunc = GL_ALWAYS;
-		s.bDepthWrite = true;
+		// no depth test
+		s.bDepthTest = false;
 	}
-
+	// point light prepass
 	{
 		RenderState& s = gPointLightPrepassState;
 		// don't write color
@@ -752,7 +368,7 @@ void SetupRenderStates()
 		s.bCullFace = true;
 		s.cullFaceMode = GL_FRONT;
 	}
-
+	// point light
 	{
 		RenderState& s = gPointLightState;
 		// depth test only, don't write depth
@@ -763,6 +379,20 @@ void SetupRenderStates()
 		s.bStencilTest = true;
 		s.stencilTestFunc = GL_EQUAL;
 		s.stencilTestRef = 1;
+	}
+	// postprocess
+	{
+		RenderState& s = gPostProcessState;
+		// no depth test
+		s.bDepthTest = false;
+	}
+	// postprocess finish
+	{
+		RenderState& s = gPostProcessFinishState;
+		// depth always pass, write depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_ALWAYS;
+		s.bDepthWrite = true;
 	}
 }
 
@@ -783,33 +413,37 @@ bool initGL()
 	SetupRenderStates();
 
 	// shader
-	gTestShader.Load("Shader\\test.vert", "Shader\\test.frag");
-	gBufferShader.Load("Shader\\gbuffer.vert", "Shader\\gbuffer.frag");
+	//gTestShader.Load("Shader\\test.vert", "Shader\\test.frag");
+	gGBufferShader.Load("Shader\\gbuffer.vert", "Shader\\gbuffer.frag");
 	gPrepassShader.Load("Shader\\prepass.vert", "Shader\\prepass.frag");
 	gDirectionalLightShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag");
 	gPointLightShader.Load("Shader\\lightVolume.vert", "Shader\\lightVolumePoint.frag");
 	gLightDebugShader.Load("Shader\\test.vert", "Shader\\lightDebug.frag");
 	gFSQuadShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag");
+	gToneMapShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadToneMap.frag");
 
 	// mesh
-	MakeCube();
+	MakeCube(gCubeMeshData);
 	MakeSphere(gSphereMeshData, 32);
 	MakeIcosahedron(gIcosahedronMeshData, 2);
 	MakeCone(gConeMeshData, 16, 2);
-	MakeQuad();
+	MakeQuad(gQuadMeshData);
 
 	// model
-	gCubeMesh.Init(&gCubeMeshData, &gBufferShader);
-	gSphereMesh.Init(&gSphereMeshData, &gBufferShader);
+	gCubeMesh.Init(&gCubeMeshData, &gGBufferShader);
+	gSphereMesh.Init(&gSphereMeshData, &gGBufferShader);
 	gLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugShader);
 	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadShader);
+
 	gDirectionalLightMesh.Init(&gQuadMeshData, &gDirectionalLightShader);
 	gPointLightMesh.Init(&gIcosahedronMeshData, &gPointLightShader);
 	gPointLightPrepassMesh.Init(&gIcosahedronMeshData, &gPrepassShader);
 
+	gToneMapMesh.Init(&gQuadMeshData, &gToneMapShader);
+
 	// texture
-	gDiffuseMap.Load("Content\\Texture\\154.jpg");
-	gNormalMap.Load("Content\\Texture\\154_norm.jpg");
+	gDiffuseMap.Load("Content\\Texture\\154.jpg", GL_SRGB, GL_RGB, GL_UNSIGNED_BYTE);
+	gNormalMap.Load("Content\\Texture\\154_norm.jpg", GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
 
 	// light
 	MakeLights();
@@ -926,9 +560,6 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 {
 	gGBufferState.Apply();
 
-	// bind frame buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-
 	// clear frame buffer
 	glClearColor(0, 0, 0, 0);
 	glClearDepth(1);
@@ -940,7 +571,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 	gNormalMap.Bind(Shader::normalTexUnit);
 
 	// draw models
-	gBufferShader.Use();
+	gGBufferShader.Use();
 	
 	for (int i = 0; i < 3; ++i)
 	{
@@ -949,8 +580,8 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		modelMat = glm::rotate(modelMat, 45.f, glm::vec3(0, 1, 0));
 		modelMat = glm::scale(modelMat, glm::vec3(1.f, 1.2f, 1.5f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
 		gCubeMesh.Draw();
 	}
@@ -960,14 +591,11 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glm::mat4 modelMat(1);
 		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 5));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
 		gSphereMesh.Draw();
 	}
-
-	// unbind frame buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void DirectionalLightPass(const Viewpoint& mainViewpoint)
@@ -985,9 +613,7 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 	{
 		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gDirectionalLights[i].position));
 		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].direction));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "ambient"), 1, glm::value_ptr(gDirectionalLights[i].ambient));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "diffuse"), 1, glm::value_ptr(gDirectionalLights[i].diffuse));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "specular"), 1, glm::value_ptr(gDirectionalLights[i].specular));
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "color"), 1, glm::value_ptr(gDirectionalLights[i].GetColorIntensity()));
 		glUniform1f(gDirectionalLightShader.GetUniformLocation("lights", i, "radius"), gDirectionalLights[i].radius);
 	}
 
@@ -1010,7 +636,7 @@ void PointLightPass(const Viewpoint& mainViewpoint)
 		
 		// camera in light volume?
 		if (Math::DistSquared(mainViewpoint.position, gPointLights[i].position) <
-			gPointLights[i].radius * gPointLights[i].radius + KINDA_SMALL_NUMBER)
+			gPointLights[i].radius * gPointLights[i].radius * 1.01f * 1.01f)
 		{
 			gPointLightPrepassState.Apply();
 			// do back face draw directly
@@ -1041,9 +667,7 @@ void PointLightPass(const Viewpoint& mainViewpoint)
 
 		glUniform3fv(gPointLightShader.GetUniformLocation("light", "position"), 1, glm::value_ptr(gPointLights[i].position));
 		glUniform3fv(gPointLightShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(gPointLights[i].direction));
-		glUniform3fv(gPointLightShader.GetUniformLocation("light", "ambient"), 1, glm::value_ptr(gPointLights[i].ambient));
-		glUniform3fv(gPointLightShader.GetUniformLocation("light", "diffuse"), 1, glm::value_ptr(gPointLights[i].diffuse));
-		glUniform3fv(gPointLightShader.GetUniformLocation("light", "specular"), 1, glm::value_ptr(gPointLights[i].specular));
+		glUniform3fv(gPointLightShader.GetUniformLocation("light", "color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
 		glUniform1f(gPointLightShader.GetUniformLocation("light", "radius"), gPointLights[i].radius);
 		
 		glUniformMatrix4fv(gPointLightShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
@@ -1065,15 +689,29 @@ void LightPass(const Viewpoint& mainViewpoint)
 	
 	// clear default buffer
 	glClearColor(0, 0, 0, 0);
-	glClearDepth(1);
-	glClearStencil(0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	//glClearDepth(1);
+	//glClearStencil(0);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	DirectionalLightPass(mainViewpoint);
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	PointLightPass(mainViewpoint);	
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+}
+
+void PostProcessPass()
+{
+	gSceneColorTex.Bind(Shader::sceneColorTexUnit);
+
+	// directional light
+	gPostProcessFinishState.Apply();
+
+	gToneMapShader.Use();
+
+	// draw quad
+	gToneMapMesh.Draw();
 }
 
 void render()
@@ -1091,13 +729,24 @@ void render()
 	// maybe use glBufferSubData later?
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &gRenderInfo, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	
+	// bind G-buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
 
 	GeometryPass(mainViewpoint);
+
+	// bind Scene-buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
 	
 	LightPass(mainViewpoint);
 
+	// unbind frame buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	PostProcessPass();
+
 	// why not working ??
-	//glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer);
+	//glBindFramebuffer(GL_READ_FRAMEBUFFER, gGBuffer);
 	//glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	//glBlitFramebuffer(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 	
@@ -1114,7 +763,7 @@ void render()
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 		glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].diffuse));
+		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
 
 		gLightDebugMesh.Draw();
 	}

@@ -15,7 +15,7 @@ class Texture2D
 {
 public:
 
-	void Load(const char* name, 
+	void Load(const char* name, GLint internalFormat, GLenum format, GLenum type,
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE,
 		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_NEAREST_MIPMAP_NEAREST)
 	{
@@ -32,7 +32,7 @@ public:
 		}
 
 		glBindTexture(GL_TEXTURE_2D, textureID);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image->w, image->h, 0, GL_RGB, GL_UNSIGNED_BYTE, image->pixels);
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, image->w, image->h, 0, format, type, image->pixels);
 		glGenerateMipmap(GL_TEXTURE_2D);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);

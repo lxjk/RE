@@ -25,6 +25,8 @@ public:
 	static const GLuint gAlbedoSpecTexUnit = 1;
 	static const GLuint gDepthStencilTexUnit = 2;
 
+	static const GLuint sceneColorTexUnit = 0;
+
 	GLuint programID;
 
 	GLint positionIdx;
@@ -139,6 +141,8 @@ public:
 		SetTextureUnit("gNormalTex", gNormalTexUnit);
 		SetTextureUnit("gAlbedoSpecTex", gAlbedoSpecTexUnit);
 		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
+		// post process
+		SetTextureUnit("sceneColorTex", sceneColorTexUnit);
 
 		// delete shader
 		glDeleteShader(vertexID);

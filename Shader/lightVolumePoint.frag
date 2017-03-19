@@ -4,9 +4,7 @@ struct Light
 {
 	vec3 position;
 	vec3 direction;
-	vec3 diffuse;
-	vec3 specular;
-	vec3 ambient;
+	vec3 color;
 	float radius;
 };
 
@@ -33,17 +31,16 @@ uniform float specPower;
 
 uniform Light light;
 
-vec3 CalcLight(vec3 light, vec3 normal, vec3 view, vec3 colorDiff, vec3 colorSpec, vec3 colorAmb, vec3 albedo, float specIntensity, float attenuation)
+vec3 CalcLight(vec3 light, vec3 normal, vec3 view, vec3 lightColor, vec3 albedo, float specIntensity, float attenuation)
 {
 	vec3 halfVec = normalize(light + view);
 	
-	vec3 ambient = colorAmb * attenuation  * specIntensity; // hack! using spec to exclude pixel we don't draw on
-	vec3 diff = albedo * max(dot(normal, light), 0.f) * colorDiff * attenuation;
-	vec3 spec = pow(max(dot(normal, halfVec), 0.f), specPower) * colorSpec * attenuation * specIntensity;
+	vec3 diff = albedo * max(dot(normal, light), 0.f) * lightColor * attenuation;
+	vec3 spec = pow(max(dot(normal, halfVec), 0.f), specPower) * lightColor * attenuation * specIntensity;
 	//spec = vec3(0,0,0);
 	
 	//return vec3(specV, specV, specV);
-	return ambient + diff + spec;
+	return diff + spec;
 }
 
 vec3 CalcPointLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, float specIntensity)
@@ -51,11 +48,12 @@ vec3 CalcPointLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albe
 	vec3 light = vec3(viewMat * vec4(lightData.position, 1.f)) - pos;
 	float dist = length(light);
 	float attRatio = min(dist / lightData.radius, 1.f);
-	float attenuation = 1.f - attRatio * attRatio;
+	//float attenuation = 1.f - attRatio;
+	float attenuation = (1.f - attRatio) * (1.f - attRatio);
 	//float attenuation = 1.f;
 	light /= dist;
 
-	return CalcLight(light, normal, view, lightData.diffuse, lightData.specular, lightData.ambient, albedo, specIntensity, attenuation);
+	return CalcLight(light, normal, view, lightData.color, albedo, specIntensity, attenuation);
 }
 
 vec3 GetPosition(float depth)
