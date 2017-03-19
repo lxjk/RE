@@ -15,7 +15,7 @@ class Shader
 {
 public:
 
-	static const GLuint renderMatricesBP = 0;
+	static const GLuint RenderInfoBP = 0;
 
 	static const GLuint diffuseTexUnit = 0;
 	static const GLuint normalTexUnit = 1;
@@ -32,11 +32,16 @@ public:
 	GLint tangentIdx;
 	GLint texCoordsIdx;
 
+	GLchar vertexFilePath[512];
+	GLchar fragmentFilePath[512];
+
 	Shader()
 	{
+		memset(vertexFilePath, 0, _countof(vertexFilePath) * sizeof(GLchar));
+		memset(fragmentFilePath, 0, _countof(fragmentFilePath) * sizeof(GLchar));
 	}
 
-	Shader(const GLchar* vertexPath, const GLchar* fragmentPath)
+	Shader(const GLchar* vertexPath, const GLchar* fragmentPath) : Shader()
 	{
 		Load(vertexPath, fragmentPath);
 	}
@@ -66,6 +71,9 @@ public:
 		{
 			printf("Error: fail to read shader vertex: %s, fragmenet: %s", vertexPath, fragmentPath);
 		}
+
+		strcpy_s(vertexFilePath, vertexPath);
+		strcpy_s(fragmentFilePath, fragmentPath);
 
 		const GLchar* vShaderCode = vCode.c_str();
 		const GLchar* fShaderCode = fCode.c_str();
@@ -119,7 +127,7 @@ public:
 		texCoordsIdx = GetAttribuleLocation("texCoords");
 
 		// uniform buffer index
-		BindUniformBlock("RenderMatrices", renderMatricesBP);
+		BindUniformBlock("RenderInfo", RenderInfoBP);
 
 		// set texture unit
 		Use(); // must use program here
@@ -148,7 +156,7 @@ public:
 		location = glGetAttribLocation(programID, name);
 		if (location == -1)
 		{
-			printf("%s is not a valid glsl program variable!\n", name);
+			printf("%s is not a valid glsl program variable! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
 		}
 		return location;
 	}
@@ -159,7 +167,20 @@ public:
 		location = glGetUniformLocation(programID, name);
 		if (location == -1)
 		{
-			printf("%s is not a valid glsl program uniform!\n", name);
+			printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
+		}
+		return location;
+	}
+
+	GLint GetUniformLocation(const GLchar* name,  const GLchar* memberName)
+	{
+		char combinedName[128];
+		sprintf_s(combinedName, "%s.%s", name, memberName);
+		GLint location = -1;
+		location = glGetUniformLocation(programID, combinedName);
+		if (location == -1)
+		{
+			printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", combinedName, vertexFilePath, fragmentFilePath);
 		}
 		return location;
 	}
@@ -172,7 +193,7 @@ public:
 		location = glGetUniformLocation(programID, combinedName);
 		if (location == -1)
 		{
-			printf("%s is not a valid glsl program uniform!\n", combinedName);
+			printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", combinedName, vertexFilePath, fragmentFilePath);
 		}
 		return location;
 	}

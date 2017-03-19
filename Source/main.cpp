@@ -27,11 +27,12 @@
 #include "Engine/Light.h"
 #include "Engine/Viewpoint.h"
 #include "Engine/Camera.h"
+#include "Engine/Math.h"
 
 const int SCREEN_WIDTH = 1280;
 const int SCREEN_HEIGHT = 720;
 
-const int LIGHT_COUNT = 4;
+const int DIRECTIONAL_LIGHT_COUNT = 4;
 
 //The window we'll be rendering to
 SDL_Window* gWindow = NULL;
@@ -50,6 +51,9 @@ Texture2D gNormalTex, gAlbedoSpecTex, gDepthStencilTex;
 // shader
 Shader gTestShader;
 Shader gBufferShader;
+Shader gPrepassShader;
+Shader gDirectionalLightShader;
+Shader gPointLightShader;
 Shader gLightDebugShader;
 Shader gFSQuadShader;
 
@@ -65,22 +69,105 @@ Mesh gCubeMesh;
 Mesh gSphereMesh;
 Mesh gLightDebugMesh;
 Mesh gFSQuadMesh;
+Mesh gDirectionalLightMesh;
+Mesh gPointLightMesh;
+Mesh gPointLightPrepassMesh;
 
 // texture
 Texture2D gDiffuseMap;
 Texture2D gNormalMap;
 
 // light
-Light gLights[LIGHT_COUNT];
+Light gDirectionalLights[DIRECTIONAL_LIGHT_COUNT];
+std::vector<Light> gPointLights;
 
 // camera
 Camera gCamera;
 
-struct RenderMatrices
+struct RenderInfo
 {
 	glm::mat4 View;
 	glm::mat4 Proj;
-} gRenderMatrices;
+	glm::vec2 Resolution;
+} gRenderInfo;
+
+struct RenderState
+{
+	bool bColorWrite;
+
+	bool bDepthTest;
+	GLenum depthTestFunc;
+	bool bDepthWrite;
+
+	bool bStencilTest;
+	GLenum stencilTestFunc;
+	GLint stencilTestRef;
+	GLuint stencilTestMask;
+	GLenum stencilWriteSFail;
+	GLenum stencilWriteDFail;
+	GLenum stencilWriteDPass;
+	
+	bool bCullFace;
+	GLenum cullFaceMode;
+
+	RenderState()
+	{
+		bColorWrite = true;
+
+		bDepthTest = true;
+		depthTestFunc = GL_LESS;
+		bDepthWrite = true;
+
+		bStencilTest = false;
+		stencilTestFunc = GL_ALWAYS;
+		stencilTestRef = 1;
+		stencilTestMask = 0xFF;
+		stencilWriteSFail = GL_KEEP;
+		stencilWriteDFail = GL_KEEP;
+		stencilWriteDPass = GL_KEEP;
+
+
+		bCullFace = true;
+		cullFaceMode = GL_BACK;
+	}
+
+	void Apply()
+	{
+		if (bColorWrite)
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		else
+			glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+		if (bDepthTest)
+		{
+			glEnable(GL_DEPTH_TEST);
+			glDepthFunc(depthTestFunc);
+			glDepthMask(bDepthWrite);
+		}
+		else
+			glDisable(GL_DEPTH_TEST);
+
+		if (bStencilTest)
+		{
+			glEnable(GL_STENCIL_TEST);
+			glStencilFunc(stencilTestFunc, stencilTestRef, stencilTestMask);
+			glStencilOp(stencilWriteSFail, stencilWriteDFail, stencilWriteDPass);
+		}
+		else
+			glDisable(GL_STENCIL_TEST);
+
+		if (bCullFace)
+		{
+			glEnable(GL_CULL_FACE);
+			glCullFace(cullFaceMode);
+		}
+		else
+			glDisable(GL_CULL_FACE);
+	}
+};
+
+// Render state
+RenderState gGBufferState, gDirectionalLightState, gPointLightPrepassState, gPointLightState, gDebugForwardState;
 
 // input
 float gMouseWheel;
@@ -113,6 +200,13 @@ bool init()
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
 	// create window with opengl
 	gWindow = SDL_CreateWindow("Test",
@@ -240,7 +334,7 @@ void MakeSphere(MeshData& meshData, int div)
 		for (int iLon = 0; iLon < div+1; ++iLon)
 		{
 			float lonRatio = (float)iLon / (float)div;
-			float lonAngle = lonRatio * 2 * glm::pi<float>();
+			float lonAngle = lonRatio * 2 * PI;
 			float cosLon = glm::cos(lonAngle);
 			float sinLon = glm::sin(lonAngle);
 			glm::vec3 pos(cosLon * cosLat, sinLat, sinLon * cosLat);
@@ -290,7 +384,7 @@ glm::vec3 GetTangent(glm::vec3 normal)
 {
 	glm::vec3 up(0, 1, 0);
 	glm::vec3 tangent = glm::cross(up, normal);
-	if (glm::dot(tangent, tangent) < 0.00001f)
+	if (glm::dot(tangent, tangent) < KINDA_SMALL_NUMBER)
 		return glm::vec3(1, 0, 0);
 	return glm::normalize(tangent);
 }
@@ -319,7 +413,7 @@ void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 		for (int ringIdx = 0; ringIdx <= ringVertCount; ++ringIdx)
 		{
 			float ratio = (float)ringIdx / (float)ringVertCount;
-			float angle = ratio * 2 * glm::pi<float>();
+			float angle = ratio * 2 * PI;
 			float cosA = glm::cos(angle);
 			float sinA = glm::sin(angle);
 			glm::vec3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA) * mainAxisValue;
@@ -367,7 +461,7 @@ void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 	for (int ringIdx = 0; ringIdx <= ringVertCount; ++ringIdx)
 	{
 		float ratio = (float)ringIdx / (float)ringVertCount;
-		float angle = ratio * 2 * glm::pi<float>();
+		float angle = ratio * 2 * PI;
 		float cosA = glm::cos(angle);
 		float sinA = glm::sin(angle);
 		glm::vec3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA);
@@ -554,27 +648,39 @@ void MakeQuad()
 
 void MakeLights()
 {
-	memset(gLights, 0, sizeof(Light) * LIGHT_COUNT);
+	// directional lights
+	memset(gDirectionalLights, 0, sizeof(Light) * DIRECTIONAL_LIGHT_COUNT);
 
-	gLights[0].position = glm::vec3(0, 10, 10);
-	gLights[0].ambient = glm::vec3(0.1f, 0.1f, 0.1f);
-	gLights[0].diffuse = glm::vec3(1.f, 1.f, 1.f);
-	gLights[0].specular = glm::vec3(1.f, 1.f, 1.f);
-	gLights[0].radius = 20.f;
+	gDirectionalLights[0].direction = glm::normalize(glm::vec3(0, -1, -2));
+	gDirectionalLights[0].ambient = glm::vec3(0.02f, 0.02f, 0.02f);
+	gDirectionalLights[0].diffuse = glm::vec3(1.f, 1.f, 1.f);
+	gDirectionalLights[0].specular = glm::vec3(1.f, 1.f, 1.f);
 
+	// point lights
+	int plIdx = 0;
+	//gPointLights.push_back(Light());
+	//plIdx = gPointLights.size() - 1;
+	//gPointLights[plIdx].position = glm::vec3(0, 10, 10);
+	//gPointLights[plIdx].ambient = glm::vec3(0.02f, 0.02f, 0.02f);
+	//gPointLights[plIdx].diffuse = glm::vec3(1.f, 1.f, 1.f);
+	//gPointLights[plIdx].specular = glm::vec3(1.f, 1.f, 1.f);
+	//gPointLights[plIdx].radius = 20.f;
 
-	gLights[1].position = glm::vec3(0, 3, 3);
-	gLights[1].ambient = glm::vec3(0.1f, 0.1f, 0.f);
-	gLights[1].diffuse = glm::vec3(1.f, 1.f, 0.f);
-	gLights[1].specular = glm::vec3(1.f, 1.f, 0.f);
-	gLights[1].radius = 10.f;
+	gPointLights.push_back(Light());
+	plIdx = gPointLights.size() - 1;
+	gPointLights[plIdx].position = glm::vec3(0, 3, 3);
+	gPointLights[plIdx].ambient = glm::vec3(0.02f, 0.02f, 0.f);
+	gPointLights[plIdx].diffuse = glm::vec3(1.f, 1.f, 0.f);
+	gPointLights[plIdx].specular = glm::vec3(1.f, 1.f, 0.f);
+	gPointLights[plIdx].radius = 6.f;
 
-
-	gLights[2].position = glm::vec3(10, 4, 0);
-	gLights[2].ambient = glm::vec3(0.f, 0.1f, 0.f);
-	gLights[2].diffuse = glm::vec3(0.f, 1.f, 0.f);
-	gLights[2].specular = glm::vec3(0.f, 1.f, 0.f);
-	gLights[2].radius = 10.f;	
+	gPointLights.push_back(Light());
+	plIdx = gPointLights.size() - 1;
+	gPointLights[plIdx].position = glm::vec3(10, 2, 0);
+	gPointLights[plIdx].ambient = glm::vec3(0.f, 0.02f, 0.f);
+	gPointLights[plIdx].diffuse = glm::vec3(0.f, 1.f, 0.f);
+	gPointLights[plIdx].specular = glm::vec3(0.f, 1.f, 0.f);
+	gPointLights[plIdx].radius = 10.f;	
 }
 
 void AllocateFrameBufferTexture(GLuint& textureID, int width, int height, GLint internalFormat, GLenum format, GLenum type)
@@ -601,7 +707,7 @@ void SetupFrameBuffers()
 	//gPositionTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 	// normal
 	//gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
-	gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
+	gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
 	gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 	// albedo + spec
 	gAlbedoSpecTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
@@ -619,6 +725,47 @@ void SetupFrameBuffers()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void SetupRenderStates()
+{
+	{
+		RenderState& s = gDirectionalLightState;
+		// depth always pass, write depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_ALWAYS;
+		s.bDepthWrite = true;
+	}
+
+	{
+		RenderState& s = gPointLightPrepassState;
+		// don't write color
+		s.bColorWrite = false;
+		// inverse depth test only, don't write depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_GEQUAL;
+		s.bDepthWrite = false;
+		// stencil always pass, write stencil
+		s.bStencilTest = true;
+		s.stencilTestFunc = GL_ALWAYS;
+		s.stencilTestRef = 1;
+		s.stencilWriteDPass = GL_REPLACE;
+		// draw backface
+		s.bCullFace = true;
+		s.cullFaceMode = GL_FRONT;
+	}
+
+	{
+		RenderState& s = gPointLightState;
+		// depth test only, don't write depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_LEQUAL;
+		s.bDepthWrite = false;
+		// stencil test equal only
+		s.bStencilTest = true;
+		s.stencilTestFunc = GL_EQUAL;
+		s.stencilTestRef = 1;
+	}
+}
+
 bool initGL()
 {
 	// frame buffers
@@ -627,14 +774,20 @@ bool initGL()
 	// ubo
 	glGenBuffers(1, &gUBO_Matrices);
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderMatrices), NULL, GL_DYNAMIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	// binding point
-	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::renderMatricesBP, gUBO_Matrices);
+	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::RenderInfoBP, gUBO_Matrices);
+
+	// render states
+	SetupRenderStates();
 
 	// shader
 	gTestShader.Load("Shader\\test.vert", "Shader\\test.frag");
 	gBufferShader.Load("Shader\\gbuffer.vert", "Shader\\gbuffer.frag");
+	gPrepassShader.Load("Shader\\prepass.vert", "Shader\\prepass.frag");
+	gDirectionalLightShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag");
+	gPointLightShader.Load("Shader\\lightVolume.vert", "Shader\\lightVolumePoint.frag");
 	gLightDebugShader.Load("Shader\\test.vert", "Shader\\lightDebug.frag");
 	gFSQuadShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag");
 
@@ -648,8 +801,11 @@ bool initGL()
 	// model
 	gCubeMesh.Init(&gCubeMeshData, &gBufferShader);
 	gSphereMesh.Init(&gSphereMeshData, &gBufferShader);
-	gLightDebugMesh.Init(&gConeMeshData, &gLightDebugShader);
+	gLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugShader);
 	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadShader);
+	gDirectionalLightMesh.Init(&gQuadMeshData, &gDirectionalLightShader);
+	gPointLightMesh.Init(&gIcosahedronMeshData, &gPointLightShader);
+	gPointLightPrepassMesh.Init(&gIcosahedronMeshData, &gPrepassShader);
 
 	// texture
 	gDiffuseMap.Load("Content\\Texture\\154.jpg");
@@ -768,14 +924,15 @@ void update()
 
 void GeometryPass(const Viewpoint& mainViewpoint)
 {
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
+	gGBufferState.Apply();
 
 	// bind frame buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
 
 	// clear frame buffer
 	glClearColor(0, 0, 0, 0);
+	glClearDepth(1);
+	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	// bind texture
@@ -813,59 +970,126 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void DirectionalLightPass(const Viewpoint& mainViewpoint)
+{
+	// directional light
+	gDirectionalLightState.Apply();
+
+	gDirectionalLightShader.Use();
+
+	//glUniform3fv(gDirectionalLightShader.GetUniformLocation("viewPos"), 1, glm::value_ptr(mainViewpoint.position));
+	glUniform1f(gDirectionalLightShader.GetUniformLocation("specPower"), 32.f);
+
+	// set light
+	for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; ++i)
+	{
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gDirectionalLights[i].position));
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].direction));
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "ambient"), 1, glm::value_ptr(gDirectionalLights[i].ambient));
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "diffuse"), 1, glm::value_ptr(gDirectionalLights[i].diffuse));
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "specular"), 1, glm::value_ptr(gDirectionalLights[i].specular));
+		glUniform1f(gDirectionalLightShader.GetUniformLocation("lights", i, "radius"), gDirectionalLights[i].radius);
+	}
+
+	// draw quad
+	gDirectionalLightMesh.Draw();
+}
+
+void PointLightPass(const Viewpoint& mainViewpoint)
+{
+	// point light
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	
+	for (int i = 0; i < gPointLights.size(); ++i)
+	{
+		// model
+		glm::mat4 modelMat(1);
+		modelMat = glm::translate(modelMat, gPointLights[i].position);
+		modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
+		
+		// camera in light volume?
+		if (Math::DistSquared(mainViewpoint.position, gPointLights[i].position) <
+			gPointLights[i].radius * gPointLights[i].radius + KINDA_SMALL_NUMBER)
+		{
+			gPointLightPrepassState.Apply();
+			// do back face draw directly
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			// no need for stencil test
+			glDisable(GL_STENCIL_TEST);
+		}
+		else
+		{
+			// do 2-pass
+			// clear stencil
+			glClearStencil(0);
+			glClear(GL_STENCIL_BUFFER_BIT);
+
+			// prepass
+			gPointLightPrepassState.Apply();
+			gPrepassShader.Use();
+			glUniformMatrix4fv(gPrepassShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+			gPointLightPrepassMesh.Draw();
+
+			// draw light
+			gPointLightState.Apply();
+		}
+
+		gPointLightShader.Use();
+
+		glUniform1f(gPointLightShader.GetUniformLocation("specPower"), 32.f);
+
+		glUniform3fv(gPointLightShader.GetUniformLocation("light", "position"), 1, glm::value_ptr(gPointLights[i].position));
+		glUniform3fv(gPointLightShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(gPointLights[i].direction));
+		glUniform3fv(gPointLightShader.GetUniformLocation("light", "ambient"), 1, glm::value_ptr(gPointLights[i].ambient));
+		glUniform3fv(gPointLightShader.GetUniformLocation("light", "diffuse"), 1, glm::value_ptr(gPointLights[i].diffuse));
+		glUniform3fv(gPointLightShader.GetUniformLocation("light", "specular"), 1, glm::value_ptr(gPointLights[i].specular));
+		glUniform1f(gPointLightShader.GetUniformLocation("light", "radius"), gPointLights[i].radius);
+		
+		glUniformMatrix4fv(gPointLightShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+		gPointLightMesh.Draw();
+		
+	}
+
+	glDisable(GL_BLEND);
+}
+
 void LightPass(const Viewpoint& mainViewpoint)
 {
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_ALWAYS);
-	glEnable(GL_CULL_FACE);
-
-	// clear default buffer
-	glClearColor(0, 0, 0, 0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
 	// bind textures
 	//gPositionTex.Bind(Shader::gPositionTexUnit);
 	gNormalTex.Bind(Shader::gNormalTexUnit);
 	gAlbedoSpecTex.Bind(Shader::gAlbedoSpecTexUnit);
 	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
-
-	gFSQuadShader.Use();
-
-	//glUniform3fv(gFSQuadShader.GetUniformLocation("viewPos"), 1, glm::value_ptr(mainViewpoint.position));
-	glUniform1f(gFSQuadShader.GetUniformLocation("specPower"), 32.f);
-
-	// set light
-	for (int i = 0; i < LIGHT_COUNT; ++i)
-	{
-		glUniform3fv(gFSQuadShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gLights[i].position));
-		glUniform3fv(gFSQuadShader.GetUniformLocation("lights", i, "ambient"), 1, glm::value_ptr(gLights[i].ambient));
-		glUniform3fv(gFSQuadShader.GetUniformLocation("lights", i, "diffuse"), 1, glm::value_ptr(gLights[i].diffuse));
-		glUniform3fv(gFSQuadShader.GetUniformLocation("lights", i, "specular"), 1, glm::value_ptr(gLights[i].specular));
-		glUniform1f(gFSQuadShader.GetUniformLocation("lights", i, "radius"), gLights[i].radius);
-	}
 	
-	// draw quad
-	gFSQuadMesh.Draw();
+	// clear default buffer
+	glClearColor(0, 0, 0, 0);
+	glClearDepth(1);
+	glClearStencil(0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	DirectionalLightPass(mainViewpoint);
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	PointLightPass(mainViewpoint);	
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
 }
 
 void render()
 {
 	const Viewpoint& mainViewpoint = gCamera.ProcessCamera((GLfloat)SCREEN_WIDTH, (GLfloat)SCREEN_HEIGHT, 0.1f, 1000.f);
 
-	//glEnable(GL_DEPTH_TEST);
-	//glEnable(GL_CULL_FACE);
-	//glCullFace(GL_BACK);
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-	//glClearColor(0, 0, 0, 1);
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	// update ubo
-	gRenderMatrices.View = mainViewpoint.viewMat;
-	gRenderMatrices.Proj = mainViewpoint.projMat;
+	gRenderInfo.View = mainViewpoint.viewMat;
+	gRenderInfo.Proj = mainViewpoint.projMat;
+	gRenderInfo.Resolution.x = mainViewpoint.width;
+	gRenderInfo.Resolution.y = mainViewpoint.height;
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 	// maybe use glBufferSubData later?
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderMatrices), &gRenderMatrices, GL_DYNAMIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &gRenderInfo, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	GeometryPass(mainViewpoint);
@@ -876,27 +1100,51 @@ void render()
 	//glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer);
 	//glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	//glBlitFramebuffer(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-
-
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
-	glEnable(GL_CULL_FACE);
+	
+	gDebugForwardState.Apply();
 
 	// draw debug
 	gLightDebugShader.Use();
 
-	for (int i = 0; i < LIGHT_COUNT; ++i)
+	for (int i = 0; i < gPointLights.size(); ++i)
 	{
 		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, gLights[i].position);
+		modelMat = glm::translate(modelMat, gPointLights[i].position);
 		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 		glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gLights[i].diffuse));
+		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].diffuse));
 
 		gLightDebugMesh.Draw();
 	}
+
+	//{
+	//	glClear(GL_STENCIL_BUFFER_BIT);
+	//	glEnable(GL_STENCIL_TEST);
+	//	glStencilFunc(GL_ALWAYS, 1, 0xFF);
+	//	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
+	//	glm::mat4 modelMat(1);
+	//	modelMat = glm::translate(modelMat, gPointLights[0].position);
+	//	modelMat = glm::scale(modelMat, glm::vec3(gPointLights[0].radius));
+	//	glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[0].diffuse));
+	//	gLightDebugMesh.Draw();
+	//}
+	//{
+	//	glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+	//	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	//	glm::mat4 modelMat(1);
+	//	modelMat = glm::translate(modelMat, gPointLights[1].position);
+	//	modelMat = glm::scale(modelMat, glm::vec3(gPointLights[1].radius));
+	//	glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[1].diffuse));
+	//	gLightDebugMesh.Draw();
+	//}
+
+	//glDisable(GL_STENCIL_TEST);
 
 }
 

@@ -23,6 +23,7 @@ void main()
 	vec3 faceTangent = normalize(fs_in.tangent);
 	mat3 TBN = mat3(faceTangent, cross(faceNormal, faceTangent), faceNormal);
 	gNormal = (TBN * normalize(texture(normalTex, fs_in.texCoords).rgb * 2.0f - 1.0f)) * 0.5f + 0.5f;
+	//gNormal = faceNormal * 0.5f + 0.5f;
 	
 	gAlbedoSpec.rgb = texture(diffuseTex, fs_in.texCoords).rgb;
 	gAlbedoSpec.a = 1.f;

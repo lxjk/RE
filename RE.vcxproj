@@ -24,6 +24,7 @@
   <ItemGroup>
     <ClInclude Include="Source\Engine\Camera.h" />
     <ClInclude Include="Source\Engine\Light.h" />
+    <ClInclude Include="Source\Engine\Math.h" />
     <ClInclude Include="Source\Engine\Mesh.h" />
     <ClInclude Include="Source\Engine\Shader.h" />
     <ClInclude Include="Source\Engine\Texture2D.h" />

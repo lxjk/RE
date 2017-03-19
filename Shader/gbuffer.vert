@@ -13,10 +13,11 @@ out VS_OUT
 	vec2 texCoords;
 } vs_out;
 
-layout(std140) uniform RenderMatrices
+layout(std140) uniform RenderInfo
 {
 	mat4 viewMat;
 	mat4 projMat;
+	vec2 resolution;
 };
 
 uniform mat4 modelMat;

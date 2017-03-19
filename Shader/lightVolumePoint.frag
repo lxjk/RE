@@ -10,12 +10,9 @@ struct Light
 	float radius;
 };
 
-#define LIGHT_COUNT 4
-
 in VS_OUT
 {
 	vec3 positionVS;
-	vec2 texCoords;
 } fs_in;
 
 out vec4 color;
@@ -34,8 +31,7 @@ uniform sampler2D gDepthStencilTex;
 
 uniform float specPower;
 
-//uniform vec3 viewPos;
-uniform Light lights[LIGHT_COUNT];
+uniform Light light;
 
 vec3 CalcLight(vec3 light, vec3 normal, vec3 view, vec3 colorDiff, vec3 colorSpec, vec3 colorAmb, vec3 albedo, float specIntensity, float attenuation)
 {
@@ -62,14 +58,6 @@ vec3 CalcPointLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albe
 	return CalcLight(light, normal, view, lightData.diffuse, lightData.specular, lightData.ambient, albedo, specIntensity, attenuation);
 }
 
-vec3 CalcDirectionalLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, float specIntensity)
-{
-	vec3 light = mat3(viewMat) * -lightData.direction;
-	float attenuation = 1.f;
-
-	return CalcLight(light, normal, view, lightData.diffuse, lightData.specular, lightData.ambient, albedo, specIntensity, attenuation);
-}
-
 vec3 GetPosition(float depth)
 {
 	float ndcZ = depth * 2.f - 1.f;
@@ -86,8 +74,7 @@ void main()
 {	
 	vec2 uv = gl_FragCoord.xy / resolution;
 	vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
-	vec4 depthStencil = texture(gDepthStencilTex, uv);
-	float depth = depthStencil.r;
+	float depth = texture(gDepthStencilTex, uv).r;
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
 	//vec3 rposition = texture(gPositionTex, fs_in.texCoords).rgb;
 	vec3 position = GetPosition(depth);
@@ -95,15 +82,8 @@ void main()
 	vec3 view = normalize(-position);	
 	vec4 albedoSpec = texture(gAlbedoSpecTex, uv);
 	
-	vec3 result = vec3(0,0,0);
-	for(int i = 0; i < LIGHT_COUNT; ++i)
-	{
-		result += CalcDirectionalLight(lights[i], normal, position, view, albedoSpec.rgb, albedoSpec.a);
-	}
-	//result += CalcPointLight(lights[0], normal, position, view, albedoSpec.rgb, albedoSpec.a);
+	vec3 result = CalcPointLight(light, normal, position, view, albedoSpec.rgb, albedoSpec.a);
 	color = vec4(result, 1.0f);
 	//color = vec4(abs((rposition - position) / rposition) * 100, 1.0f);
-	//color = vec4(normal, 1.0f);
-	//color = vec4(depthStencil.a, depthStencil.a, depthStencil.a, 1.0f);
-	gl_FragDepth = depth;
+	//color = vec4(1.0f, 1.0f, 1.0f , 1.0f);
 }
