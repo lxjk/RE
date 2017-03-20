@@ -1,5 +1,7 @@
 #version 330 core
 
+#include "Include/CommonUBO.incl"
+
 in vec3 position;
 in vec2 texCoords;
 
@@ -8,13 +10,6 @@ out VS_OUT
 	vec3 positionVS;
 	vec2 texCoords;
 } vs_out;
-
-layout(std140) uniform RenderInfo
-{
-	mat4 viewMat;
-	mat4 projMat;
-	vec2 resolution;
-};
 
 void main()
 {	

@@ -404,14 +404,17 @@ void SetupRenderStates()
 
 void LoadShaders(bool bReload)
 {
-	//gTestShader.Load("Shader\\test.vert", "Shader\\test.frag", !bReload);
-	gGBufferShader.Load("Shader\\gbuffer.vert", "Shader\\gbuffer.frag", !bReload);
-	gPrepassShader.Load("Shader\\prepass.vert", "Shader\\prepass.frag", !bReload);
-	gDirectionalLightShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag", !bReload);
-	gPointLightShader.Load("Shader\\lightVolume.vert", "Shader\\lightVolumePoint.frag", !bReload);
-	gLightDebugShader.Load("Shader\\test.vert", "Shader\\lightDebug.frag", !bReload);
-	gFSQuadShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag", !bReload);
-	gToneMapShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadToneMap.frag", !bReload);
+	// clear cache
+	gShaderFileCache.clear();
+
+	//gTestShader.Load("Shader/test.vert", "Shader/test.frag", !bReload);
+	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
+	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
+	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
+	gPointLightShader.Load("Shader/lightVolume.vert", "Shader/lightVolumePoint.frag", !bReload);
+	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
+	gFSQuadShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
+	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 }
 
 bool initGL()
@@ -453,8 +456,8 @@ bool initGL()
 	gToneMapMesh.Init(&gQuadMeshData, &gToneMapShader);
 
 	// texture
-	gDiffuseMap.Load("Content\\Texture\\154.jpg", GL_SRGB, GL_RGB, GL_UNSIGNED_BYTE);
-	gNormalMap.Load("Content\\Texture\\154_norm.jpg", GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
+	gDiffuseMap.Load("Content/Texture/154.jpg", GL_SRGB, GL_RGB, GL_UNSIGNED_BYTE);
+	gNormalMap.Load("Content/Texture/154_norm.jpg", GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
 
 	// light
 	MakeLights();
@@ -652,13 +655,12 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 	gDirectionalLightShader.Use();
 
 	//glUniform3fv(gDirectionalLightShader.GetUniformLocation("viewPos"), 1, glm::value_ptr(mainViewpoint.position));
-	//glUniform1f(gDirectionalLightShader.GetUniformLocation("specPower"), 32.f);
 
 	// set light
 	for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; ++i)
 	{
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gDirectionalLights[i].position));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].direction));
+		//glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gDirectionalLights[i].GetPositionViewSpace(mainViewpoint.viewMat)));
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].GetDirectionViewSpace(mainViewpoint.viewMat)));
 		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "color"), 1, glm::value_ptr(gDirectionalLights[i].GetColorIntensity()));
 		glUniform1f(gDirectionalLightShader.GetUniformLocation("lights", i, "radius"), gDirectionalLights[i].radius);
 	}
@@ -708,11 +710,9 @@ void PointLightPass(const Viewpoint& mainViewpoint)
 		}
 
 		gPointLightShader.Use();
-
-		//glUniform1f(gPointLightShader.GetUniformLocation("specPower"), 32.f);
-
-		glUniform3fv(gPointLightShader.GetUniformLocation("light", "position"), 1, glm::value_ptr(gPointLights[i].position));
-		glUniform3fv(gPointLightShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(gPointLights[i].direction));
+		
+		glUniform3fv(gPointLightShader.GetUniformLocation("light", "position"), 1, glm::value_ptr(gPointLights[i].GetPositionViewSpace(mainViewpoint.viewMat)));
+		//glUniform3fv(gPointLightShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(gPointLights[i].GetDirectionViewSpace(mainViewpoint.viewMat)));
 		glUniform3fv(gPointLightShader.GetUniformLocation("light", "color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
 		glUniform1f(gPointLightShader.GetUniformLocation("light", "radius"), gPointLights[i].radius);
 		

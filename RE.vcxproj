@@ -27,6 +27,7 @@
     <ClInclude Include="Source\Engine\Math.h" />
     <ClInclude Include="Source\Engine\Mesh.h" />
     <ClInclude Include="Source\Engine\Shader.h" />
+    <ClInclude Include="Source\Engine\ShaderLoader.h" />
     <ClInclude Include="Source\Engine\Texture2D.h" />
     <ClInclude Include="Source\Engine\Viewpoint.h" />
   </ItemGroup>

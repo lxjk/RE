@@ -1,0 +1,6 @@
+#ifndef COMMON_CONST_INCL
+#define COMMON_CONST_INCL
+
+const float PI = 3.14159265359;
+
+#endif

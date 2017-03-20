@@ -6,10 +6,7 @@
 // opengl
 #include "SDL_opengl.h"
 
-#include <string>
-#include <fstream>
-#include <sstream>
-#include <iostream>
+#include "ShaderLoader.h"
 
 class Shader
 {
@@ -52,26 +49,22 @@ public:
 	{
 		std::string vCode;
 		std::string fCode;
-		std::ifstream vShaderFile;
-		std::ifstream fShaderFile;
-		vShaderFile.exceptions(std::ifstream::badbit);
-		fShaderFile.exceptions(std::ifstream::badbit);
-		try
+
+		if (!LoadShader(vCode, vertexPath))
 		{
-			// open files
-			vShaderFile.open(vertexPath);
-			fShaderFile.open(fragmentPath);
-			std::stringstream vShaderStream, fShaderStream;
-			vShaderStream << vShaderFile.rdbuf();
-			fShaderStream << fShaderFile.rdbuf();
-			vShaderFile.close();
-			fShaderFile.close();
-			vCode = vShaderStream.str();
-			fCode = fShaderStream.str();
+			printf("Error: fail to read shader vertex: %s", vertexPath);
+			if (bAssert)
+				assert(0);
+			else
+				return;
 		}
-		catch (std::ifstream::failure e)
+		if (!LoadShader(fCode, fragmentPath))
 		{
-			printf("Error: fail to read shader vertex: %s, fragmenet: %s", vertexPath, fragmentPath);
+			printf("Error: fail to read shader fragmenet: %s", fragmentPath);
+			if (bAssert)
+				assert(0);
+			else
+				return;
 		}
 
 		strcpy_s(vertexFilePath, vertexPath);

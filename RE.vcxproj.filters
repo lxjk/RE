@@ -39,5 +39,8 @@
     <ClInclude Include="Source\Engine\Math.h">
       <Filter>Source\Engine</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\ShaderLoader.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

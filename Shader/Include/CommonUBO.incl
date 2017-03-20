@@ -1,0 +1,11 @@
+#ifndef COMMON_UBO_INCL
+#define COMMON_UBO_INCL
+
+layout(std140) uniform RenderInfo
+{
+	mat4 viewMat;
+	mat4 projMat;
+	vec2 resolution;
+};
+
+#endif

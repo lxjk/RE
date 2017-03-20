@@ -1,13 +1,8 @@
 #version 330 core
 
-in vec3 position;
+#include "Include/CommonUBO.incl"
 
-layout(std140) uniform RenderInfo
-{
-	mat4 viewMat;
-	mat4 projMat;
-	vec2 resolution;
-};
+in vec3 position;
 
 uniform mat4 modelMat;
 

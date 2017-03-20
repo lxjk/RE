@@ -25,4 +25,14 @@ public:
 	{
 		return color * intensity;
 	}
+
+	glm::vec3 GetPositionViewSpace(const glm::mat4& viewMat)
+	{
+		return glm::vec3(viewMat * glm::vec4(position, 1.f));
+	}
+
+	glm::vec3 GetDirectionViewSpace(const glm::mat4& viewMat)
+	{
+		return glm::mat3(viewMat) * direction;
+	}
 };
