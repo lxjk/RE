@@ -20,12 +20,12 @@ public:
 	static const GLuint diffuseTexUnit = 0;
 	static const GLuint normalTexUnit = 1;
 
-	//static const GLuint gPositionTexUnit = 0;
-	static const GLuint gNormalTexUnit = 0;
-	static const GLuint gAlbedoSpecTexUnit = 1;
-	static const GLuint gDepthStencilTexUnit = 2;
+	static const GLuint gDepthStencilTexUnit = 0;
+	static const GLuint gNormalTexUnit = 1;
+	static const GLuint gAlbedoTexUnit = 2;
+	static const GLuint gMaterialTexUnit = 3;
 
-	static const GLuint sceneColorTexUnit = 0;
+	static const GLuint sceneColorTexUnit = 1;
 
 	GLuint programID;
 
@@ -48,7 +48,7 @@ public:
 		Load(vertexPath, fragmentPath);
 	}
 
-	void Load(const GLchar* vertexPath, const GLchar* fragmentPath)
+	void Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAssert = true)
 	{
 		std::string vCode;
 		std::string fCode;
@@ -94,8 +94,13 @@ public:
 		{
 			glGetShaderInfoLog(vertexID, 512, NULL, infoLog);
 			printf("Error: vertex shader %s compile fail: %s", vertexPath, infoLog);
+			// clean up
+			glDeleteShader(vertexID);
+			if (bAssert)
+				assert(success);
+			else
+				return;
 		}
-		assert(success);
 
 		// fragment shader
 		fragmentID = glCreateShader(GL_FRAGMENT_SHADER);
@@ -106,21 +111,43 @@ public:
 		{
 			glGetShaderInfoLog(fragmentID, 512, NULL, infoLog);
 			printf("Error: fragment shader %s compile fail: %s", fragmentPath, infoLog);
+			// clean up
+			glDeleteShader(vertexID);
+			glDeleteShader(fragmentID);
+			if (bAssert)
+				assert(success);
+			else
+				return;
 		}
-		assert(success);
 
 		// attach and link
-		programID = glCreateProgram();
-		glAttachShader(programID, vertexID);
-		glAttachShader(programID, fragmentID);
-		glLinkProgram(programID);
-		glGetProgramiv(programID, GL_LINK_STATUS, &success);
+		GLuint newProgramID = glCreateProgram();
+		glAttachShader(newProgramID, vertexID);
+		glAttachShader(newProgramID, fragmentID);
+		glLinkProgram(newProgramID);
+		glGetProgramiv(newProgramID, GL_LINK_STATUS, &success);
 		if (!success)
 		{
-			glGetProgramInfoLog(programID, 512, NULL, infoLog);
+			glGetProgramInfoLog(newProgramID, 512, NULL, infoLog);
 			printf("Error: shader programe link fail: %s", infoLog);
+			// clean up
+			glDeleteShader(vertexID);
+			glDeleteShader(fragmentID);
+			glDeleteProgram(newProgramID);
+			if (bAssert)
+				assert(success);
+			else
+				return;
 		}
-		assert(success);
+		
+		// delete shader
+		glDeleteShader(vertexID);
+		glDeleteShader(fragmentID);
+
+		// delete old program
+		if (programID)
+			glDeleteProgram(programID);
+		programID = newProgramID;
 
 		// get attribute indices
 		positionIdx = GetAttribuleLocation("position");
@@ -137,16 +164,12 @@ public:
 		SetTextureUnit("diffuseTex", diffuseTexUnit);
 		SetTextureUnit("normalTex", normalTexUnit);
 		// light pass
-		//SetTextureUnit("gPositionTex", gPositionTexUnit);
-		SetTextureUnit("gNormalTex", gNormalTexUnit);
-		SetTextureUnit("gAlbedoSpecTex", gAlbedoSpecTexUnit);
 		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
+		SetTextureUnit("gNormalTex", gNormalTexUnit);
+		SetTextureUnit("gAlbedoTex", gAlbedoTexUnit);
+		SetTextureUnit("gMaterialTex", gMaterialTexUnit);
 		// post process
 		SetTextureUnit("sceneColorTex", sceneColorTexUnit);
-
-		// delete shader
-		glDeleteShader(vertexID);
-		glDeleteShader(fragmentID);
 	}
 
 	void Use()

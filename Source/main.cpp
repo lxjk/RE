@@ -45,8 +45,7 @@ GLuint gUBO_Matrices = 0;
 
 // frame buffer
 GLuint gGBuffer = 0;
-//Texture2D gPositionTex;
-Texture2D gNormalTex, gAlbedoSpecTex, gDepthStencilTex;
+Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gDepthStencilTex;
 
 GLuint gSceneBuffer = 0;
 Texture2D gSceneColorTex;
@@ -267,57 +266,64 @@ void MakeLights()
 	memset(gDirectionalLights, 0, sizeof(Light) * DIRECTIONAL_LIGHT_COUNT);
 
 	gDirectionalLights[0].direction = glm::normalize(glm::vec3(0, -1, -2));
-	gDirectionalLights[0].color = glm::vec3(0.1f, 0.1f, 0.1f);
+	gDirectionalLights[0].color = glm::vec3(1.f, 1.f, 1.f);
 	gDirectionalLights[0].intensity = 1;
 
 	// point lights
 	int plIdx = 0;
-	gPointLights.push_back(Light());
-	plIdx = gPointLights.size() - 1;
-	gPointLights[plIdx].position = glm::vec3(0, 10, 10);
-	gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 1.f);
-	gPointLights[plIdx].intensity = 1;
-	gPointLights[plIdx].radius = 20.f;
+	//gPointLights.push_back(Light());
+	//plIdx = gPointLights.size() - 1;
+	//gPointLights[plIdx].position = glm::vec3(0, 10, 10);
+	//gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 1.f);
+	//gPointLights[plIdx].intensity = 1;
+	//gPointLights[plIdx].radius = 20.f;
 
 	gPointLights.push_back(Light());
 	plIdx = gPointLights.size() - 1;
 	gPointLights[plIdx].position = glm::vec3(0, 3, 3);
-	gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 0.f);
-	gPointLights[plIdx].intensity = 10;
-	gPointLights[plIdx].radius = 6.f;
+	gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 1.f);
+	gPointLights[plIdx].intensity = 20;
+	gPointLights[plIdx].radius = 12.f;
 
 	gPointLights.push_back(Light());
 	plIdx = gPointLights.size() - 1;
 	gPointLights[plIdx].position = glm::vec3(10, 2, 0);
 	gPointLights[plIdx].color = glm::vec3(0.f, 1.f, 0.f);
-	gPointLights[plIdx].intensity = 5;
-	gPointLights[plIdx].radius = 10.f;	
+	gPointLights[plIdx].intensity = 20;
+	gPointLights[plIdx].radius = 20.f;
+
+	gPointLights.push_back(Light());
+	plIdx = gPointLights.size() - 1;
+	gPointLights[plIdx].position = glm::vec3(-10, 3, 3);
+	gPointLights[plIdx].color = glm::vec3(1.f, 0.f, 0.f);
+	gPointLights[plIdx].intensity = 20;
+	gPointLights[plIdx].radius = 12.f;
 }
 
 void SetupFrameBuffers()
 {
 	// G-Buffer
 	{
-		// position(RGB)
 		// normal(RGB)
-		// color(RGB) + spec(A)
+		// color(RGB)
+		// matellic(R) + roughness(B)
 		glGenFramebuffers(1, &gGBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
-		// position
-		//gPositionTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
-		//gPositionTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 		// normal
 		//gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
 		gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
 		gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
-		// albedo + spec
-		gAlbedoSpecTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
-		gAlbedoSpecTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
+		// albedo
+		gAlbedoTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
+		gAlbedoTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
+		// material: metallic + roughness
+		gMaterialTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
+		gMaterialTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT2);
 		// depth
 		gDepthStencilTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
 		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 
-		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
 		glDrawBuffers(_countof(attachments), attachments);
 
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -396,6 +402,18 @@ void SetupRenderStates()
 	}
 }
 
+void LoadShaders(bool bReload)
+{
+	//gTestShader.Load("Shader\\test.vert", "Shader\\test.frag", !bReload);
+	gGBufferShader.Load("Shader\\gbuffer.vert", "Shader\\gbuffer.frag", !bReload);
+	gPrepassShader.Load("Shader\\prepass.vert", "Shader\\prepass.frag", !bReload);
+	gDirectionalLightShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag", !bReload);
+	gPointLightShader.Load("Shader\\lightVolume.vert", "Shader\\lightVolumePoint.frag", !bReload);
+	gLightDebugShader.Load("Shader\\test.vert", "Shader\\lightDebug.frag", !bReload);
+	gFSQuadShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag", !bReload);
+	gToneMapShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadToneMap.frag", !bReload);
+}
+
 bool initGL()
 {
 	// frame buffers
@@ -413,14 +431,7 @@ bool initGL()
 	SetupRenderStates();
 
 	// shader
-	//gTestShader.Load("Shader\\test.vert", "Shader\\test.frag");
-	gGBufferShader.Load("Shader\\gbuffer.vert", "Shader\\gbuffer.frag");
-	gPrepassShader.Load("Shader\\prepass.vert", "Shader\\prepass.frag");
-	gDirectionalLightShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag");
-	gPointLightShader.Load("Shader\\lightVolume.vert", "Shader\\lightVolumePoint.frag");
-	gLightDebugShader.Load("Shader\\test.vert", "Shader\\lightDebug.frag");
-	gFSQuadShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadLight.frag");
-	gToneMapShader.Load("Shader\\fsQuad.vert", "Shader\\fsQuadToneMap.frag");
+	LoadShaders(false);
 
 	// mesh
 	MakeCube(gCubeMeshData);
@@ -450,8 +461,8 @@ bool initGL()
 	
 	// camera
 	gCamera.fov = glm::radians(90.f);
-	gCamera.position = glm::vec3(0.f, 0.f, 10.f);
-	gCamera.euler = glm::vec3(0.f, 0.f, 0.f);
+	gCamera.position = glm::vec3(0.f, 5.f, 20.f);
+	gCamera.euler = glm::vec3(-10.f, 0.f, 0.f);
 
 	return true;
 }
@@ -573,18 +584,36 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 	// draw models
 	gGBufferShader.Use();
 	
+	glUniform1f(gGBufferShader.GetUniformLocation("metallic"), 1.0f);
+	glUniform1f(gGBufferShader.GetUniformLocation("roughness"), 0.3f);
+	
 	for (int i = 0; i < 3; ++i)
 	{
 		glm::mat4 modelMat(1);
 		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 0));
 		modelMat = glm::rotate(modelMat, 45.f, glm::vec3(0, 1, 0));
-		modelMat = glm::scale(modelMat, glm::vec3(1.f, 1.2f, 1.5f));
+		modelMat = glm::scale(modelMat, glm::vec3(1.5f, 1.f, 1.2f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
 		gCubeMesh.Draw();
 	}
+
+	// floor
+	//{
+	//	glm::mat4 modelMat(1);
+	//	modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.2f, 0.f));
+	//	modelMat = glm::scale(modelMat, glm::vec3(16.f, 0.2f, 12.f));
+	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+	//	glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+	//	glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+
+	//	glUniform1f(gGBufferShader.GetUniformLocation("metallic"), 0.f);
+	//	glUniform1f(gGBufferShader.GetUniformLocation("roughness"), 0.5f);
+
+	//	gCubeMesh.Draw();
+	//}
 
 	for (int i = 0; i < 3; ++i)
 	{
@@ -593,6 +622,23 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+
+		glUniform1f(gGBufferShader.GetUniformLocation("metallic"), 1.f);
+		glUniform1f(gGBufferShader.GetUniformLocation("roughness"), i * 0.45f + 0.1f);
+
+		gSphereMesh.Draw();
+	}
+
+	for (int i = 0; i < 3; ++i)
+	{
+		glm::mat4 modelMat(1);
+		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 7.5));
+		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+
+		glUniform1f(gGBufferShader.GetUniformLocation("metallic"), i * 0.5f);
+		glUniform1f(gGBufferShader.GetUniformLocation("roughness"), 0.4f);
 
 		gSphereMesh.Draw();
 	}
@@ -606,7 +652,7 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 	gDirectionalLightShader.Use();
 
 	//glUniform3fv(gDirectionalLightShader.GetUniformLocation("viewPos"), 1, glm::value_ptr(mainViewpoint.position));
-	glUniform1f(gDirectionalLightShader.GetUniformLocation("specPower"), 32.f);
+	//glUniform1f(gDirectionalLightShader.GetUniformLocation("specPower"), 32.f);
 
 	// set light
 	for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; ++i)
@@ -663,7 +709,7 @@ void PointLightPass(const Viewpoint& mainViewpoint)
 
 		gPointLightShader.Use();
 
-		glUniform1f(gPointLightShader.GetUniformLocation("specPower"), 32.f);
+		//glUniform1f(gPointLightShader.GetUniformLocation("specPower"), 32.f);
 
 		glUniform3fv(gPointLightShader.GetUniformLocation("light", "position"), 1, glm::value_ptr(gPointLights[i].position));
 		glUniform3fv(gPointLightShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(gPointLights[i].direction));
@@ -684,10 +730,11 @@ void LightPass(const Viewpoint& mainViewpoint)
 	// bind textures
 	//gPositionTex.Bind(Shader::gPositionTexUnit);
 	gNormalTex.Bind(Shader::gNormalTexUnit);
-	gAlbedoSpecTex.Bind(Shader::gAlbedoSpecTexUnit);
+	gAlbedoTex.Bind(Shader::gAlbedoTexUnit);
+	gMaterialTex.Bind(Shader::gMaterialTexUnit);
 	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 	
-	// clear default buffer
+	// clear color buffer only.
 	glClearColor(0, 0, 0, 0);
 	//glClearDepth(1);
 	//glClearStencil(0);
@@ -699,6 +746,27 @@ void LightPass(const Viewpoint& mainViewpoint)
 	PointLightPass(mainViewpoint);	
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+}
+
+void DebugForwardPass()
+{
+	gDebugForwardState.Apply();
+
+	// draw debug
+	gLightDebugShader.Use();
+
+	for (int i = 0; i < gPointLights.size(); ++i)
+	{
+		glm::mat4 modelMat(1);
+		modelMat = glm::translate(modelMat, gPointLights[i].position);
+		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
+		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
+
+		gLightDebugMesh.Draw();
+	}
 }
 
 void PostProcessPass()
@@ -740,61 +808,12 @@ void render()
 	
 	LightPass(mainViewpoint);
 
+	DebugForwardPass();
+
 	// unbind frame buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	PostProcessPass();
-
-	// why not working ??
-	//glBindFramebuffer(GL_READ_FRAMEBUFFER, gGBuffer);
-	//glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-	//glBlitFramebuffer(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-	
-	gDebugForwardState.Apply();
-
-	// draw debug
-	gLightDebugShader.Use();
-
-	for (int i = 0; i < gPointLights.size(); ++i)
-	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, gPointLights[i].position);
-		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
-
-		gLightDebugMesh.Draw();
-	}
-
-	//{
-	//	glClear(GL_STENCIL_BUFFER_BIT);
-	//	glEnable(GL_STENCIL_TEST);
-	//	glStencilFunc(GL_ALWAYS, 1, 0xFF);
-	//	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-
-	//	glm::mat4 modelMat(1);
-	//	modelMat = glm::translate(modelMat, gPointLights[0].position);
-	//	modelMat = glm::scale(modelMat, glm::vec3(gPointLights[0].radius));
-	//	glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[0].diffuse));
-	//	gLightDebugMesh.Draw();
-	//}
-	//{
-	//	glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
-	//	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-	//	glm::mat4 modelMat(1);
-	//	modelMat = glm::translate(modelMat, gPointLights[1].position);
-	//	modelMat = glm::scale(modelMat, glm::vec3(gPointLights[1].radius));
-	//	glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[1].diffuse));
-	//	gLightDebugMesh.Draw();
-	//}
-
-	//glDisable(GL_STENCIL_TEST);
-
 }
 
 int main(int argc, char **argv)
@@ -821,6 +840,11 @@ int main(int argc, char **argv)
 				else if (event.type == SDL_MOUSEWHEEL)
 				{
 					gMouseWheel = (float)event.wheel.y;
+				}
+				else if (event.type == SDL_KEYUP)
+				{
+					if (event.key.keysym.sym == SDLK_r)
+						LoadShaders(true);
 				}
 			}
 
