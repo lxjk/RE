@@ -30,6 +30,6 @@ void main()
 	float metallic = material.r;
 	float roughness = material.g;
 	
-	vec3 result = CalcPointLight(light, normal, position, view, albedo, metallic, roughness);
+	vec3 result = CalcLight(light, normal, position, view, albedo, metallic, roughness);
 	color = vec4(result, 1.0f);
 }

@@ -53,9 +53,10 @@ Texture2D gSceneColorTex;
 // shader
 Shader gTestShader;
 Shader gGBufferShader;
+Shader gGBufferColorShader;
 Shader gPrepassShader;
 Shader gDirectionalLightShader;
-Shader gPointLightShader;
+Shader gLightVolumeShader;
 Shader gLightDebugShader;
 Shader gFSQuadShader;
 Shader gToneMapShader;
@@ -70,14 +71,20 @@ MeshData gQuadMeshData;
 // mesh
 Mesh gCubeMesh;
 Mesh gSphereMesh;
-Mesh gLightDebugMesh;
 Mesh gFSQuadMesh;
+
+Mesh gCubeColorMesh;
 
 Mesh gDirectionalLightMesh;
 Mesh gPointLightMesh;
 Mesh gPointLightPrepassMesh;
+Mesh gSpotLightMesh;
+Mesh gSpotLightPrepassMesh;
 
 Mesh gToneMapMesh;
+
+Mesh gPointLightDebugMesh;
+Mesh gSpotLightDebugMesh;
 
 // texture
 Texture2D gDiffuseMap;
@@ -86,6 +93,7 @@ Texture2D gNormalMap;
 // light
 Light gDirectionalLights[DIRECTIONAL_LIGHT_COUNT];
 std::vector<Light> gPointLights;
+std::vector<Light> gSpotLights;
 
 // camera
 Camera gCamera;
@@ -174,7 +182,7 @@ struct RenderState
 
 // Render state
 RenderState gGBufferState, gDebugForwardState;
-RenderState gDirectionalLightState, gPointLightPrepassState, gPointLightState;
+RenderState gDirectionalLightState, gLightVolumePrepassState, gLightVolumeState;
 RenderState gPostProcessState, gPostProcessFinishState;
 
 // input
@@ -265,9 +273,11 @@ void MakeLights()
 	// directional lights
 	memset(gDirectionalLights, 0, sizeof(Light) * DIRECTIONAL_LIGHT_COUNT);
 
-	gDirectionalLights[0].direction = glm::normalize(glm::vec3(0, -1, -2));
-	gDirectionalLights[0].color = glm::vec3(1.f, 1.f, 1.f);
-	gDirectionalLights[0].intensity = 1;
+	gDirectionalLights[0].SetDirectionLight(
+		/*dir=*/	glm::vec3(0, -1, -2),
+		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
+		/*int=*/	1
+	);
 
 	// point lights
 	int plIdx = 0;
@@ -280,24 +290,44 @@ void MakeLights()
 
 	gPointLights.push_back(Light());
 	plIdx = gPointLights.size() - 1;
-	gPointLights[plIdx].position = glm::vec3(0, 3, 3);
-	gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 1.f);
-	gPointLights[plIdx].intensity = 20;
-	gPointLights[plIdx].radius = 12.f;
+	gPointLights[plIdx].SetPointLight(
+		/*pos=*/	glm::vec3(0, 3, 3),
+		/*radius=*/	12.f,
+		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
+		/*int=*/	20
+	);
 
 	gPointLights.push_back(Light());
 	plIdx = gPointLights.size() - 1;
-	gPointLights[plIdx].position = glm::vec3(10, 2, 0);
-	gPointLights[plIdx].color = glm::vec3(0.f, 1.f, 0.f);
-	gPointLights[plIdx].intensity = 20;
-	gPointLights[plIdx].radius = 20.f;
+	gPointLights[plIdx].SetPointLight(
+		/*pos=*/	glm::vec3(10, 2, 0),
+		/*radius=*/	20.f,
+		/*color=*/	glm::vec3(0.f, 1.f, 0.f),
+		/*int=*/	20
+	);
 
 	gPointLights.push_back(Light());
 	plIdx = gPointLights.size() - 1;
-	gPointLights[plIdx].position = glm::vec3(-10, 3, 3);
-	gPointLights[plIdx].color = glm::vec3(1.f, 0.f, 0.f);
-	gPointLights[plIdx].intensity = 20;
-	gPointLights[plIdx].radius = 12.f;
+	gPointLights[plIdx].SetPointLight(
+		/*pos=*/	glm::vec3(-10, 3, 3),
+		/*radius=*/	12.f,
+		/*color=*/	glm::vec3(1.f, 0.f, 0.f),
+		/*int=*/	20
+	);
+
+	// spot lights
+	int slIdx = 0;
+	gSpotLights.push_back(Light());
+	slIdx = gSpotLights.size() - 1;
+	gSpotLights[slIdx].SetSpotLight(
+		/*pos=*/	glm::vec3(12.5f, 1, 6),
+		/*dir=*/	glm::vec3(-2, -0.5f, -0.2f),
+		/*radius=*/	20.f,
+		/*hOuter=*/	30.f,
+		/*hInner=*/	20.f,
+		/*color=*/	glm::vec3(0.f, 0.f, 1.f),
+		/*int=*/	100
+	);
 }
 
 void SetupFrameBuffers()
@@ -358,7 +388,7 @@ void SetupRenderStates()
 	}
 	// point light prepass
 	{
-		RenderState& s = gPointLightPrepassState;
+		RenderState& s = gLightVolumePrepassState;
 		// don't write color
 		s.bColorWrite = false;
 		// inverse depth test only, don't write depth
@@ -376,7 +406,7 @@ void SetupRenderStates()
 	}
 	// point light
 	{
-		RenderState& s = gPointLightState;
+		RenderState& s = gLightVolumeState;
 		// depth test only, don't write depth
 		s.bDepthTest = true;
 		s.depthTestFunc = GL_LEQUAL;
@@ -409,9 +439,10 @@ void LoadShaders(bool bReload)
 
 	//gTestShader.Load("Shader/test.vert", "Shader/test.frag", !bReload);
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
+	gGBufferColorShader.Load("Shader/gbuffer.vert", "Shader/gbufferColor.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
-	gPointLightShader.Load("Shader/lightVolume.vert", "Shader/lightVolumePoint.frag", !bReload);
+	gLightVolumeShader.Load("Shader/lightVolume.vert", "Shader/lightVolume.frag", !bReload);
 	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
 	gFSQuadShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
@@ -446,14 +477,20 @@ bool initGL()
 	// model
 	gCubeMesh.Init(&gCubeMeshData, &gGBufferShader);
 	gSphereMesh.Init(&gSphereMeshData, &gGBufferShader);
-	gLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugShader);
 	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadShader);
 
+	gCubeColorMesh.Init(&gCubeMeshData, &gGBufferColorShader);
+
 	gDirectionalLightMesh.Init(&gQuadMeshData, &gDirectionalLightShader);
-	gPointLightMesh.Init(&gIcosahedronMeshData, &gPointLightShader);
+	gPointLightMesh.Init(&gIcosahedronMeshData, &gLightVolumeShader);
 	gPointLightPrepassMesh.Init(&gIcosahedronMeshData, &gPrepassShader);
+	gSpotLightMesh.Init(&gConeMeshData, &gLightVolumeShader);
+	gSpotLightPrepassMesh.Init(&gConeMeshData, &gPrepassShader);
 
 	gToneMapMesh.Init(&gQuadMeshData, &gToneMapShader);
+
+	gPointLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugShader);
+	gSpotLightDebugMesh.Init(&gConeMeshData, &gLightDebugShader);
 
 	// texture
 	gDiffuseMap.Load("Content/Texture/154.jpg", GL_SRGB, GL_RGB, GL_UNSIGNED_BYTE);
@@ -603,21 +640,6 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		gCubeMesh.Draw();
 	}
 
-	// floor
-	//{
-	//	glm::mat4 modelMat(1);
-	//	modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.2f, 0.f));
-	//	modelMat = glm::scale(modelMat, glm::vec3(16.f, 0.2f, 12.f));
-	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-	//	glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-	//	glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-
-	//	glUniform1f(gGBufferShader.GetUniformLocation("metallic"), 0.f);
-	//	glUniform1f(gGBufferShader.GetUniformLocation("roughness"), 0.5f);
-
-	//	gCubeMesh.Draw();
-	//}
-
 	for (int i = 0; i < 3; ++i)
 	{
 		glm::mat4 modelMat(1);
@@ -645,6 +667,24 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 
 		gSphereMesh.Draw();
 	}
+
+	gGBufferColorShader.Use();
+
+	// floor
+	{
+		glm::mat4 modelMat(1);
+		modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.2f, 0.f));
+		modelMat = glm::scale(modelMat, glm::vec3(16.f, 0.2f, 12.f));
+		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+		glUniformMatrix4fv(gGBufferColorShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferColorShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+
+		glUniform1f(gGBufferColorShader.GetUniformLocation("metallic"), 0.f);
+		glUniform1f(gGBufferColorShader.GetUniformLocation("roughness"), 1.f);
+		glUniform3fv(gGBufferColorShader.GetUniformLocation("color"), 1, glm::value_ptr(glm::vec3(0.2f)));
+
+		gCubeColorMesh.Draw();
+	}
 }
 
 void DirectionalLightPass(const Viewpoint& mainViewpoint)
@@ -660,33 +700,48 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 	for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; ++i)
 	{
 		//glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gDirectionalLights[i].GetPositionViewSpace(mainViewpoint.viewMat)));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].GetDirectionViewSpace(mainViewpoint.viewMat)));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "color"), 1, glm::value_ptr(gDirectionalLights[i].GetColorIntensity()));
-		glUniform1f(gDirectionalLightShader.GetUniformLocation("lights", i, "radius"), gDirectionalLights[i].radius);
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].GetDirectionVS(mainViewpoint.viewMat)));
+		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "color"), 1, glm::value_ptr(gDirectionalLights[i].colorIntensity));
+		glUniform4fv(gDirectionalLightShader.GetUniformLocation("lights", i, "attenParams"), 1, glm::value_ptr(gDirectionalLights[i].attenParams));
 	}
 
 	// draw quad
 	gDirectionalLightMesh.Draw();
 }
 
-void PointLightPass(const Viewpoint& mainViewpoint)
+void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& lights, const Mesh& lightVolumePrepassMesh, const Mesh& lightVolumeMesh)
 {
-	// point light
+	// spot light
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
-	
-	for (int i = 0; i < gPointLights.size(); ++i)
+
+	for (int i = 0; i < lights.size(); ++i)
 	{
+		bool bSpot = (lights[i].attenParams.y > 0);
 		// model
 		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, gPointLights[i].position);
-		modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
-		
-		// camera in light volume?
-		if (Math::DistSquared(mainViewpoint.position, gPointLights[i].position) <
-			gPointLights[i].radius * gPointLights[i].radius * 1.01f * 1.01f)
+		if (bSpot)
 		{
-			gPointLightPrepassState.Apply();
+			modelMat = Math::MakeMatFromForward(lights[i].direction);
+			modelMat[3] = glm::vec4(lights[i].position, 1);
+			modelMat = glm::scale(modelMat, glm::vec3(lights[i].endRadius, lights[i].endRadius, lights[i].radius));
+		}
+		else
+		{
+			modelMat = glm::translate(modelMat, gPointLights[i].position);
+			modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
+		}
+
+		// camera in light volume?
+		glm::vec3 lightToCamera = mainViewpoint.position - lights[i].position;
+		bool isInLightVolume = (Math::SizeSquared(lightToCamera) <	lights[i].radius * lights[i].radius * 1.01f * 1.01f);
+		if (bSpot)
+		{
+			isInLightVolume &= (glm::dot(glm::normalize(lightToCamera), lights[i].direction) > lights[i].outerCosHalfAngle - KINDA_SMALL_NUMBER);
+		}
+		if (isInLightVolume)
+		{
+			gLightVolumePrepassState.Apply();
 			// do back face draw directly
 			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 			// no need for stencil test
@@ -700,29 +755,39 @@ void PointLightPass(const Viewpoint& mainViewpoint)
 			glClear(GL_STENCIL_BUFFER_BIT);
 
 			// prepass
-			gPointLightPrepassState.Apply();
+			gLightVolumePrepassState.Apply();
 			gPrepassShader.Use();
 			glUniformMatrix4fv(gPrepassShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-			gPointLightPrepassMesh.Draw();
+			lightVolumePrepassMesh.Draw();
 
 			// draw light
-			gPointLightState.Apply();
+			gLightVolumeState.Apply();
 		}
 
-		gPointLightShader.Use();
-		
-		glUniform3fv(gPointLightShader.GetUniformLocation("light", "position"), 1, glm::value_ptr(gPointLights[i].GetPositionViewSpace(mainViewpoint.viewMat)));
-		//glUniform3fv(gPointLightShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(gPointLights[i].GetDirectionViewSpace(mainViewpoint.viewMat)));
-		glUniform3fv(gPointLightShader.GetUniformLocation("light", "color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
-		glUniform1f(gPointLightShader.GetUniformLocation("light", "radius"), gPointLights[i].radius);
-		
-		glUniformMatrix4fv(gPointLightShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		gLightVolumeShader.Use();
 
-		gPointLightMesh.Draw();
-		
+		glUniform4fv(gLightVolumeShader.GetUniformLocation("light", "positionInvR"), 1, glm::value_ptr(lights[i].GetPositionVSInvR(mainViewpoint.viewMat)));
+		glUniform3fv(gLightVolumeShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(lights[i].GetDirectionVS(mainViewpoint.viewMat)));
+		glUniform3fv(gLightVolumeShader.GetUniformLocation("light", "color"), 1, glm::value_ptr(lights[i].colorIntensity));
+		glUniform4fv(gLightVolumeShader.GetUniformLocation("light", "attenParams"), 1, glm::value_ptr(lights[i].attenParams));
+
+		glUniformMatrix4fv(gLightVolumeShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+
+		lightVolumeMesh.Draw();
+
 	}
 
 	glDisable(GL_BLEND);
+}
+
+void PointLightPass(const Viewpoint& mainViewpoint)
+{
+	LightVolumePass(mainViewpoint, gPointLights, gPointLightPrepassMesh, gPointLightMesh);
+}
+
+void SpotLightPass(const Viewpoint& mainViewpoint)
+{
+	LightVolumePass(mainViewpoint, gSpotLights, gSpotLightPrepassMesh, gSpotLightMesh);
 }
 
 void LightPass(const Viewpoint& mainViewpoint)
@@ -742,9 +807,8 @@ void LightPass(const Viewpoint& mainViewpoint)
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	DirectionalLightPass(mainViewpoint);
-	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	PointLightPass(mainViewpoint);	
-	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	PointLightPass(mainViewpoint);
+	SpotLightPass(mainViewpoint);
 
 }
 
@@ -762,11 +826,49 @@ void DebugForwardPass()
 		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
+		//glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].colorIntensity));
 
-		gLightDebugMesh.Draw();
+		gPointLightDebugMesh.Draw();
 	}
+
+	for (int i = 0; i < gSpotLights.size(); ++i)
+	{
+		glm::mat4 modelMat(1);
+		//modelMat = glm::translate(modelMat, gSpotLights[i].position);
+		modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
+		modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
+		modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius) / gSpotLights[i].radius * 0.6f);
+		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		//glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gSpotLights[i].colorIntensity));
+
+		gSpotLightDebugMesh.Draw();
+	}
+
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	//glDisable(GL_CULL_FACE);
+
+	//gLightDebugShader.Use();
+
+	//for (int i = 0; i < gPointLights.size(); ++i)
+	//{
+	//	// model
+	//	glm::mat4 modelMat(1);
+	//	modelMat = glm::translate(modelMat, gPointLights[i].position);
+	//	modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
+	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+	//			
+	//	glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+	//	glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
+
+	//	gPointLightDebugMesh.Draw();
+
+	//}
+
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 void PostProcessPass()

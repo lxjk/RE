@@ -52,7 +52,7 @@ public:
 		InitResource();
 	}
 
-	void Draw()
+	void Draw() const
 	{
 		if (!meshData && !shader)
 			return;

@@ -42,9 +42,8 @@ void main()
 	vec3 result = ambient;
 	for(int i = 0; i < LIGHT_COUNT; ++i)
 	{
-		result += CalcDirectionalLight(lights[i], normal, position, view, albedo, metallic, roughness);
+		result += CalcLight(lights[i], normal, position, view, albedo, metallic, roughness);
 	}
-	//result += CalcPointLight(lights[0], normal, position, view, albedoSpec.rgb, albedoSpec.a);
 	color = vec4(result, 1.0f);
 	//color = vec4(abs((rposition - position) / rposition) * 100, 1.0f);
 	//color = vec4(normal, 1.0f);
