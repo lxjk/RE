@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "Math.h"
-#include "Shader.h"
+#include "Material.h"
 
 struct Vertex
 {
@@ -30,13 +30,27 @@ struct Vertex
 class MeshData
 {
 public:
+	static std::vector<MeshData*> gMeshDataContainer;
+
+	static MeshData* Create()
+	{
+		MeshData* md = new MeshData();
+		gMeshDataContainer.push_back(md);
+		return md;
+	}
+
 	std::vector<Vertex> vertices;
 	std::vector<GLuint> indices;
 };
 
+std::vector<MeshData*> MeshData::gMeshDataContainer;
+
 class Mesh
 {
 public:
+
+	MeshData* meshData;
+	Material* material;
 
 	Mesh() : 
 	  VAO(0)
@@ -44,17 +58,17 @@ public:
 	, EBO(0)
 	{}
 
-	void Init(MeshData* inMeshData, Shader* inShader)
+	void Init(MeshData* inMeshData, Material* inMaterial)
 	{
 		meshData = inMeshData;
-		shader = inShader;
+		material = inMaterial;
 
 		InitResource();
 	}
 
 	void Draw() const
 	{
-		if (!meshData && !shader)
+		if (!meshData || !material || !material->shader)
 			return;
 
 		glBindVertexArray(VAO);
@@ -64,7 +78,7 @@ public:
 
 	void InitResource()
 	{
-		if (!meshData && !shader)
+		if (!meshData || !material || !material->shader)
 			return;
 
 		// clear old buffer
@@ -89,33 +103,31 @@ public:
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(GLuint), meshData->indices.data(), GL_STATIC_DRAW);
 
 		// set attributes
-		if (shader->positionIdx >= 0)
+		if (material->shader->positionIdx >= 0)
 		{
-			glEnableVertexAttribArray(shader->positionIdx);
-			glVertexAttribPointer(shader->positionIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)0);
+			glEnableVertexAttribArray(material->shader->positionIdx);
+			glVertexAttribPointer(material->shader->positionIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)0);
 		}
-		if (shader->normalIdx >= 0)
+		if (material->shader->normalIdx >= 0)
 		{
-			glEnableVertexAttribArray(shader->normalIdx);
-			glVertexAttribPointer(shader->normalIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, normal));
+			glEnableVertexAttribArray(material->shader->normalIdx);
+			glVertexAttribPointer(material->shader->normalIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, normal));
 		}
-		if (shader->tangentIdx >= 0)
+		if (material->shader->tangentIdx >= 0)
 		{
-			glEnableVertexAttribArray(shader->tangentIdx);
-			glVertexAttribPointer(shader->tangentIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, tangent));
+			glEnableVertexAttribArray(material->shader->tangentIdx);
+			glVertexAttribPointer(material->shader->tangentIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, tangent));
 		}
-		if (shader->texCoordsIdx >= 0)
+		if (material->shader->texCoordsIdx >= 0)
 		{
-			glEnableVertexAttribArray(shader->texCoordsIdx);
-			glVertexAttribPointer(shader->texCoordsIdx, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, texCoords));
+			glEnableVertexAttribArray(material->shader->texCoordsIdx);
+			glVertexAttribPointer(material->shader->texCoordsIdx, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, texCoords));
 		}
 
 		glBindVertexArray(0);
 	}
 
 protected:
-	MeshData* meshData;
-	Shader* shader;
 
 	GLuint VAO, VBO, EBO;
 };
@@ -426,8 +438,8 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 
 	for (int tesIdx = 0; tesIdx < tesLevel; ++tesIdx)
 	{
-		int idxCount = idxList.size();
-		int newVertStartIdx = vertList.size();
+		int idxCount = (int)idxList.size();
+		int newVertStartIdx = (int)vertList.size();
 
 		int newVertCount = idxCount / 2;
 		std::vector<glm::ivec3> newVertTable;

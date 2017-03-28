@@ -22,12 +22,16 @@
 
 // local
 #include "Engine/Shader.h"
+#include "Engine/Material.h"
 #include "Engine/Mesh.h"
+#include "Engine/MeshLoader.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Light.h"
 #include "Engine/Viewpoint.h"
 #include "Engine/Camera.h"
 #include "Engine/Math.h"
+
+#define PROFILE 0
 
 const int SCREEN_WIDTH = 1280;
 const int SCREEN_HEIGHT = 720;
@@ -40,6 +44,10 @@ SDL_Window* gWindow = NULL;
 // opengl context
 SDL_GLContext gContext;
 
+// time
+double gInvPerformanceFreq;
+Uint64 gPerformanceCounter;
+
 // ubo
 GLuint gUBO_Matrices = 0;
 
@@ -51,7 +59,6 @@ GLuint gSceneBuffer = 0;
 Texture2D gSceneColorTex;
 
 // shader
-Shader gTestShader;
 Shader gGBufferShader;
 Shader gGBufferColorShader;
 Shader gPrepassShader;
@@ -60,6 +67,16 @@ Shader gLightVolumeShader;
 Shader gLightDebugShader;
 Shader gFSQuadShader;
 Shader gToneMapShader;
+
+// material
+Material gGBufferMaterial(&gGBufferShader);
+Material gGBufferColorMaterial(&gGBufferColorShader);
+Material gPrepassMaterial(&gPrepassShader);
+Material gDirectionalLightMaterial(&gDirectionalLightShader);
+Material gLightVolumeMaterial(&gLightVolumeShader);
+Material gLightDebugMaterial(&gLightDebugShader);
+Material gFSQuadMaterial(&gFSQuadShader);
+Material gToneMapMaterial(&gToneMapShader);
 
 // mesh data
 MeshData gCubeMeshData;
@@ -72,6 +89,7 @@ MeshData gQuadMeshData;
 Mesh gCubeMesh;
 Mesh gSphereMesh;
 Mesh gFSQuadMesh;
+std::vector<Mesh> gNanosuitMeshes;
 
 Mesh gCubeColorMesh;
 
@@ -87,8 +105,8 @@ Mesh gPointLightDebugMesh;
 Mesh gSpotLightDebugMesh;
 
 // texture
-Texture2D gDiffuseMap;
-Texture2D gNormalMap;
+Texture2D* gDiffuseMap;
+Texture2D* gNormalMap;
 
 // light
 Light gDirectionalLights[DIRECTIONAL_LIGHT_COUNT];
@@ -186,13 +204,79 @@ RenderState gDirectionalLightState, gLightVolumePrepassState, gLightVolumeState;
 RenderState gPostProcessState, gPostProcessFinishState;
 
 // input
+bool gMouseCaptured = false;
 float gMouseWheel;
 const Uint8* gKeyStates;
 
-bool init();
-bool initGL();
+class ScopedProfileTimer
+{
+	Uint64 start;
+	glm::uvec2 query;
+	std::string name;
+	bool bGPUTimer;
 
-bool init()
+public:
+	static std::map<std::string, double> timerMapCPU;
+	static std::map<std::string, std::vector<glm::uvec2>> timerMapGPU[2];
+	static int GPUMapWriteIdx;
+	static std::string fullName;
+
+	ScopedProfileTimer(std::string inName, bool inGPUTimer)
+	{
+#if PROFILE
+		name = inName;
+		bGPUTimer = inGPUTimer;
+		// add to prefix
+		fullName.append("/");
+		fullName.append(name);
+		if (bGPUTimer)
+		{
+			glGenQueries(2, glm::value_ptr(query));
+			glQueryCounter(query[0], GL_TIMESTAMP);
+		}
+		else
+			start = SDL_GetPerformanceCounter();
+#endif
+	}
+
+	~ScopedProfileTimer()
+	{
+#if PROFILE
+		if (bGPUTimer)
+		{
+			glQueryCounter(query[1], GL_TIMESTAMP);
+			timerMapGPU[GPUMapWriteIdx][fullName].push_back(query);
+		}
+		else
+		{
+			Uint64 end = SDL_GetPerformanceCounter();
+			double deltaTime = (double)((end - start) * 1000) * gInvPerformanceFreq;
+			auto it = timerMapCPU.find(fullName);
+			if (it != timerMapCPU.end())
+			{
+				// find it
+				it->second += deltaTime;
+			}
+			else
+			{
+				timerMapCPU[fullName] = deltaTime;
+			}
+		}
+		// remove from full name
+		fullName = fullName.substr(0, fullName.size() - name.size() - 1);
+#endif
+	}
+};
+std::map<std::string, double> ScopedProfileTimer::timerMapCPU;
+std::map<std::string, std::vector<glm::uvec2>> ScopedProfileTimer::timerMapGPU[2];
+int ScopedProfileTimer::GPUMapWriteIdx = 0;
+std::string ScopedProfileTimer::fullName;
+
+
+bool Init();
+bool InitGL();
+
+bool Init()
 {
 	// init sdl
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -253,17 +337,17 @@ bool init()
 	}
 
 	//Initialize OpenGL
-	if (!initGL())
+	if (!InitGL())
 	{
 		printf("Unable to initialize OpenGL!\n");
 		return false;
 	}
 
-	// capture mouse
-	SDL_CaptureMouse(SDL_TRUE);
-
 	// set key states
 	gKeyStates = SDL_GetKeyboardState(NULL);
+
+	// time
+	gInvPerformanceFreq = (double)1 / (double)SDL_GetPerformanceFrequency();
 
 	return true;
 }
@@ -289,7 +373,7 @@ void MakeLights()
 	//gPointLights[plIdx].radius = 20.f;
 
 	gPointLights.push_back(Light());
-	plIdx = gPointLights.size() - 1;
+	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(0, 3, 3),
 		/*radius=*/	12.f,
@@ -298,7 +382,7 @@ void MakeLights()
 	);
 
 	gPointLights.push_back(Light());
-	plIdx = gPointLights.size() - 1;
+	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(10, 2, 0),
 		/*radius=*/	20.f,
@@ -307,7 +391,7 @@ void MakeLights()
 	);
 
 	gPointLights.push_back(Light());
-	plIdx = gPointLights.size() - 1;
+	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(-10, 3, 3),
 		/*radius=*/	12.f,
@@ -318,9 +402,9 @@ void MakeLights()
 	// spot lights
 	int slIdx = 0;
 	gSpotLights.push_back(Light());
-	slIdx = gSpotLights.size() - 1;
+	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
-		/*pos=*/	glm::vec3(12.5f, 1, 6),
+		/*pos=*/	glm::vec3(0, 2, 6),
 		/*dir=*/	glm::vec3(-2, -0.5f, -0.2f),
 		/*radius=*/	20.f,
 		/*hOuter=*/	30.f,
@@ -437,7 +521,6 @@ void LoadShaders(bool bReload)
 	// clear cache
 	gShaderFileCache.clear();
 
-	//gTestShader.Load("Shader/test.vert", "Shader/test.frag", !bReload);
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
 	gGBufferColorShader.Load("Shader/gbuffer.vert", "Shader/gbufferColor.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
@@ -448,7 +531,7 @@ void LoadShaders(bool bReload)
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 }
 
-bool initGL()
+bool InitGL()
 {
 	// frame buffers
 	SetupFrameBuffers();
@@ -467,34 +550,41 @@ bool initGL()
 	// shader
 	LoadShaders(false);
 
-	// mesh
+	// mesh data
 	MakeCube(gCubeMeshData);
 	MakeSphere(gSphereMeshData, 32);
 	MakeIcosahedron(gIcosahedronMeshData, 2);
 	MakeCone(gConeMeshData, 16, 2);
 	MakeQuad(gQuadMeshData);
 
-	// model
-	gCubeMesh.Init(&gCubeMeshData, &gGBufferShader);
-	gSphereMesh.Init(&gSphereMeshData, &gGBufferShader);
-	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadShader);
+	// mesh
+	gCubeMesh.Init(&gCubeMeshData, &gGBufferMaterial);
+	gSphereMesh.Init(&gSphereMeshData, &gGBufferMaterial);
+	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadMaterial);
 
-	gCubeColorMesh.Init(&gCubeMeshData, &gGBufferColorShader);
+	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader);
+	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader);
 
-	gDirectionalLightMesh.Init(&gQuadMeshData, &gDirectionalLightShader);
-	gPointLightMesh.Init(&gIcosahedronMeshData, &gLightVolumeShader);
-	gPointLightPrepassMesh.Init(&gIcosahedronMeshData, &gPrepassShader);
-	gSpotLightMesh.Init(&gConeMeshData, &gLightVolumeShader);
-	gSpotLightPrepassMesh.Init(&gConeMeshData, &gPrepassShader);
+	gCubeColorMesh.Init(&gCubeMeshData, &gGBufferColorMaterial);
 
-	gToneMapMesh.Init(&gQuadMeshData, &gToneMapShader);
+	gDirectionalLightMesh.Init(&gQuadMeshData, &gDirectionalLightMaterial);
+	gPointLightMesh.Init(&gIcosahedronMeshData, &gLightVolumeMaterial);
+	gPointLightPrepassMesh.Init(&gIcosahedronMeshData, &gPrepassMaterial);
+	gSpotLightMesh.Init(&gConeMeshData, &gLightVolumeMaterial);
+	gSpotLightPrepassMesh.Init(&gConeMeshData, &gPrepassMaterial);
 
-	gPointLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugShader);
-	gSpotLightDebugMesh.Init(&gConeMeshData, &gLightDebugShader);
+	gToneMapMesh.Init(&gQuadMeshData, &gToneMapMaterial);
+
+	gPointLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugMaterial);
+	gSpotLightDebugMesh.Init(&gConeMeshData, &gLightDebugMaterial);
 
 	// texture
-	gDiffuseMap.Load("Content/Texture/154.jpg", GL_SRGB, GL_RGB, GL_UNSIGNED_BYTE);
-	gNormalMap.Load("Content/Texture/154_norm.jpg", GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
+	gDiffuseMap = Texture2D::FindOrCreate("Content/Texture/154.jpg", true);
+	gNormalMap = Texture2D::FindOrCreate("Content/Texture/154_norm.jpg", false);
+
+	// set textures
+	gGBufferMaterial.SetTexture("diffuseTex", gDiffuseMap);
+	gGBufferMaterial.SetTexture("normalTex", gNormalMap);
 
 	// light
 	MakeLights();
@@ -507,7 +597,7 @@ bool initGL()
 	return true;
 }
 
-void close()
+void Close()
 {
 	SDL_GL_DeleteContext(gContext);
 
@@ -521,23 +611,26 @@ void close()
 	SDL_Quit();
 }
 
-void updateMouseInput()
+void updateMouseInput(float deltaTime)
 {
+	bool bShouldCaptureMouse = false;
+
 	int x = 0, y = 0;
 	Uint32 mouseState = SDL_GetRelativeMouseState(&x, &y);
 
 	float deltaX = (float)x;
 	float deltaY = (float)y;
 
-	const static float rotSpeed = 0.5f;
-	const static float moveSpeed = 0.2f;
-	const static float scrollSpeed = 2.f;
+	const static float rotSpeed = 30.f;
+	const static float moveSpeed = 12.f;
+	const static float scrollSpeed = 120.f;
 	
 	if (mouseState & (SDL_BUTTON(SDL_BUTTON_LEFT) | SDL_BUTTON(SDL_BUTTON_RIGHT)))
 	{
-		gCamera.euler.y -= rotSpeed * deltaX;
-		gCamera.euler.x -= rotSpeed * deltaY;
+		gCamera.euler.y -= rotSpeed * deltaTime * deltaX;
+		gCamera.euler.x -= rotSpeed * deltaTime * deltaY;
 		gCamera.euler.x = glm::clamp(gCamera.euler.x, -89.f, 89.f);
+		bShouldCaptureMouse = true;
 	}
 
 	glm::quat cameraRot(glm::radians(gCamera.euler));
@@ -547,18 +640,30 @@ void updateMouseInput()
 
 	if (mouseState & SDL_BUTTON(SDL_BUTTON_MIDDLE))
 	{
-		gCamera.position -= cameraRight * deltaX * moveSpeed;
-		gCamera.position += cameraUp * deltaY * moveSpeed;
+		gCamera.position -= cameraRight * deltaX * moveSpeed * deltaTime;
+		gCamera.position += cameraUp * deltaY * moveSpeed * deltaTime;
+		bShouldCaptureMouse = true;
 	}
 	// mouse wheel?
 	if (gMouseWheel != 0)
 	{
-		gCamera.position += cameraForward * gMouseWheel * scrollSpeed;
+		gCamera.position += cameraForward * gMouseWheel * scrollSpeed * deltaTime;
 		gMouseWheel = 0;
+	}
+
+	if (bShouldCaptureMouse && !gMouseCaptured)
+	{
+		SDL_CaptureMouse(SDL_TRUE);
+		gMouseCaptured = true;
+	}
+	else if (!bShouldCaptureMouse && gMouseCaptured)
+	{
+		SDL_CaptureMouse(SDL_FALSE);
+		gMouseCaptured = false;
 	}
 }
 
-void updateKeyboardInput()
+void updateKeyboardInput(float deltaTime)
 {
 	int x = 0, y = 0;
 	Uint32 mouseState = SDL_GetRelativeMouseState(&x, &y);
@@ -569,46 +674,73 @@ void updateKeyboardInput()
 
 	glm::vec3 up = glm::vec3(0, 1, 0);
 
-	const static float moveSpeed = 0.2f;
+	const static float moveSpeed = 12.f;
 
 	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT))
 	{
 		if (gKeyStates[SDL_SCANCODE_W])
 		{
-			gCamera.position += cameraForward * moveSpeed;
+			gCamera.position += cameraForward * moveSpeed * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_S])
 		{
-			gCamera.position -= cameraForward * moveSpeed;
+			gCamera.position -= cameraForward * moveSpeed * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_D])
 		{
-			gCamera.position += cameraRight * moveSpeed;
+			gCamera.position += cameraRight * moveSpeed * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_A])
 		{
-			gCamera.position -= cameraRight * moveSpeed;
+			gCamera.position -= cameraRight * moveSpeed * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_E])
 		{
-			gCamera.position += up * moveSpeed;
+			gCamera.position += up * moveSpeed * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_Q])
 		{
-			gCamera.position -= up * moveSpeed;
+			gCamera.position -= up * moveSpeed * deltaTime;
 		}
 	}
 
 }
 
-void update()
+void Update(float deltaTime)
 {
-	updateMouseInput();
-	updateKeyboardInput();
+	ScopedProfileTimer timer("update", false);
+
+	updateMouseInput(deltaTime);
+	updateKeyboardInput(deltaTime);
+
+	// update spot light
+	if (gSpotLights.size() > 0)
+	{
+		static const float totalTime = 4.f;
+		static float spotLightLocalTime = 0.f;
+		spotLightLocalTime += deltaTime;
+		if (spotLightLocalTime > totalTime)
+		{
+			spotLightLocalTime -= totalTime;
+		}
+
+		float ratio = spotLightLocalTime / totalTime;
+		ratio = glm::abs(ratio * 2 - 1); // [0 - 1] -> [1 - 0 - 1]
+
+		const glm::vec3 startPos(12.5f, 1, 6);
+		const glm::vec3 endPos(-12.5f, 1, 6);
+		const glm::vec3 startDir(-2, -0.5f, -0.2f);
+		const glm::vec3 endDir(2, -0.5f, -0.2f);
+		
+		//gSpotLights[0].position = glm::mix(startPos, endPos, ratio);
+		gSpotLights[0].direction = glm::normalize(glm::mix(startDir, endDir, ratio));
+	}
 }
 
 void GeometryPass(const Viewpoint& mainViewpoint)
 {
+	ScopedProfileTimer timer("geometry", true);
+
 	gGBufferState.Apply();
 
 	// clear frame buffer
@@ -616,16 +748,12 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 	glClearDepth(1);
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-	// bind texture
-	gDiffuseMap.Bind(Shader::diffuseTexUnit);
-	gNormalMap.Bind(Shader::normalTexUnit);
-
-	// draw models
-	gGBufferShader.Use();
 	
-	glUniform1f(gGBufferShader.GetUniformLocation("metallic"), 1.0f);
-	glUniform1f(gGBufferShader.GetUniformLocation("roughness"), 0.3f);
+	// draw models
+	gGBufferMaterial.Use();
+
+	glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), 1.0f);
+	glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), 0.3f);
 	
 	for (int i = 0; i < 3; ++i)
 	{
@@ -634,8 +762,8 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		modelMat = glm::rotate(modelMat, 45.f, glm::vec3(0, 1, 0));
 		modelMat = glm::scale(modelMat, glm::vec3(1.5f, 1.f, 1.2f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniformMatrix4fv(gGBufferMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
 		gCubeMesh.Draw();
 	}
@@ -645,11 +773,11 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glm::mat4 modelMat(1);
 		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 5));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniformMatrix4fv(gGBufferMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
-		glUniform1f(gGBufferShader.GetUniformLocation("metallic"), 1.f);
-		glUniform1f(gGBufferShader.GetUniformLocation("roughness"), i * 0.45f + 0.1f);
+		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), 1.f);
+		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), i * 0.45f + 0.1f);
 
 		gSphereMesh.Draw();
 	}
@@ -659,16 +787,41 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glm::mat4 modelMat(1);
 		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 7.5));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniformMatrix4fv(gGBufferMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
-		glUniform1f(gGBufferShader.GetUniformLocation("metallic"), i * 0.5f);
-		glUniform1f(gGBufferShader.GetUniformLocation("roughness"), 0.4f);
+		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), i * 0.5f);
+		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), 0.4f);
 
 		gSphereMesh.Draw();
 	}
+	
+	// nanosuit
+	{
+		glm::mat4 modelMat(1);
+		modelMat = glm::translate(modelMat, glm::vec3(5, -1, 5));
+		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
+		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 
-	gGBufferColorShader.Use();
+		for (int i = 0; i < gNanosuitMeshes.size(); ++i)
+		{
+			Material* material = gNanosuitMeshes[i].material;
+			if (!material)
+				continue;
+
+			material->Use();
+
+			glUniformMatrix4fv(material->shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+			glUniformMatrix3fv(material->shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+
+			glUniform1f(material->shader->GetUniformLocation("metallic"), 0.f);
+			glUniform1f(material->shader->GetUniformLocation("roughness"), 0.3f);
+
+			gNanosuitMeshes[i].Draw();
+		}
+	}
+
+	gGBufferColorMaterial.Use();
 
 	// floor
 	{
@@ -676,12 +829,12 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.2f, 0.f));
 		modelMat = glm::scale(modelMat, glm::vec3(16.f, 0.2f, 12.f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferColorShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferColorShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		glUniformMatrix4fv(gGBufferColorMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix3fv(gGBufferColorMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
-		glUniform1f(gGBufferColorShader.GetUniformLocation("metallic"), 0.f);
-		glUniform1f(gGBufferColorShader.GetUniformLocation("roughness"), 1.f);
-		glUniform3fv(gGBufferColorShader.GetUniformLocation("color"), 1, glm::value_ptr(glm::vec3(0.2f)));
+		glUniform1f(gGBufferColorMaterial.shader->GetUniformLocation("metallic"), 0.f);
+		glUniform1f(gGBufferColorMaterial.shader->GetUniformLocation("roughness"), 1.f);
+		glUniform3fv(gGBufferColorMaterial.shader->GetUniformLocation("color"), 1, glm::value_ptr(glm::vec3(0.2f)));
 
 		gCubeColorMesh.Draw();
 	}
@@ -689,10 +842,12 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 
 void DirectionalLightPass(const Viewpoint& mainViewpoint)
 {
+	ScopedProfileTimer timer("directional light", true);
+
 	// directional light
 	gDirectionalLightState.Apply();
 
-	gDirectionalLightShader.Use();
+	gDirectionalLightMaterial.Use();
 
 	//glUniform3fv(gDirectionalLightShader.GetUniformLocation("viewPos"), 1, glm::value_ptr(mainViewpoint.position));
 
@@ -700,9 +855,9 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 	for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; ++i)
 	{
 		//glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gDirectionalLights[i].GetPositionViewSpace(mainViewpoint.viewMat)));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].GetDirectionVS(mainViewpoint.viewMat)));
-		glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "color"), 1, glm::value_ptr(gDirectionalLights[i].colorIntensity));
-		glUniform4fv(gDirectionalLightShader.GetUniformLocation("lights", i, "attenParams"), 1, glm::value_ptr(gDirectionalLights[i].attenParams));
+		glUniform3fv(gDirectionalLightMaterial.shader->GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].GetDirectionVS(mainViewpoint.viewMat)));
+		glUniform3fv(gDirectionalLightMaterial.shader->GetUniformLocation("lights", i, "color"), 1, glm::value_ptr(gDirectionalLights[i].colorIntensity));
+		glUniform4fv(gDirectionalLightMaterial.shader->GetUniformLocation("lights", i, "attenParams"), 1, glm::value_ptr(gDirectionalLights[i].attenParams));
 	}
 
 	// draw quad
@@ -711,6 +866,8 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 
 void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& lights, const Mesh& lightVolumePrepassMesh, const Mesh& lightVolumeMesh)
 {
+	//ScopedProfileTimer timer("light volume", true);
+
 	// spot light
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
@@ -756,22 +913,22 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 
 			// prepass
 			gLightVolumePrepassState.Apply();
-			gPrepassShader.Use();
-			glUniformMatrix4fv(gPrepassShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+			gPrepassMaterial.Use();
+			glUniformMatrix4fv(gPrepassMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 			lightVolumePrepassMesh.Draw();
 
 			// draw light
 			gLightVolumeState.Apply();
 		}
 
-		gLightVolumeShader.Use();
+		gLightVolumeMaterial.Use();
 
-		glUniform4fv(gLightVolumeShader.GetUniformLocation("light", "positionInvR"), 1, glm::value_ptr(lights[i].GetPositionVSInvR(mainViewpoint.viewMat)));
-		glUniform3fv(gLightVolumeShader.GetUniformLocation("light", "direction"), 1, glm::value_ptr(lights[i].GetDirectionVS(mainViewpoint.viewMat)));
-		glUniform3fv(gLightVolumeShader.GetUniformLocation("light", "color"), 1, glm::value_ptr(lights[i].colorIntensity));
-		glUniform4fv(gLightVolumeShader.GetUniformLocation("light", "attenParams"), 1, glm::value_ptr(lights[i].attenParams));
+		glUniform4fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "positionInvR"), 1, glm::value_ptr(lights[i].GetPositionVSInvR(mainViewpoint.viewMat)));
+		glUniform3fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "direction"), 1, glm::value_ptr(lights[i].GetDirectionVS(mainViewpoint.viewMat)));
+		glUniform3fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "color"), 1, glm::value_ptr(lights[i].colorIntensity));
+		glUniform4fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "attenParams"), 1, glm::value_ptr(lights[i].attenParams));
 
-		glUniformMatrix4fv(gLightVolumeShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		glUniformMatrix4fv(gLightVolumeMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 
 		lightVolumeMesh.Draw();
 
@@ -782,22 +939,19 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 
 void PointLightPass(const Viewpoint& mainViewpoint)
 {
+	ScopedProfileTimer timer("point light", true);
 	LightVolumePass(mainViewpoint, gPointLights, gPointLightPrepassMesh, gPointLightMesh);
 }
 
 void SpotLightPass(const Viewpoint& mainViewpoint)
 {
+	ScopedProfileTimer timer("spot light", true);
 	LightVolumePass(mainViewpoint, gSpotLights, gSpotLightPrepassMesh, gSpotLightMesh);
 }
 
 void LightPass(const Viewpoint& mainViewpoint)
 {
-	// bind textures
-	//gPositionTex.Bind(Shader::gPositionTexUnit);
-	gNormalTex.Bind(Shader::gNormalTexUnit);
-	gAlbedoTex.Bind(Shader::gAlbedoTexUnit);
-	gMaterialTex.Bind(Shader::gMaterialTexUnit);
-	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
+	ScopedProfileTimer timer("light", true);
 	
 	// clear color buffer only.
 	glClearColor(0, 0, 0, 0);
@@ -814,6 +968,8 @@ void LightPass(const Viewpoint& mainViewpoint)
 
 void DebugForwardPass()
 {
+	ScopedProfileTimer timer("debug foward", true);
+
 	gDebugForwardState.Apply();
 
 	// draw debug
@@ -873,7 +1029,7 @@ void DebugForwardPass()
 
 void PostProcessPass()
 {
-	gSceneColorTex.Bind(Shader::sceneColorTexUnit);
+	ScopedProfileTimer timer("post process", true);
 
 	// directional light
 	gPostProcessFinishState.Apply();
@@ -884,8 +1040,10 @@ void PostProcessPass()
 	gToneMapMesh.Draw();
 }
 
-void render()
+void Render()
 {
+	ScopedProfileTimer timer("render", true);
+
 	const Viewpoint& mainViewpoint = gCamera.ProcessCamera((GLfloat)SCREEN_WIDTH, (GLfloat)SCREEN_HEIGHT, 0.1f, 1000.f);
 
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -908,6 +1066,12 @@ void render()
 	// bind Scene-buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
 	
+	// bind deferred pass textures
+	gNormalTex.Bind(Shader::gNormalTexUnit);
+	gAlbedoTex.Bind(Shader::gAlbedoTexUnit);
+	gMaterialTex.Bind(Shader::gMaterialTexUnit);
+	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
+	
 	LightPass(mainViewpoint);
 
 	DebugForwardPass();
@@ -915,12 +1079,16 @@ void render()
 	// unbind frame buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	// find post process pass textures
+	gSceneColorTex.Bind(Shader::gSceneColorTexUnit);
+	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
+
 	PostProcessPass();
 }
 
 int main(int argc, char **argv)
 {
-	if (!init())
+	if (!Init())
 	{
 		printf("Failed to initialize!\n");
 	}
@@ -928,6 +1096,9 @@ int main(int argc, char **argv)
 	{
 		//Main loop flag
 		bool quit = false;
+
+		gPerformanceCounter = SDL_GetPerformanceCounter();
+		float deltaTime = 0;
 
 		SDL_Event event;
 
@@ -950,15 +1121,52 @@ int main(int argc, char **argv)
 				}
 			}
 
-			update();
+			Update(deltaTime);
 
-			render();
+			Render();
 
 			SDL_GL_SwapWindow(gWindow);
+			
+			Uint64 newPerformanceCounter = SDL_GetPerformanceCounter();
+			deltaTime = (float)((double)(newPerformanceCounter - gPerformanceCounter) * gInvPerformanceFreq);
+			gPerformanceCounter = newPerformanceCounter;
+
+#if PROFILE
+			{
+				ScopedProfileTimer timer("profile", false);
+
+				// profiling cpu
+				for (auto it = ScopedProfileTimer::timerMapCPU.begin(); it != ScopedProfileTimer::timerMapCPU.end(); ++it)
+				{
+					//printf("%s: %f\n", it->first.c_str(), it->second);
+					// clear
+					it->second = 0;
+				}
+				// profiling gpu
+				int GPUMapReadIdx = 1 - ScopedProfileTimer::GPUMapWriteIdx;
+				ScopedProfileTimer::GPUMapWriteIdx = GPUMapReadIdx;
+				for (auto &it = ScopedProfileTimer::timerMapGPU[GPUMapReadIdx].begin(); it != ScopedProfileTimer::timerMapGPU[GPUMapReadIdx].end(); ++it)
+				{
+					double elapsed = 0;
+					for (int pairIdx = 0; pairIdx < it->second.size(); ++pairIdx)
+					{
+						GLuint64 elapsedStart = 0, elapsedEnd = 0;
+						glGetQueryObjectui64v(it->second[pairIdx][0], GL_QUERY_RESULT_NO_WAIT, &elapsedStart);
+						glGetQueryObjectui64v(it->second[pairIdx][1], GL_QUERY_RESULT_NO_WAIT, &elapsedEnd);
+						elapsed += (double)(elapsedEnd - elapsedStart) / (double)1000000;
+					}
+					printf("%s: %f\n", it->first.c_str(), elapsed);
+					// clear
+					it->second.clear();
+				}
+				printf("delta time %f\n", deltaTime * 1000);
+				printf("\n");
+			}
+#endif
 		}
 	}
 
-	close();
+	Close();
 
 	return EXIT_SUCCESS;
 }

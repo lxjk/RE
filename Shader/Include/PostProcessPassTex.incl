@@ -1,0 +1,9 @@
+#ifndef POST_PROCESS_PASS_TEX_INCL
+#define POST_PROCESS_PASS_TEX_INCL
+
+#hint UsePostProcessPassTex
+
+uniform sampler2D gSceneColorTex;
+uniform sampler2D gDepthStencilTex;
+
+#endif

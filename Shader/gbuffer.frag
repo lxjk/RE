@@ -25,7 +25,7 @@ void main()
 	//gNormal = faceNormal * 0.5f + 0.5f;
 	
 	gAlbedo = texture(diffuseTex, fs_in.texCoords).rgb;
-	//gAlbedo = vec3(1.0);
+	//gAlbedo = vec3(fs_in.texCoords.x, 0.0, 0.0);
 	
 	gMaterial.r = metallic;
 	gMaterial.g = roughness;

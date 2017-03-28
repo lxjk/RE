@@ -4,6 +4,7 @@
 
 #include "Include/CommonUBO.incl"
 #include "Include/DeferredLighting.incl"
+#include "Include/DeferredPassTex.incl"
 
 in VS_OUT
 {
@@ -12,12 +13,6 @@ in VS_OUT
 } fs_in;
 
 out vec4 color;
-
-uniform sampler2D gPositionTex;
-uniform sampler2D gNormalTex;
-uniform sampler2D gAlbedoTex;
-uniform sampler2D gMaterialTex;
-uniform sampler2D gDepthStencilTex;
 
 //uniform vec3 viewPos;
 uniform Light lights[LIGHT_COUNT];
@@ -46,7 +41,7 @@ void main()
 	}
 	color = vec4(result, 1.0f);
 	//color = vec4(abs((rposition - position) / rposition) * 100, 1.0f);
-	//color = vec4(normal, 1.0f);
+	//color = vec4(albedo, 1.0f);
 	//color = vec4(metallic, roughness, 0.0f, 1.0f);
 	//gl_FragDepth = depth;
 

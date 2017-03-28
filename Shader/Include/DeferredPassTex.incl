@@ -1,0 +1,11 @@
+#ifndef DEFERRED_PASS_TEX_INCL
+#define DEFERRED_PASS_TEX_INCL
+
+#hint UseDeferredPassTex
+
+uniform sampler2D gNormalTex;
+uniform sampler2D gAlbedoTex;
+uniform sampler2D gMaterialTex;
+uniform sampler2D gDepthStencilTex;
+
+#endif

@@ -100,7 +100,7 @@ vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, f
 		attenuation = (1 - attRatio * attRatio * attRatio * attRatio);
 		attenuation = (attenuation * attenuation) / (dist * dist + 1);
 	}
-	if(lightData.attenParams.x > 0.5f)
+	if(lightData.attenParams.y > 0.5f)
 	{
 		//float spotRatio = min((1 - dot(light, -lightData.direction)) / (1 - lightData.cosHalfAngle), 1.f);
 		//attenuation *= (1 - spotRatio);

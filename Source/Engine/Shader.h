@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 // glew
 #include "gl/glew.h"
 
@@ -14,15 +16,19 @@ public:
 
 	static const GLuint RenderInfoBP = 0;
 
-	static const GLuint diffuseTexUnit = 0;
-	static const GLuint normalTexUnit = 1;
-
+	// deferred pass
 	static const GLuint gDepthStencilTexUnit = 0;
 	static const GLuint gNormalTexUnit = 1;
 	static const GLuint gAlbedoTexUnit = 2;
 	static const GLuint gMaterialTexUnit = 3;
 
-	static const GLuint sceneColorTexUnit = 1;
+	static const int deferredPassTexCount = 4;
+
+	// post process pass
+	//static const GLuint gDepthStencilTexUnit = 0; reuse
+	static const GLuint gSceneColorTexUnit = 1;
+
+	static const int postProcessPassTexCount = 2;
 
 	GLuint programID;
 
@@ -33,6 +39,8 @@ public:
 
 	GLchar vertexFilePath[512];
 	GLchar fragmentFilePath[512];
+
+	std::map<std::string, GLuint> TexUnitMap;
 
 	Shader()
 	{
@@ -47,10 +55,10 @@ public:
 
 	void Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAssert = true)
 	{
-		std::string vCode;
-		std::string fCode;
+		ShaderInfo vShaderInfo;
+		ShaderInfo fShaderInfo;
 
-		if (!LoadShader(vCode, vertexPath))
+		if (!LoadShader(vShaderInfo, vertexPath))
 		{
 			printf("Error: fail to read shader vertex: %s", vertexPath);
 			if (bAssert)
@@ -58,7 +66,7 @@ public:
 			else
 				return;
 		}
-		if (!LoadShader(fCode, fragmentPath))
+		if (!LoadShader(fShaderInfo, fragmentPath))
 		{
 			printf("Error: fail to read shader fragmenet: %s", fragmentPath);
 			if (bAssert)
@@ -70,8 +78,8 @@ public:
 		strcpy_s(vertexFilePath, vertexPath);
 		strcpy_s(fragmentFilePath, fragmentPath);
 
-		const GLchar* vShaderCode = vCode.c_str();
-		const GLchar* fShaderCode = fCode.c_str();
+		const GLchar* vShaderCode = vShaderInfo.shaderCode.c_str();
+		const GLchar* fShaderCode = fShaderInfo.shaderCode.c_str();
 
 		// compile shader
 		GLuint vertexID, fragmentID;
@@ -132,6 +140,28 @@ public:
 			else
 				return;
 		}
+
+		bool bUseDeferredPassTex = false;
+		bool bUsePostProcessPassTex = false;
+		// process hint
+		ShaderInfo* shaderInfoList[2] = { &vShaderInfo, &fShaderInfo };
+		for (int shaderInfoIdx = 0; shaderInfoIdx < 2; ++shaderInfoIdx)
+		{
+			ShaderInfo* shaderInfo = shaderInfoList[shaderInfoIdx];
+
+			bUseDeferredPassTex |= shaderInfo->bUseDeferredPassTex;
+			bUsePostProcessPassTex |= shaderInfo->bUsePostProcessPassTex;
+		}
+		if (bUseDeferredPassTex && bUsePostProcessPassTex)
+		{
+			glDeleteShader(vertexID);
+			glDeleteShader(fragmentID);
+			glDeleteProgram(newProgramID);
+			if (bAssert)
+				assert(false);
+			else
+				return;
+		}
 		
 		// delete shader
 		glDeleteShader(vertexID);
@@ -150,19 +180,55 @@ public:
 
 		// uniform buffer index
 		BindUniformBlock("RenderInfo", RenderInfoBP);
+		
+		// process uniforms
+		int texUnitStart = 0;
+		if (bUseDeferredPassTex)
+			texUnitStart = deferredPassTexCount;
+		else if (bUsePostProcessPassTex)
+			texUnitStart = postProcessPassTexCount;
+
+		TexUnitMap.clear();
+		for (int shaderInfoIdx = 0; shaderInfoIdx < 2; ++shaderInfoIdx)
+		{
+			ShaderInfo* shaderInfo = shaderInfoList[shaderInfoIdx];
+			for (auto it = shaderInfo->shaderUniforms.typeMap.begin(); it != shaderInfo->shaderUniforms.typeMap.end(); ++it)
+			{
+				if (it->first.compare("sampler2D") == 0)
+				{
+					for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
+					{
+						TexUnitMap[it->second[nameIdx]] = texUnitStart;
+						++texUnitStart;
+					}
+				}
+			}
+		}
+		
 
 		// set texture unit
 		Use(); // must use program here
-		// geometry pass
-		SetTextureUnit("diffuseTex", diffuseTexUnit);
-		SetTextureUnit("normalTex", normalTexUnit);
-		// light pass
-		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
-		SetTextureUnit("gNormalTex", gNormalTexUnit);
-		SetTextureUnit("gAlbedoTex", gAlbedoTexUnit);
-		SetTextureUnit("gMaterialTex", gMaterialTexUnit);
-		// post process
-		SetTextureUnit("sceneColorTex", sceneColorTexUnit);
+		// deferrd pass
+		if (bUseDeferredPassTex)
+		{
+			SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
+			SetTextureUnit("gNormalTex", gNormalTexUnit);
+			SetTextureUnit("gAlbedoTex", gAlbedoTexUnit);
+			SetTextureUnit("gMaterialTex", gMaterialTexUnit);
+		}
+		// post process pass
+		else if (bUsePostProcessPassTex)
+		{
+			SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
+			SetTextureUnit("gSceneColorTex", gSceneColorTexUnit);
+		}
+		// custom
+		//for (auto it = TexUnitMap.begin(); it != TexUnitMap.end(); ++it)
+		//{
+		//	SetTextureUnit(it->first.c_str(), it->second);
+		//}
+		SetTextureUnit("diffuseTex", 0);
+		SetTextureUnit("normalTex", 1);
 	}
 
 	void Use()
@@ -230,5 +296,16 @@ public:
 		GLint location = GetUniformLocation(name);
 		if (location != -1)
 			glUniform1i(location, texUnit);
+	}
+
+	GLint GetTextureUnit(const GLchar* name)
+	{
+		auto it = TexUnitMap.find(name);
+		if (it != TexUnitMap.end())
+		{
+			return it->second;
+		}
+		printf("%s is not a valid texture name! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
+		return -1;
 	}
 };

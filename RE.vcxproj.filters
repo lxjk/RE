@@ -42,5 +42,14 @@
     <ClInclude Include="Source\Engine\ShaderLoader.h">
       <Filter>Source\Engine</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Util.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Material.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\MeshLoader.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

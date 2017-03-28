@@ -6,13 +6,59 @@
 #include <iostream>
 #include <map>
 
+#include "Util.h"
+
 #define DUMP_SHADER 0
+
+class ShaderUniforms
+{
+public:
+	// <type, nameArray>
+	std::map<std::string, std::vector<std::string>> typeMap;
+
+	void Append(const ShaderUniforms& other)
+	{
+		for (auto itOther = other.typeMap.begin(); itOther != other.typeMap.end(); ++itOther)
+		{
+			if (itOther->second.size() > 0)
+			{
+				// insert or find name array according to type
+				std::vector<std::string>& nameArray = typeMap[itOther->first];
+				// append other
+				nameArray.insert(nameArray.begin(), itOther->second.begin(), itOther->second.end());
+			}
+		}
+	}
+};
+
+class ShaderInfo
+{
+public:
+	std::string shaderCode;
+	ShaderUniforms shaderUniforms;
+
+	bool bUseDeferredPassTex = false;
+	bool bUsePostProcessPassTex = false;
+
+	void Append(const ShaderInfo& other)
+	{
+		shaderCode.append(other.shaderCode);
+		shaderUniforms.Append(other.shaderUniforms);
+		bUseDeferredPassTex |= other.bUseDeferredPassTex;
+		bUsePostProcessPassTex |= other.bUsePostProcessPassTex;
+	}
+
+	bool IsValid()
+	{
+		return shaderCode.size() > 0 && !(bUseDeferredPassTex && bUsePostProcessPassTex);
+	}
+};
 
 const int MAX_INCLUDE_DEPTH = 8;
 
-std::map<std::string, std::string> gShaderFileCache;
+std::map<std::string, ShaderInfo> gShaderFileCache;
 
-bool LoadShader(std::string& output, std::string path, int includeDepth = 0)
+bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 0)
 {
 	if (includeDepth > MAX_INCLUDE_DEPTH)
 	{
@@ -39,7 +85,7 @@ bool LoadShader(std::string& output, std::string path, int includeDepth = 0)
 	if (it != gShaderFileCache.end())
 	{
 		// find it
-		output.append(it->second);
+		output.Append(it->second);
 		return true;
 	}
 
@@ -69,10 +115,17 @@ bool LoadShader(std::string& output, std::string path, int includeDepth = 0)
 		return false;
 	}
 
-	std::string localOutput;
+	ShaderInfo localOutput;
+	bool bShouldProcessUniform = true;
 
-	const char* token = "#include \"";
-	size_t tokenLen = strlen(token);
+	const char* tokenInclude = "#include \"";
+	size_t tokenLenInclude = strlen(tokenInclude);
+
+	const char* tokenUniform = "uniform ";
+	size_t tokenLenUniform = strlen(tokenUniform);
+
+	const char* tokenHint = "#hint ";
+	size_t tokenLenHint = strlen(tokenHint);
 
 	char endOfLineChar = '\n';
 	size_t posStartOfLine = 0;
@@ -80,28 +133,81 @@ bool LoadShader(std::string& output, std::string path, int includeDepth = 0)
 	while (posEndOfLine != std::string::npos)
 	{
 		std::string line = content.substr(posStartOfLine, posEndOfLine - posStartOfLine + 1);
-		size_t includeStart = line.find(token);
-		if (includeStart != std::string::npos)
+		size_t tokenStart = std::string::npos;
+		bool bShouldCopy = true;
+		// include token
+		if (tokenStart == std::string::npos)
 		{
-			// maybe found an include
-			size_t pathStart = includeStart + tokenLen;
-			// do we have an end?
-			size_t pathEnd = line.find('\"', pathStart);
-			if (pathEnd != std::string::npos && pathEnd - pathStart > 1)
+			tokenStart = line.find(tokenInclude);
+			if (tokenStart != std::string::npos)
 			{
-				// we have a valid end
-				std::string includePath = localPath;
-				includePath.append(line.substr(pathStart, pathEnd - pathStart));
-				if (!LoadShader(localOutput, includePath, includeDepth + 1))
+				bShouldCopy = false;
+				// maybe found an include
+				size_t pathStart = tokenStart + tokenLenInclude;
+				// do we have an end?
+				size_t pathEnd = line.find('\"', pathStart);
+				if (pathEnd != std::string::npos && pathEnd - pathStart > 1)
 				{
-					return false;
+					// we have a valid end
+					std::string includePath = localPath;
+					includePath.append(line.substr(pathStart, pathEnd - pathStart));
+					if (!LoadShader(localOutput, includePath, includeDepth + 1))
+					{
+						return false;
+					}
 				}
 			}
 		}
-		else
+		// hint token
+		if (tokenStart == std::string::npos)
+		{
+			tokenStart = line.find(tokenHint);
+			if (tokenStart != std::string::npos)
+			{
+				bShouldCopy = false;
+				// maybe found an hint
+				size_t hintStart = tokenStart + tokenLenHint;
+				std::string hint = line.substr(hintStart);
+				trim(hint);
+				if (hint.compare("UseDeferredPassTex") == 0)
+				{
+					localOutput.bUseDeferredPassTex = true;
+					bShouldProcessUniform = false;
+				}
+				else if (hint.compare("UsePostProcessPassTex") == 0)
+				{
+					localOutput.bUsePostProcessPassTex = true;
+					bShouldProcessUniform = false;
+				}
+			}
+		}
+		// uniform token
+		if (bShouldProcessUniform && (tokenStart == std::string::npos))
+		{
+			tokenStart = line.find(tokenUniform);
+			if (tokenStart != std::string::npos)
+			{
+				size_t typeStart = tokenStart + tokenLenUniform;
+				size_t nameEnd = line.find(';');
+				if (nameEnd != std::string::npos)
+				{
+					std::string typeName = line.substr(typeStart, nameEnd - typeStart);
+					trim(typeName);
+					size_t typeEnd = typeName.find_first_of(" \t");
+					size_t nameStart = typeName.find_last_of(" \t");
+					if (typeEnd != std::string::npos && nameStart != std::string::npos)
+					{
+						localOutput.shaderUniforms.typeMap[typeName.substr(0, typeEnd)]
+							.push_back(typeName.substr(nameStart + 1, nameEnd - nameStart - 1));
+					}
+				}
+			}
+		}
+		// normal line
+		if (bShouldCopy)
 		{
 			// copy the line
-			localOutput.append(line);
+			localOutput.shaderCode.append(line);
 		}
 
 		posStartOfLine = posEndOfLine + 1;
@@ -109,14 +215,16 @@ bool LoadShader(std::string& output, std::string path, int includeDepth = 0)
 	}
 
 	// last line
-	localOutput.append(content.substr(posStartOfLine));
-	localOutput.append("\n");
+	localOutput.shaderCode.append(content.substr(posStartOfLine));
+	localOutput.shaderCode.append("\n");
+
+	assert(localOutput.IsValid());
 
 	// we load the file, now add it to cache
 	gShaderFileCache[fileName] = localOutput;
 	
 	// add to output
-	output.append(localOutput);
+	output.Append(localOutput);
 
 #if DUMP_SHADER
 	// only dump top level
@@ -128,7 +236,7 @@ bool LoadShader(std::string& output, std::string path, int includeDepth = 0)
 		fopen_s(&file, dumpPath, "w");
 		if (file)
 		{
-			fputs(output.c_str(), file);
+			fputs(output.shaderCode.c_str(), file);
 			fclose(file);
 		}
 	}

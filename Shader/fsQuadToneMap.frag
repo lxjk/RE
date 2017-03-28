@@ -1,5 +1,7 @@
 #version 330 core
 
+#include "Include/PostProcessPassTex.incl"
+
 in VS_OUT
 {
 	vec3 positionVS;
@@ -8,15 +10,12 @@ in VS_OUT
 
 out vec4 color;
 
-uniform sampler2D sceneColorTex;
-uniform sampler2D gDepthStencilTex;
-
 void main() 
 {
 	const float invGamma = 1.0 / 2.2;
 	const float exposure = 1.0;
 	
-	vec3 hdrColor = texture(sceneColorTex, fs_in.texCoords).rgb;
+	vec3 hdrColor = texture(gSceneColorTex, fs_in.texCoords).rgb;
 	//vec3 mapped = hdrColor;
 	//vec3 mapped = hdrColor / (hdrColor + vec3(1.0f));
 	vec3 mapped = vec3(1.0) - exp(-hdrColor * exposure);
