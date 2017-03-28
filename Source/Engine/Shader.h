@@ -223,12 +223,10 @@ public:
 			SetTextureUnit("gSceneColorTex", gSceneColorTexUnit);
 		}
 		// custom
-		//for (auto it = TexUnitMap.begin(); it != TexUnitMap.end(); ++it)
-		//{
-		//	SetTextureUnit(it->first.c_str(), it->second);
-		//}
-		SetTextureUnit("diffuseTex", 0);
-		SetTextureUnit("normalTex", 1);
+		for (auto it = TexUnitMap.begin(); it != TexUnitMap.end(); ++it)
+		{
+			SetTextureUnit(it->first.c_str(), it->second);
+		}
 	}
 
 	void Use()
