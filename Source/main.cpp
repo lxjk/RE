@@ -86,23 +86,23 @@ MeshData gIcosahedronMeshData;
 MeshData gQuadMeshData;
 
 // mesh
-Mesh gCubeMesh;
-Mesh gSphereMesh;
-Mesh gFSQuadMesh;
-std::vector<Mesh> gNanosuitMeshes;
+Mesh* gCubeMesh;
+Mesh* gSphereMesh;
+Mesh* gFSQuadMesh;
+std::vector<Mesh*> gNanosuitMeshes;
 
-Mesh gCubeColorMesh;
+Mesh* gCubeColorMesh;
 
-Mesh gDirectionalLightMesh;
-Mesh gPointLightMesh;
-Mesh gPointLightPrepassMesh;
-Mesh gSpotLightMesh;
-Mesh gSpotLightPrepassMesh;
+Mesh* gDirectionalLightMesh;
+Mesh* gPointLightMesh;
+Mesh* gPointLightPrepassMesh;
+Mesh* gSpotLightMesh;
+Mesh* gSpotLightPrepassMesh;
 
-Mesh gToneMapMesh;
+Mesh* gToneMapMesh;
 
-Mesh gPointLightDebugMesh;
-Mesh gSpotLightDebugMesh;
+Mesh* gPointLightDebugMesh;
+Mesh* gSpotLightDebugMesh;
 
 // texture
 Texture2D* gDiffuseMap;
@@ -558,25 +558,25 @@ bool InitGL()
 	MakeQuad(gQuadMeshData);
 
 	// mesh
-	gCubeMesh.Init(&gCubeMeshData, &gGBufferMaterial);
-	gSphereMesh.Init(&gSphereMeshData, &gGBufferMaterial);
-	gFSQuadMesh.Init(&gQuadMeshData, &gFSQuadMaterial);
+	gCubeMesh = Mesh::Create(&gCubeMeshData, &gGBufferMaterial);
+	gSphereMesh = Mesh::Create(&gSphereMeshData, &gGBufferMaterial);
+	gFSQuadMesh = Mesh::Create(&gQuadMeshData, &gFSQuadMaterial);
 
 	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader);
 	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader);
 
-	gCubeColorMesh.Init(&gCubeMeshData, &gGBufferColorMaterial);
+	gCubeColorMesh = Mesh::Create(&gCubeMeshData, &gGBufferColorMaterial);
 
-	gDirectionalLightMesh.Init(&gQuadMeshData, &gDirectionalLightMaterial);
-	gPointLightMesh.Init(&gIcosahedronMeshData, &gLightVolumeMaterial);
-	gPointLightPrepassMesh.Init(&gIcosahedronMeshData, &gPrepassMaterial);
-	gSpotLightMesh.Init(&gConeMeshData, &gLightVolumeMaterial);
-	gSpotLightPrepassMesh.Init(&gConeMeshData, &gPrepassMaterial);
+	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, &gDirectionalLightMaterial);
+	gPointLightMesh = Mesh::Create(&gIcosahedronMeshData, &gLightVolumeMaterial);
+	gPointLightPrepassMesh = Mesh::Create(&gIcosahedronMeshData, &gPrepassMaterial);
+	gSpotLightMesh = Mesh::Create(&gConeMeshData, &gLightVolumeMaterial);
+	gSpotLightPrepassMesh = Mesh::Create(&gConeMeshData, &gPrepassMaterial);
 
-	gToneMapMesh.Init(&gQuadMeshData, &gToneMapMaterial);
+	gToneMapMesh = Mesh::Create(&gQuadMeshData, &gToneMapMaterial);
 
-	gPointLightDebugMesh.Init(&gIcosahedronMeshData, &gLightDebugMaterial);
-	gSpotLightDebugMesh.Init(&gConeMeshData, &gLightDebugMaterial);
+	gPointLightDebugMesh = Mesh::Create(&gIcosahedronMeshData, &gLightDebugMaterial);
+	gSpotLightDebugMesh = Mesh::Create(&gConeMeshData, &gLightDebugMaterial);
 
 	// texture
 	gDiffuseMap = Texture2D::FindOrCreate("Content/Texture/154.jpg", true);
@@ -765,7 +765,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glUniformMatrix4fv(gGBufferMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 		glUniformMatrix3fv(gGBufferMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 
-		gCubeMesh.Draw();
+		gCubeMesh->Draw();
 	}
 
 	for (int i = 0; i < 3; ++i)
@@ -779,7 +779,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), 1.f);
 		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), i * 0.45f + 0.1f);
 
-		gSphereMesh.Draw();
+		gSphereMesh->Draw();
 	}
 
 	for (int i = 0; i < 3; ++i)
@@ -793,7 +793,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), i * 0.5f);
 		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), 0.4f);
 
-		gSphereMesh.Draw();
+		gSphereMesh->Draw();
 	}
 	
 	// nanosuit
@@ -805,7 +805,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 
 		for (int i = 0; i < gNanosuitMeshes.size(); ++i)
 		{
-			Material* material = gNanosuitMeshes[i].material;
+			Material* material = gNanosuitMeshes[i]->material;
 			if (!material)
 				continue;
 
@@ -817,7 +817,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 			glUniform1f(material->shader->GetUniformLocation("metallic"), 0.f);
 			glUniform1f(material->shader->GetUniformLocation("roughness"), 0.3f);
 
-			gNanosuitMeshes[i].Draw();
+			gNanosuitMeshes[i]->Draw();
 		}
 	}
 
@@ -836,7 +836,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glUniform1f(gGBufferColorMaterial.shader->GetUniformLocation("roughness"), 1.f);
 		glUniform3fv(gGBufferColorMaterial.shader->GetUniformLocation("color"), 1, glm::value_ptr(glm::vec3(0.2f)));
 
-		gCubeColorMesh.Draw();
+		gCubeColorMesh->Draw();
 	}
 }
 
@@ -861,10 +861,10 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 	}
 
 	// draw quad
-	gDirectionalLightMesh.Draw();
+	gDirectionalLightMesh->Draw();
 }
 
-void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& lights, const Mesh& lightVolumePrepassMesh, const Mesh& lightVolumeMesh)
+void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& lights, const Mesh* lightVolumePrepassMesh, const Mesh* lightVolumeMesh)
 {
 	//ScopedProfileTimer timer("light volume", true);
 
@@ -915,7 +915,7 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 			gLightVolumePrepassState.Apply();
 			gPrepassMaterial.Use();
 			glUniformMatrix4fv(gPrepassMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-			lightVolumePrepassMesh.Draw();
+			lightVolumePrepassMesh->Draw();
 
 			// draw light
 			gLightVolumeState.Apply();
@@ -930,7 +930,7 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 
 		glUniformMatrix4fv(gLightVolumeMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 
-		lightVolumeMesh.Draw();
+		lightVolumeMesh->Draw();
 
 	}
 
@@ -985,7 +985,7 @@ void DebugForwardPass()
 		//glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].colorIntensity));
 
-		gPointLightDebugMesh.Draw();
+		gPointLightDebugMesh->Draw();
 	}
 
 	for (int i = 0; i < gSpotLights.size(); ++i)
@@ -1000,7 +1000,7 @@ void DebugForwardPass()
 		//glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gSpotLights[i].colorIntensity));
 
-		gSpotLightDebugMesh.Draw();
+		gSpotLightDebugMesh->Draw();
 	}
 
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -1020,7 +1020,7 @@ void DebugForwardPass()
 	//	glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
 	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
 
-	//	gPointLightDebugMesh.Draw();
+	//	gPointLightDebugMesh->Draw();
 
 	//}
 
@@ -1037,7 +1037,7 @@ void PostProcessPass()
 	gToneMapShader.Use();
 
 	// draw quad
-	gToneMapMesh.Draw();
+	gToneMapMesh->Draw();
 }
 
 void Render()
@@ -1117,7 +1117,11 @@ int main(int argc, char **argv)
 				else if (event.type == SDL_KEYUP)
 				{
 					if (event.key.keysym.sym == SDLK_r)
+					{
 						LoadShaders(true);
+						for (int i = 0; i < Mesh::gMeshContainer.size(); ++i)
+							Mesh::gMeshContainer[i]->SetAttributes();
+					}
 				}
 			}
 

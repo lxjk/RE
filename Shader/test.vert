@@ -4,14 +4,14 @@
 
 in vec3 position;
 in vec3 normal;
-in vec3 tangent;
+in vec4 tangent;
 in vec2 texCoords;
 
 out VS_OUT
 {
 	vec3 position;
 	vec3 normal;
-	vec3 tangent;
+	vec4 tangent;
 	vec2 texCoords;
 } vs_out;
 
@@ -28,6 +28,6 @@ void main()
 	//gl_Position.zw = vec2(0, 1);
 	vs_out.position = worldPos.xyz;
 	vs_out.normal = normalMat * normal;
-	vs_out.tangent = normalMat * tangent;
+	vs_out.tangent = vec4(normalMat * tangent.xyz, tangent.w);
 	vs_out.texCoords = texCoords;
 }

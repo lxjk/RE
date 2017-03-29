@@ -12,12 +12,12 @@ struct Vertex
 {
 	glm::vec3 position;
 	glm::vec3 normal;
-	glm::vec3 tangent;
+	glm::vec4 tangent;
 	glm::vec2 texCoords;
 
 	Vertex(glm::vec3 inPosition,
 		glm::vec3 inNormal,
-		glm::vec3 inTangent,
+		glm::vec4 inTangent,
 		glm::vec2 inTexCoords)
 	{
 		position = inPosition;
@@ -48,6 +48,22 @@ std::vector<MeshData*> MeshData::gMeshDataContainer;
 class Mesh
 {
 public:
+
+	static std::vector<Mesh*> gMeshContainer;
+
+	static Mesh* Create()
+	{
+		Mesh* mesh = new Mesh();
+		gMeshContainer.push_back(mesh);
+		return mesh;
+	}
+
+	static Mesh* Create(MeshData* inMeshData, Material* inMaterial)
+	{
+		Mesh* mesh = Create();
+		mesh->Init(inMeshData, inMaterial);
+		return mesh;
+	}
 
 	MeshData* meshData;
 	Material* material;
@@ -102,6 +118,20 @@ public:
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(GLuint), meshData->indices.data(), GL_STATIC_DRAW);
 
+		glBindVertexArray(0);
+
+		SetAttributes();
+
+	}
+
+	void SetAttributes()
+	{
+		if (VAO == 0)
+			return;
+
+		glBindVertexArray(VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, VBO);
+
 		// set attributes
 		if (material->shader->positionIdx >= 0)
 		{
@@ -116,7 +146,7 @@ public:
 		if (material->shader->tangentIdx >= 0)
 		{
 			glEnableVertexAttribArray(material->shader->tangentIdx);
-			glVertexAttribPointer(material->shader->tangentIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, tangent));
+			glVertexAttribPointer(material->shader->tangentIdx, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, tangent));
 		}
 		if (material->shader->texCoordsIdx >= 0)
 		{
@@ -131,6 +161,8 @@ protected:
 
 	GLuint VAO, VBO, EBO;
 };
+
+std::vector<Mesh*> Mesh::gMeshContainer;
 
 
 void MakeCube(MeshData& meshData)
@@ -168,10 +200,11 @@ void MakeCube(MeshData& meshData)
 	for (int i = 0; i < 6; ++i)
 	{
 		glm::vec3 right = glm::cross(up[i], normal[i]);
+		glm::vec4 tangent = glm::vec4(right, 1.f);
 		for (int j = 0; j < 4; ++j)
 		{
-			glm::vec2 ext = uv[j] * 2.f - 1.f;
-			vertList.push_back(Vertex(normal[i] + ext.x * right - ext.y * up[i], normal[i], right, uv[j]));
+			glm::vec2 ext = uv[j] * 2.f - 1.f;;
+			vertList.push_back(Vertex(normal[i] + ext.x * right - ext.y * up[i], normal[i], tangent, uv[j]));
 		}
 		idxList.push_back(i * 4 + 0);
 		idxList.push_back(i * 4 + 1);
@@ -196,7 +229,7 @@ void MakeSphere(MeshData& meshData, int div)
 	idxList.reserve(idxCount);
 
 	// add first vert
-	vertList.push_back(Vertex(glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)));
+	vertList.push_back(Vertex(glm::vec3(0, 1, 0), glm::vec3(0, 1, 0), glm::vec4(1, 0, 0, 1), glm::vec2(0, 0)));
 	int prevRingStart = 0;
 	int curRingStart = 1;
 	// add rings
@@ -215,7 +248,7 @@ void MakeSphere(MeshData& meshData, int div)
 			float cosLon = glm::cos(lonAngle);
 			float sinLon = glm::sin(lonAngle);
 			glm::vec3 pos(cosLon * cosLat, sinLat, sinLon * cosLat);
-			glm::vec3 tangent(sinLon, 0, -cosLon);
+			glm::vec4 tangent(sinLon, 0, -cosLon, 1);
 			vertList.push_back(Vertex(pos, pos, tangent, glm::vec2(lonRatio, latRatio)));
 		}
 		// add idx on a ring with prev ring
@@ -243,7 +276,7 @@ void MakeSphere(MeshData& meshData, int div)
 		curRingStart += (div + 1);
 	}
 	// add last vert
-	vertList.push_back(Vertex(glm::vec3(0, -1, 0), glm::vec3(0, -1, 0), glm::vec3(1, 0, 0), glm::vec2(1, 1)));
+	vertList.push_back(Vertex(glm::vec3(0, -1, 0), glm::vec3(0, -1, 0), glm::vec4(1, 0, 0, 1), glm::vec2(1, 1)));
 	// add idx for last ring
 	for (int iLon = 0; iLon < div; ++iLon)
 	{
@@ -278,7 +311,7 @@ void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 	static const float normScaler = 1.f / sqrt(2.f);
 
 	// first vert = level 0
-	vertList.push_back(Vertex(glm::vec3(0, 0, 0), -mainAxis, thrAxis, glm::vec2(0, 0)));
+	vertList.push_back(Vertex(glm::vec3(0, 0, 0), -mainAxis, glm::vec4(thrAxis, 1), glm::vec2(0, 0)));
 	int prevRingStart = 0;
 	int curRingStart = 1;
 
@@ -297,7 +330,7 @@ void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 			glm::vec3 normal = (-mainAxis + secAxis * cosA + thrAxis * sinA) * normScaler;
 			glm::vec3 tangent = secAxis * sinA + thrAxis * -cosA;
 
-			vertList.push_back(Vertex(pos, normal, tangent, glm::vec2(ratio, mainAxisValue)));
+			vertList.push_back(Vertex(pos, normal, glm::vec4(tangent, 1), glm::vec2(ratio, mainAxisValue)));
 		}
 
 		// idx
@@ -344,14 +377,14 @@ void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 		glm::vec3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA);
 		glm::vec3 tangent = secAxis * sinA + thrAxis * -cosA;
 
-		vertList.push_back(Vertex(pos, mainAxis, tangent, glm::vec2(ratio, 1)));
+		vertList.push_back(Vertex(pos, mainAxis, glm::vec4(tangent, 1), glm::vec2(ratio, 1)));
 	}
 
 	prevRingStart = curRingStart;
 	curRingStart += (ringVertCount + 1);
 
 	// final vert
-	vertList.push_back(Vertex(mainAxis, mainAxis, thrAxis, glm::vec2(0, 0)));
+	vertList.push_back(Vertex(mainAxis, mainAxis, glm::vec4(thrAxis, 1), glm::vec2(0, 0)));
 
 	// idx
 	for (int ringIdx = 1; ringIdx <= ringVertCount; ++ringIdx)
@@ -430,7 +463,7 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 
 	for (int i = 0; i < 12; ++i)
 	{
-		vertList.push_back(Vertex(originVert[i], originVert[i], GetTangent(originVert[i]), glm::vec2(0, 0)));
+		vertList.push_back(Vertex(originVert[i], originVert[i], glm::vec4(GetTangent(originVert[i]), 1), glm::vec2(0, 0)));
 	}
 
 	for (int i = 0; i < 60; ++i)
@@ -461,7 +494,7 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 			if (i3 < 0)
 			{
 				glm::vec3 v3 = glm::normalize((v0 + v1) * 0.5f);
-				vertList.push_back(Vertex(v3, v3, GetTangent(v3), glm::vec2(0, 0)));
+				vertList.push_back(Vertex(v3, v3, glm::vec4(GetTangent(v3), 1), glm::vec2(0, 0)));
 				i3 = newVertStartIdx;
 				++newVertStartIdx;
 				newVertTable.push_back(glm::ivec3(i0, i1, i3));
@@ -469,7 +502,7 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 			if (i4 < 0)
 			{
 				glm::vec3 v4 = glm::normalize((v1 + v2) * 0.5f);
-				vertList.push_back(Vertex(v4, v4, GetTangent(v4), glm::vec2(0, 0)));
+				vertList.push_back(Vertex(v4, v4, glm::vec4(GetTangent(v4), 1), glm::vec2(0, 0)));
 				i4 = newVertStartIdx;
 				++newVertStartIdx;
 				newVertTable.push_back(glm::ivec3(i1, i2, i4));
@@ -477,7 +510,7 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 			if (i5 < 0)
 			{
 				glm::vec3 v5 = glm::normalize((v2 + v0) * 0.5f);
-				vertList.push_back(Vertex(v5, v5, GetTangent(v5), glm::vec2(0, 0)));
+				vertList.push_back(Vertex(v5, v5, glm::vec4(GetTangent(v5), 1), glm::vec2(0, 0)));
 				i5 = newVertStartIdx;
 				++newVertStartIdx;
 				newVertTable.push_back(glm::ivec3(i2, i0, i5));
@@ -510,10 +543,10 @@ void MakeQuad(MeshData& meshData)
 	vertList.reserve(4);
 	idxList.reserve(6);
 
-	vertList.push_back(Vertex(glm::vec3(-1, 1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)));
-	vertList.push_back(Vertex(glm::vec3(-1, -1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(0, 0)));
-	vertList.push_back(Vertex(glm::vec3(1, -1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(1, 0)));
-	vertList.push_back(Vertex(glm::vec3(1, 1, 0), glm::vec3(0, 0, -1), glm::vec3(1, 0, 0), glm::vec2(1, 1)));
+	vertList.push_back(Vertex(glm::vec3(-1, 1, 0), glm::vec3(0, 0, -1), glm::vec4(1, 0, 0, 1), glm::vec2(0, 1)));
+	vertList.push_back(Vertex(glm::vec3(-1, -1, 0), glm::vec3(0, 0, -1), glm::vec4(1, 0, 0, 1), glm::vec2(0, 0)));
+	vertList.push_back(Vertex(glm::vec3(1, -1, 0), glm::vec3(0, 0, -1), glm::vec4(1, 0, 0, 1), glm::vec2(1, 0)));
+	vertList.push_back(Vertex(glm::vec3(1, 1, 0), glm::vec3(0, 0, -1), glm::vec4(1, 0, 0, 1), glm::vec2(1, 1)));
 
 	idxList.push_back(0);
 	idxList.push_back(1);

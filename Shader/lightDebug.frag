@@ -4,7 +4,7 @@ in VS_OUT
 {
 	vec3 position;
 	vec3 normal;
-	vec3 tangent;
+	vec4 tangent;
 	vec2 texCoords;
 } fs_in;
 
