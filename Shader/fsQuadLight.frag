@@ -14,19 +14,18 @@ in VS_OUT
 
 out vec4 color;
 
-//uniform vec3 viewPos;
 uniform Light lights[LIGHT_COUNT];
 
 void main() 
 {	
 	vec2 uv = fs_in.texCoords;
-	vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
 	vec4 depthStencil = texture(gDepthStencilTex, uv);
 	float depth = depthStencil.r;
+	if(depth == 1)
+		discard;
+	vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
-	//vec3 rposition = texture(gPositionTex, fs_in.texCoords).rgb;
 	vec3 position = GetGBufferPositionVS(depth, projMat, fs_in.positionVS);
-	//vec3 view = normalize(viewPos - position);
 	vec3 view = normalize(-position);	
 	vec3 albedo = texture(gAlbedoTex, uv).rgb;
 	vec4 material = texture(gMaterialTex, uv);
@@ -40,9 +39,8 @@ void main()
 		result += CalcLight(lights[i], normal, position, view, albedo, metallic, roughness);
 	}
 	color = vec4(result, 1.0f);
-	//color = vec4(abs((rposition - position) / rposition) * 100, 1.0f);
 	//color = vec4(albedo, 1.0f);
 	//color = vec4(metallic, roughness, 0.0f, 1.0f);
-	//gl_FragDepth = depth;
+	gl_FragDepth = depth;
 
 }

@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <vector>
+#include <functional>
 
 // local
 #include "Engine/Shader.h"
@@ -73,7 +74,8 @@ GLuint gGBuffer = 0;
 Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gDepthStencilTex;
 
 GLuint gSceneBuffer = 0;
-Texture2D gSceneColorTex;
+Texture2D gSceneColorTex, gSceneDepthStencilTex;
+GLuint gSceneDepthStencilRBO;
 
 // shader
 Shader gGBufferShader;
@@ -142,45 +144,33 @@ struct RenderInfo
 
 struct RenderState
 {
-	bool bColorWrite;
+	bool bColorWrite = true;
 
-	bool bDepthTest;
-	GLenum depthTestFunc;
-	bool bDepthWrite;
+	bool bDepthTest = true;
+	GLenum depthTestFunc = GL_LESS;
+	bool bDepthWrite = true;
 
-	bool bStencilTest;
-	GLenum stencilTestFunc;
-	GLint stencilTestRef;
-	GLuint stencilTestMask;
-	GLenum stencilWriteSFail;
-	GLenum stencilWriteDFail;
-	GLenum stencilWriteDPass;
+	bool bStencilTest = false;
+	GLenum stencilTestFunc = GL_ALWAYS;
+	GLint stencilTestRef = 1;
+	GLuint stencilTestMask = 0xFF;
+	GLenum stencilWriteSFail = GL_KEEP;
+	GLenum stencilWriteDFail = GL_KEEP;
+	GLenum stencilWriteDPass = GL_KEEP;
 	
-	bool bCullFace;
-	GLenum cullFaceMode;
+	bool bCullFace = true;
+	GLenum cullFaceMode = GL_BACK;
 
-	RenderState()
+	RenderState() {}
+	
+	// constructor with a init function callback
+	RenderState(std::function<void (RenderState&)> initFunc) : RenderState()
 	{
-		bColorWrite = true;
-
-		bDepthTest = true;
-		depthTestFunc = GL_LESS;
-		bDepthWrite = true;
-
-		bStencilTest = false;
-		stencilTestFunc = GL_ALWAYS;
-		stencilTestRef = 1;
-		stencilTestMask = 0xFF;
-		stencilWriteSFail = GL_KEEP;
-		stencilWriteDFail = GL_KEEP;
-		stencilWriteDPass = GL_KEEP;
-
-
-		bCullFace = true;
-		cullFaceMode = GL_BACK;
+		if (initFunc)
+			initFunc(*this);
 	}
 
-	void Apply()
+	void Apply() const
 	{
 		if (bColorWrite)
 			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -214,11 +204,6 @@ struct RenderState
 			glDisable(GL_CULL_FACE);
 	}
 };
-
-// Render state
-RenderState gGBufferState, gDebugForwardState;
-RenderState gDirectionalLightState, gLightVolumePrepassState, gLightVolumeState;
-RenderState gPostProcessState, gPostProcessFinishState;
 
 // input
 bool gMouseCaptured = false;
@@ -294,7 +279,7 @@ std::string ScopedProfileTimer::fullName;
 
 
 bool Init();
-bool InitGL();
+bool InitEngine();
 
 bool Init()
 {
@@ -353,7 +338,7 @@ bool Init()
 	// init imgui
 	ImGui_Impl_Init(gWindow);
 	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->AddFontFromFileTTF("Content/Fonts/DroidSans.ttf", 24.0f);
+	io.Fonts->AddFontFromFileTTF("Content/Fonts/DroidSans.ttf", 22.0f);
 
 	//Use Vsync
 	//if (SDL_GL_SetSwapInterval(1) < 0)
@@ -361,10 +346,10 @@ bool Init()
 	//	printf("Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError());
 	//}
 
-	//Initialize OpenGL
-	if (!InitGL())
+	//Initialize Engine
+	if (!InitEngine())
 	{
-		printf("Unable to initialize OpenGL!\n");
+		printf("Unable to initialize Engine!\n");
 		return false;
 	}
 
@@ -465,7 +450,7 @@ void SetupFrameBuffers()
 		// material: metallic + roughness
 		gMaterialTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
 		gMaterialTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT2);
-		// depth
+		// depth stencil
 		gDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
 		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 
@@ -483,7 +468,7 @@ void SetupFrameBuffers()
 		gAlbedoTex.Reallocate(gWindowWidth, gWindowHeight);
 		// material: metallic + roughness
 		gMaterialTex.Reallocate(gWindowWidth, gWindowHeight);
-		// depth
+		// depth stencil
 		gDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
 	}
 
@@ -496,8 +481,15 @@ void SetupFrameBuffers()
 		// HDR scene color
 		gSceneColorTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
 		gSceneColorTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
-		// re-use g-buffer depth
-		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
+		// depth stencil
+		//gSceneDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
+		//gSceneDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
+		// depth stencil rbo
+		glGenRenderbuffers(1, &gSceneDepthStencilRBO);
+		glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gSceneDepthStencilRBO);
 
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 			printf("Error: Scene Buffer not complete!\n");
@@ -506,63 +498,15 @@ void SetupFrameBuffers()
 	{
 		// HDR scene color
 		gSceneColorTex.Reallocate(gWindowWidth, gWindowHeight);
+		// depth stencil
+		//gSceneDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
+		// depth stencil rbo
+		glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void SetupRenderStates()
-{
-	// directional light
-	{
-		RenderState& s = gDirectionalLightState;
-		// no depth test
-		s.bDepthTest = false;
-	}
-	// point light prepass
-	{
-		RenderState& s = gLightVolumePrepassState;
-		// don't write color
-		s.bColorWrite = false;
-		// inverse depth test only, don't write depth
-		s.bDepthTest = true;
-		s.depthTestFunc = GL_GEQUAL;
-		s.bDepthWrite = false;
-		// stencil always pass, write stencil
-		s.bStencilTest = true;
-		s.stencilTestFunc = GL_ALWAYS;
-		s.stencilTestRef = 1;
-		s.stencilWriteDPass = GL_REPLACE;
-		// draw backface
-		s.bCullFace = true;
-		s.cullFaceMode = GL_FRONT;
-	}
-	// point light
-	{
-		RenderState& s = gLightVolumeState;
-		// depth test only, don't write depth
-		s.bDepthTest = true;
-		s.depthTestFunc = GL_LEQUAL;
-		s.bDepthWrite = false;
-		// stencil test equal only
-		s.bStencilTest = true;
-		s.stencilTestFunc = GL_EQUAL;
-		s.stencilTestRef = 1;
-	}
-	// postprocess
-	{
-		RenderState& s = gPostProcessState;
-		// no depth test
-		s.bDepthTest = false;
-	}
-	// postprocess finish
-	{
-		RenderState& s = gPostProcessFinishState;
-		// depth always pass, write depth
-		s.bDepthTest = true;
-		s.depthTestFunc = GL_ALWAYS;
-		s.bDepthWrite = true;
-	}
 }
 
 void LoadShaders(bool bReload)
@@ -580,7 +524,7 @@ void LoadShaders(bool bReload)
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 }
 
-bool InitGL()
+bool InitEngine()
 {
 	// frame buffers
 	SetupFrameBuffers();
@@ -592,10 +536,7 @@ bool InitGL()
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	// binding point
 	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::RenderInfoBP, gUBO_Matrices);
-
-	// render states
-	SetupRenderStates();
-
+	
 	// shader
 	LoadShaders(false);
 
@@ -804,7 +745,9 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 {
 	GPU_SCOPED_PROFILE("geometry");
 
-	gGBufferState.Apply();
+	static const RenderState renderState;
+
+	renderState.Apply();
 
 	// clear frame buffer
 	glClearColor(0, 0, 0, 0);
@@ -907,8 +850,20 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 {
 	GPU_SCOPED_PROFILE("directional light");
 
+	const static RenderState renderState([](RenderState& s) {
+		//// no depth test
+		//s.bDepthTest = false;
+		// we need to write depth to new depth buffer
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_ALWAYS;
+		s.bDepthWrite = true;
+	});
+
+	glClearDepth(1);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
 	// directional light
-	gDirectionalLightState.Apply();
+	renderState.Apply();
 
 	gDirectionalLightMaterial.Use();
 
@@ -931,7 +886,47 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 {
 	//GPU_SCOPED_PROFILE("light volume");
 
-	// spot light
+	// prepass render state
+	const static RenderState prepassRenderState( [] (RenderState& s) {
+		// don't write color
+		s.bColorWrite = false;
+		// inverse depth test only, don't write depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_GEQUAL;
+		s.bDepthWrite = false;
+		// stencil always pass, write stencil
+		s.bStencilTest = true;
+		s.stencilTestFunc = GL_ALWAYS;
+		s.stencilTestRef = 1;
+		s.stencilWriteDPass = GL_REPLACE;
+		// draw backface
+		s.bCullFace = true;
+		s.cullFaceMode = GL_FRONT;
+	});
+
+	// lighting render state
+	const static RenderState lightingRenderState( [] (RenderState& s) {
+		// depth test only, don't write depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_LEQUAL;
+		s.bDepthWrite = false;
+		// stencil test equal only
+		s.bStencilTest = true;
+		s.stencilTestFunc = GL_EQUAL;
+		s.stencilTestRef = 1;
+	});
+
+	// one pass render state, when camera inside volume
+	const static RenderState onePassVolumeRenderState([](RenderState& s) {
+		// inverse depth test only, don't write depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_GEQUAL;
+		s.bDepthWrite = false;
+		// draw backface
+		s.bCullFace = true;
+		s.cullFaceMode = GL_FRONT;
+	});
+
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 
@@ -961,11 +956,8 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 		}
 		if (isInLightVolume)
 		{
-			gLightVolumePrepassState.Apply();
-			// do back face draw directly
-			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-			// no need for stencil test
-			glDisable(GL_STENCIL_TEST);
+			// do 1-pass
+			onePassVolumeRenderState.Apply();
 		}
 		else
 		{
@@ -975,13 +967,13 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 			glClear(GL_STENCIL_BUFFER_BIT);
 
 			// prepass
-			gLightVolumePrepassState.Apply();
+			prepassRenderState.Apply();
 			gPrepassMaterial.Use();
 			glUniformMatrix4fv(gPrepassMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 			lightVolumePrepassMesh->Draw();
 
 			// draw light
-			gLightVolumeState.Apply();
+			lightingRenderState.Apply();
 		}
 
 		gLightVolumeMaterial.Use();
@@ -1033,7 +1025,9 @@ void DebugForwardPass()
 {
 	GPU_SCOPED_PROFILE("debug foward");
 
-	gDebugForwardState.Apply();
+	static const RenderState renderState;
+
+	renderState.Apply();
 
 	// draw debug
 	gLightDebugShader.Use();
@@ -1081,7 +1075,7 @@ void DebugForwardPass()
 	//			
 	//	glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
 	//	glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].GetColorIntensity()));
+	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].colorIntensity));
 
 	//	gPointLightDebugMesh->Draw();
 
@@ -1094,8 +1088,12 @@ void PostProcessPass()
 {
 	GPU_SCOPED_PROFILE("post process");
 
-	// directional light
-	gPostProcessFinishState.Apply();
+	const static RenderState renderState( [] (RenderState& s) {
+		// no depth test
+		s.bDepthTest = false;
+	});
+
+	renderState.Apply();
 
 	gToneMapShader.Use();
 
@@ -1126,8 +1124,8 @@ void UIPass()
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
 			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
-			ImGui::Text("%s \t %.3f ms", displayName.c_str(), it->second);
 			float timeRatio = glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			ImGui::Text("%s \t %.3f ms %.2f%%", displayName.c_str(), it->second, timeRatio * 100);
 			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
 		}
 		// profiling gpu
@@ -1136,8 +1134,8 @@ void UIPass()
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
 			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
-			ImGui::Text("%s \t %.3f ms", displayName.c_str(), it->second);
 			float timeRatio = glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			ImGui::Text("%s \t %.3f ms %.2f%%", displayName.c_str(), it->second, timeRatio * 100);
 			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
 		}
 
