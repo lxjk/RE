@@ -27,7 +27,7 @@ public:
 
 	static Texture2D* FindOrCreate(const char* name, bool bSRGB,
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE,
-		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_NEAREST_MIPMAP_NEAREST)
+		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_LINEAR)
 	{
 		for (int i = 0; i < gTexture2DContainer.size(); ++i)
 		{
@@ -52,7 +52,7 @@ public:
 
 	void Load(const char* name, bool bSRGB,
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE,
-		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_NEAREST_MIPMAP_NEAREST)
+		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_LINEAR)
 	{
 		if (!textureID)
 		{
@@ -108,8 +108,19 @@ public:
 		glBindTexture(GL_TEXTURE_2D, textureID);
 		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
+	}
+
+	void Reallocate(int width, int height)
+	{
+		if (textureID)
+		{
+			this->width = width;
+			this->height = height;
+			glBindTexture(GL_TEXTURE_2D, textureID);
+			glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
+		}
 	}
 
 	void AttachToFrameBuffer(GLenum attachment)

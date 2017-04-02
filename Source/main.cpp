@@ -1,6 +1,6 @@
 
 // sdl
-#define SDL_MAIN_HANDLED
+//#define SDL_MAIN_HANDLED
 #include "sdl.h"
 #include "SDL_image.h"
 
@@ -31,10 +31,21 @@
 #include "Engine/Camera.h"
 #include "Engine/Math.h"
 
-#define PROFILE 0
+// imgui
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl.h"
 
-const int SCREEN_WIDTH = 1280;
-const int SCREEN_HEIGHT = 720;
+#define PROFILE 1
+#if PROFILE
+#define CPU_SCOPED_PROFILE(name) ScopedProfileTimer _cpu_macro_profiler(name, false)
+#define GPU_SCOPED_PROFILE(name) ScopedProfileTimer _gpu_macro_profiler(name, true)
+#else
+#define CPU_SCOPED_PROFILE(name) 
+#define GPU_SCOPED_PROFILE(name) 
+#endif
+
+int gWindowWidth = 1280;
+int gWindowHeight = 720;
 
 const int DIRECTIONAL_LIGHT_COUNT = 4;
 
@@ -47,6 +58,12 @@ SDL_GLContext gContext;
 // time
 double gInvPerformanceFreq;
 Uint64 gPerformanceCounter;
+float gLastDeltaTime;
+float gAverageDeltaTime;
+float gDeltaTimeAccum;
+float gDeltaTimeBuffer[60];
+int gDeltaTimeBufferCount;
+int gDeltaTimeBufferIdx;
 
 // ubo
 GLuint gUBO_Matrices = 0;
@@ -217,13 +234,13 @@ class ScopedProfileTimer
 
 public:
 	static std::map<std::string, double> timerMapCPU;
-	static std::map<std::string, std::vector<glm::uvec2>> timerMapGPU[2];
+	static std::map<std::string, double> timerMapGPU;
+	static std::map<std::string, std::vector<glm::uvec2>> timeStampPairMapGPU[2];
 	static int GPUMapWriteIdx;
 	static std::string fullName;
 
 	ScopedProfileTimer(std::string inName, bool inGPUTimer)
 	{
-#if PROFILE
 		name = inName;
 		bGPUTimer = inGPUTimer;
 		// add to prefix
@@ -236,16 +253,19 @@ public:
 		}
 		else
 			start = SDL_GetPerformanceCounter();
-#endif
 	}
 
 	~ScopedProfileTimer()
 	{
-#if PROFILE
 		if (bGPUTimer)
 		{
 			glQueryCounter(query[1], GL_TIMESTAMP);
-			timerMapGPU[GPUMapWriteIdx][fullName].push_back(query);
+			timeStampPairMapGPU[GPUMapWriteIdx][fullName].push_back(query);
+			auto it = timerMapGPU.find(fullName);
+			if (it == timerMapGPU.end())
+			{
+				timerMapGPU[fullName] = 0;
+			}
 		}
 		else
 		{
@@ -264,11 +284,11 @@ public:
 		}
 		// remove from full name
 		fullName = fullName.substr(0, fullName.size() - name.size() - 1);
-#endif
 	}
 };
 std::map<std::string, double> ScopedProfileTimer::timerMapCPU;
-std::map<std::string, std::vector<glm::uvec2>> ScopedProfileTimer::timerMapGPU[2];
+std::map<std::string, double> ScopedProfileTimer::timerMapGPU;
+std::map<std::string, std::vector<glm::uvec2>> ScopedProfileTimer::timeStampPairMapGPU[2];
 int ScopedProfileTimer::GPUMapWriteIdx = 0;
 std::string ScopedProfileTimer::fullName;
 
@@ -293,8 +313,8 @@ bool Init()
 	}
 
 	// use opengl 3.1 core
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
@@ -305,8 +325,8 @@ bool Init()
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
 	// create window with opengl
-	gWindow = SDL_CreateWindow("Test",
-		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
+	gWindow = SDL_CreateWindow("RE",
+		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, gWindowWidth, gWindowHeight,
 		SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
 	if (gWindow == NULL)
 	{
@@ -330,11 +350,16 @@ bool Init()
 		printf("Error initializing GLEW! %s\n", glewGetErrorString(glewError));
 	}
 
+	// init imgui
+	ImGui_Impl_Init(gWindow);
+	ImGuiIO& io = ImGui::GetIO();
+	io.Fonts->AddFontFromFileTTF("Content/Fonts/DroidSans.ttf", 24.0f);
+
 	//Use Vsync
-	if (SDL_GL_SetSwapInterval(1) < 0)
-	{
-		printf("Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError());
-	}
+	//if (SDL_GL_SetSwapInterval(1) < 0)
+	//{
+	//	printf("Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError());
+	//}
 
 	//Initialize OpenGL
 	if (!InitGL())
@@ -348,6 +373,12 @@ bool Init()
 
 	// time
 	gInvPerformanceFreq = (double)1 / (double)SDL_GetPerformanceFrequency();
+	gLastDeltaTime = 0;
+	gAverageDeltaTime = 0.03f;
+	gDeltaTimeAccum = 0.f;
+	gDeltaTimeBufferCount = _countof(gDeltaTimeBuffer);
+	memset(gDeltaTimeBuffer, 0, sizeof(float) * gDeltaTimeBufferCount);
+	gDeltaTimeBufferIdx = 0;
 
 	return true;
 }
@@ -417,6 +448,7 @@ void MakeLights()
 void SetupFrameBuffers()
 {
 	// G-Buffer
+	if(!gGBuffer)
 	{
 		// normal(RGB)
 		// color(RGB)
@@ -424,17 +456,17 @@ void SetupFrameBuffers()
 		glGenFramebuffers(1, &gGBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
 		// normal
-		//gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB16F, GL_RGB, GL_FLOAT);
-		gNormalTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
+		//gNormalTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB16F, GL_RGB, GL_FLOAT);
+		gNormalTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
 		gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 		// albedo
-		gAlbedoTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
+		gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
 		gAlbedoTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
 		// material: metallic + roughness
-		gMaterialTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
+		gMaterialTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
 		gMaterialTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT2);
 		// depth
-		gDepthStencilTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
+		gDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
 		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 
 		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
@@ -443,20 +475,37 @@ void SetupFrameBuffers()
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 			printf("Error: G Buffer not complete!\n");
 	}
+	else
+	{
+		// normal
+		gNormalTex.Reallocate(gWindowWidth, gWindowHeight);
+		// albedo
+		gAlbedoTex.Reallocate(gWindowWidth, gWindowHeight);
+		// material: metallic + roughness
+		gMaterialTex.Reallocate(gWindowWidth, gWindowHeight);
+		// depth
+		gDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
+	}
 
 
 	// Scene Buffer
+	if(!gSceneBuffer)
 	{
 		glGenFramebuffers(1, &gSceneBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
 		// HDR scene color
-		gSceneColorTex.AllocateForFrameBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+		gSceneColorTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
 		gSceneColorTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 		// re-use g-buffer depth
 		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 			printf("Error: Scene Buffer not complete!\n");
+	}
+	else
+	{
+		// HDR scene color
+		gSceneColorTex.Reallocate(gWindowWidth, gWindowHeight);
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -597,8 +646,19 @@ bool InitGL()
 	return true;
 }
 
+void OnWindowResize(int newWidth, int newHeight)
+{
+	gWindowWidth = newWidth;
+	gWindowHeight = newHeight;
+
+	SetupFrameBuffers();
+}
+
 void Close()
 {
+	// shut down imgui
+	ImGui_Impl_Shutdown();
+
 	SDL_GL_DeleteContext(gContext);
 
 	//Destroy window
@@ -625,7 +685,7 @@ void updateMouseInput(float deltaTime)
 	const static float moveSpeed = 12.f;
 	const static float scrollSpeed = 120.f;
 	
-	if (mouseState & (SDL_BUTTON(SDL_BUTTON_LEFT) | SDL_BUTTON(SDL_BUTTON_RIGHT)))
+	if (mouseState & (/*SDL_BUTTON(SDL_BUTTON_LEFT) | */SDL_BUTTON(SDL_BUTTON_RIGHT)))
 	{
 		gCamera.euler.y -= rotSpeed * deltaTime * deltaX;
 		gCamera.euler.x -= rotSpeed * deltaTime * deltaY;
@@ -708,7 +768,7 @@ void updateKeyboardInput(float deltaTime)
 
 void Update(float deltaTime)
 {
-	ScopedProfileTimer timer("update", false);
+	CPU_SCOPED_PROFILE("update");
 
 	updateMouseInput(deltaTime);
 	updateKeyboardInput(deltaTime);
@@ -735,11 +795,14 @@ void Update(float deltaTime)
 		//gSpotLights[0].position = glm::mix(startPos, endPos, ratio);
 		gSpotLights[0].direction = glm::normalize(glm::mix(startDir, endDir, ratio));
 	}
+
+	// update imgui
+	ImGui_Impl_NewFrame(gWindow);
 }
 
 void GeometryPass(const Viewpoint& mainViewpoint)
 {
-	ScopedProfileTimer timer("geometry", true);
+	GPU_SCOPED_PROFILE("geometry");
 
 	gGBufferState.Apply();
 
@@ -842,7 +905,7 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 
 void DirectionalLightPass(const Viewpoint& mainViewpoint)
 {
-	ScopedProfileTimer timer("directional light", true);
+	GPU_SCOPED_PROFILE("directional light");
 
 	// directional light
 	gDirectionalLightState.Apply();
@@ -866,7 +929,7 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 
 void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& lights, const Mesh* lightVolumePrepassMesh, const Mesh* lightVolumeMesh)
 {
-	//ScopedProfileTimer timer("light volume", true);
+	//GPU_SCOPED_PROFILE("light volume");
 
 	// spot light
 	glEnable(GL_BLEND);
@@ -939,19 +1002,19 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 
 void PointLightPass(const Viewpoint& mainViewpoint)
 {
-	ScopedProfileTimer timer("point light", true);
+	GPU_SCOPED_PROFILE("point light");
 	LightVolumePass(mainViewpoint, gPointLights, gPointLightPrepassMesh, gPointLightMesh);
 }
 
 void SpotLightPass(const Viewpoint& mainViewpoint)
 {
-	ScopedProfileTimer timer("spot light", true);
+	GPU_SCOPED_PROFILE("spot light");
 	LightVolumePass(mainViewpoint, gSpotLights, gSpotLightPrepassMesh, gSpotLightMesh);
 }
 
 void LightPass(const Viewpoint& mainViewpoint)
 {
-	ScopedProfileTimer timer("light", true);
+	GPU_SCOPED_PROFILE("light");
 	
 	// clear color buffer only.
 	glClearColor(0, 0, 0, 0);
@@ -968,7 +1031,7 @@ void LightPass(const Viewpoint& mainViewpoint)
 
 void DebugForwardPass()
 {
-	ScopedProfileTimer timer("debug foward", true);
+	GPU_SCOPED_PROFILE("debug foward");
 
 	gDebugForwardState.Apply();
 
@@ -1029,7 +1092,7 @@ void DebugForwardPass()
 
 void PostProcessPass()
 {
-	ScopedProfileTimer timer("post process", true);
+	GPU_SCOPED_PROFILE("post process");
 
 	// directional light
 	gPostProcessFinishState.Apply();
@@ -1040,12 +1103,63 @@ void PostProcessPass()
 	gToneMapMesh->Draw();
 }
 
+void UIPass()
+{
+	GPU_SCOPED_PROFILE("UI");
+
+	{
+		ImColor red(1.f, 0.f, 0.f);
+		ImColor yellow(1.f, 1.f, 0.f);
+		ImColor green(0.f, 1.f, 0.f);
+
+		static bool open = true;
+		ImGui::Begin("stats", &open);
+
+		float fps = 1.f / gAverageDeltaTime;
+		float averageFrameTime = gAverageDeltaTime * 1000.f;
+		ImColor fpsColor = fps > 60 ? green : (fps > 30 ? yellow : red);
+		ImGui::TextColored(fpsColor, "FPS %.1f \t %.3f ms", fps, averageFrameTime);
+
+		// profiling cpu
+		for (auto it = ScopedProfileTimer::timerMapCPU.begin(); it != ScopedProfileTimer::timerMapCPU.end(); ++it)
+		{
+			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
+			std::string displayName(layer, '\t');
+			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
+			ImGui::Text("%s \t %.3f ms", displayName.c_str(), it->second);
+			float timeRatio = glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
+		}
+		// profiling gpu
+		for (auto &it = ScopedProfileTimer::timerMapGPU.begin(); it != ScopedProfileTimer::timerMapGPU.end(); ++it)
+		{
+			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
+			std::string displayName(layer, '\t');
+			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
+			ImGui::Text("%s \t %.3f ms", displayName.c_str(), it->second);
+			float timeRatio = glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
+		}
+
+		ImGui::End();
+	}
+
+	//{
+	//	static bool open = true;
+	//	ImGui::SetNextWindowPos(ImVec2(650, 20), ImGuiSetCond_FirstUseEver);
+	//	ImGui::ShowTestWindow(&open);
+	//}
+
+	ImGui::Render();
+}
+
 void Render()
 {
-	ScopedProfileTimer timer("render", true);
+	GPU_SCOPED_PROFILE("render");
 
-	const Viewpoint& mainViewpoint = gCamera.ProcessCamera((GLfloat)SCREEN_WIDTH, (GLfloat)SCREEN_HEIGHT, 0.1f, 1000.f);
+	const Viewpoint& mainViewpoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 1000.f);
 
+	glViewport(0, 0, gWindowWidth, gWindowHeight);
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 	// update ubo
@@ -1084,6 +1198,8 @@ void Render()
 	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 
 	PostProcessPass();
+
+	UIPass();
 }
 
 int main(int argc, char **argv)
@@ -1098,7 +1214,6 @@ int main(int argc, char **argv)
 		bool quit = false;
 
 		gPerformanceCounter = SDL_GetPerformanceCounter();
-		float deltaTime = 0;
 
 		SDL_Event event;
 
@@ -1123,48 +1238,68 @@ int main(int argc, char **argv)
 							Mesh::gMeshContainer[i]->SetAttributes();
 					}
 				}
+				else if (event.type == SDL_WINDOWEVENT)
+				{
+					switch (event.window.event)
+					{
+					case SDL_WINDOWEVENT_RESIZED:
+						OnWindowResize(event.window.data1, event.window.data2);
+						break;
+
+					}
+				}
 			}
 
-			Update(deltaTime);
+			Update(gLastDeltaTime);
 
 			Render();
 
 			SDL_GL_SwapWindow(gWindow);
 			
+			// time
 			Uint64 newPerformanceCounter = SDL_GetPerformanceCounter();
-			deltaTime = (float)((double)(newPerformanceCounter - gPerformanceCounter) * gInvPerformanceFreq);
+			gLastDeltaTime = (float)((double)(newPerformanceCounter - gPerformanceCounter) * gInvPerformanceFreq);
 			gPerformanceCounter = newPerformanceCounter;
+			gDeltaTimeAccum = gDeltaTimeAccum - gDeltaTimeBuffer[gDeltaTimeBufferIdx] + gLastDeltaTime;
+			gDeltaTimeBuffer[gDeltaTimeBufferIdx] = gLastDeltaTime;
+			++gDeltaTimeBufferIdx;
+			if (gDeltaTimeBufferIdx >= gDeltaTimeBufferCount) gDeltaTimeBufferIdx -= gDeltaTimeBufferCount;
+			gAverageDeltaTime = gDeltaTimeAccum / gDeltaTimeBufferCount;
 
 #if PROFILE
 			{
-				ScopedProfileTimer timer("profile", false);
 
 				// profiling cpu
 				for (auto it = ScopedProfileTimer::timerMapCPU.begin(); it != ScopedProfileTimer::timerMapCPU.end(); ++it)
 				{
-					//printf("%s: %f\n", it->first.c_str(), it->second);
 					// clear
 					it->second = 0;
 				}
 				// profiling gpu
 				int GPUMapReadIdx = 1 - ScopedProfileTimer::GPUMapWriteIdx;
 				ScopedProfileTimer::GPUMapWriteIdx = GPUMapReadIdx;
-				for (auto &it = ScopedProfileTimer::timerMapGPU[GPUMapReadIdx].begin(); it != ScopedProfileTimer::timerMapGPU[GPUMapReadIdx].end(); ++it)
+				for (auto &it = ScopedProfileTimer::timeStampPairMapGPU[GPUMapReadIdx].begin(); it != ScopedProfileTimer::timeStampPairMapGPU[GPUMapReadIdx].end(); ++it)
 				{
 					double elapsed = 0;
 					for (int pairIdx = 0; pairIdx < it->second.size(); ++pairIdx)
 					{
 						GLuint64 elapsedStart = 0, elapsedEnd = 0;
-						glGetQueryObjectui64v(it->second[pairIdx][0], GL_QUERY_RESULT_NO_WAIT, &elapsedStart);
-						glGetQueryObjectui64v(it->second[pairIdx][1], GL_QUERY_RESULT_NO_WAIT, &elapsedEnd);
+						glGetQueryObjectui64v(it->second[pairIdx][0], GL_QUERY_RESULT, &elapsedStart);
+						glGetQueryObjectui64v(it->second[pairIdx][1], GL_QUERY_RESULT, &elapsedEnd);
+						glDeleteQueries(2, glm::value_ptr(it->second[pairIdx]));
 						elapsed += (double)(elapsedEnd - elapsedStart) / (double)1000000;
 					}
-					printf("%s: %f\n", it->first.c_str(), elapsed);
+					if (elapsed > 0)
+					{
+						// update
+						if (ScopedProfileTimer::timerMapGPU[it->first] > 0)
+							ScopedProfileTimer::timerMapGPU[it->first] = glm::mix(ScopedProfileTimer::timerMapGPU[it->first], elapsed, 0.2);
+						else
+							ScopedProfileTimer::timerMapGPU[it->first] = elapsed;
+					}
 					// clear
 					it->second.clear();
 				}
-				printf("delta time %f\n", deltaTime * 1000);
-				printf("\n");
 			}
 #endif
 		}

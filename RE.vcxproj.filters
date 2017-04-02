@@ -11,8 +11,23 @@
     <Filter Include="Source\Engine">
       <UniqueIdentifier>{f484e1bc-ada9-468c-9ef8-fa919690e699}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\imgui">
+      <UniqueIdentifier>{2dab1f80-e917-43ba-937e-232400689a3c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Source\imgui\imgui.cpp">
+      <Filter>Source\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\imgui\imgui_demo.cpp">
+      <Filter>Source\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\imgui\imgui_draw.cpp">
+      <Filter>Source\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\imgui\imgui_impl.cpp">
+      <Filter>Source\imgui</Filter>
+    </ClCompile>
     <ClCompile Include="Source\main.cpp">
       <Filter>Source</Filter>
     </ClCompile>
@@ -50,6 +65,27 @@
     </ClInclude>
     <ClInclude Include="Source\Engine\MeshLoader.h">
       <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\imgui\imconfig.h">
+      <Filter>Source\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\imgui\imgui.h">
+      <Filter>Source\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\imgui\imgui_impl.h">
+      <Filter>Source\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\imgui\imgui_internal.h">
+      <Filter>Source\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\imgui\stb_rect_pack.h">
+      <Filter>Source\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\imgui\stb_textedit.h">
+      <Filter>Source\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\imgui\stb_truetype.h">
+      <Filter>Source\imgui</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

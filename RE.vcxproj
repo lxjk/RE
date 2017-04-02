@@ -19,6 +19,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Source\imgui\imgui.cpp" />
+    <ClCompile Include="Source\imgui\imgui_demo.cpp" />
+    <ClCompile Include="Source\imgui\imgui_draw.cpp" />
+    <ClCompile Include="Source\imgui\imgui_impl.cpp" />
     <ClCompile Include="Source\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -33,6 +37,13 @@
     <ClInclude Include="Source\Engine\Texture2D.h" />
     <ClInclude Include="Source\Engine\Util.h" />
     <ClInclude Include="Source\Engine\Viewpoint.h" />
+    <ClInclude Include="Source\imgui\imconfig.h" />
+    <ClInclude Include="Source\imgui\imgui.h" />
+    <ClInclude Include="Source\imgui\imgui_impl.h" />
+    <ClInclude Include="Source\imgui\imgui_internal.h" />
+    <ClInclude Include="Source\imgui\stb_rect_pack.h" />
+    <ClInclude Include="Source\imgui\stb_textedit.h" />
+    <ClInclude Include="Source\imgui\stb_truetype.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{49FB9721-3360-4CA1-A129-D7B96A4F0115}</ProjectGuid>
@@ -126,10 +137,10 @@
       <AdditionalIncludeDirectories>..\3rdparty\sdl_image\include;..\3rdparty\sdl\include;..\3rdparty\glm;..\3rdparty\glew\include;..\3rdparty\assimp\include;C:\Program Files (x86)\Visual Leak Detector\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\3rdparty\glew\lib\Release\x64;..\3rdparty\sdl_image\lib\x64;..\3rdparty\sdl\lib\x64;..\3rdparty\assimp\build\code\Release;C:\Program Files (x86)\Visual Leak Detector\lib\Win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>sdl2.lib;SDL2_image.lib;assimp-vc140-mt.lib;opengl32.lib;glew32.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>sdl2.lib;SDL2main.lib;SDL2_image.lib;assimp-vc140-mt.lib;opengl32.lib;glew32.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -166,12 +177,12 @@
       <AdditionalIncludeDirectories>..\3rdparty\sdl_image\include;..\3rdparty\sdl\include;..\3rdparty\glm;..\3rdparty\glew\include;..\3rdparty\assimp\include;C:\Program Files (x86)\Visual Leak Detector\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\3rdparty\glew\lib\Release\x64;..\3rdparty\sdl_image\lib\x64;..\3rdparty\sdl\lib\x64;..\3rdparty\assimp\build\code\Release;C:\Program Files (x86)\Visual Leak Detector\lib\Win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>sdl2.lib;SDL2_image.lib;assimp-vc140-mt.lib;opengl32.lib;glew32.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>sdl2.lib;SDL2main.lib;SDL2_image.lib;assimp-vc140-mt.lib;opengl32.lib;glew32.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
