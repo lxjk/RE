@@ -48,7 +48,7 @@
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
 
-const int DIRECTIONAL_LIGHT_COUNT = 4;
+const int MAX_DIRECTIONAL_LIGHT_COUNT = 4;
 
 //The window we'll be rendering to
 SDL_Window* gWindow = NULL;
@@ -128,7 +128,7 @@ Texture2D* gDiffuseMap;
 Texture2D* gNormalMap;
 
 // light
-Light gDirectionalLights[DIRECTIONAL_LIGHT_COUNT];
+std::vector<Light> gDirectionalLights;
 std::vector<Light> gPointLights;
 std::vector<Light> gSpotLights;
 
@@ -371,13 +371,16 @@ bool Init()
 void MakeLights()
 {
 	// directional lights
-	memset(gDirectionalLights, 0, sizeof(Light) * DIRECTIONAL_LIGHT_COUNT);
-
-	gDirectionalLights[0].SetDirectionLight(
+	int dlIdx = 0;
+	gDirectionalLights.push_back(Light());
+	dlIdx = (int)gDirectionalLights.size() - 1;
+	gDirectionalLights[dlIdx].SetDirectionLight(
 		/*dir=*/	glm::vec3(0, -1, -2),
 		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
 		/*int=*/	1
 	);
+
+	assert(gDirectionalLights.size() <= MAX_DIRECTIONAL_LIGHT_COUNT);
 
 	// point lights
 	int plIdx = 0;
@@ -391,8 +394,8 @@ void MakeLights()
 	gPointLights.push_back(Light());
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	glm::vec3(0, 3, 3),
-		/*radius=*/	12.f,
+		/*pos=*/	glm::vec3(0, 2, 3),
+		/*radius=*/	4.f,
 		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
 		/*int=*/	20
 	);
@@ -401,7 +404,7 @@ void MakeLights()
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(10, 2, 0),
-		/*radius=*/	20.f,
+		/*radius=*/	10.f,
 		/*color=*/	glm::vec3(0.f, 1.f, 0.f),
 		/*int=*/	20
 	);
@@ -410,7 +413,7 @@ void MakeLights()
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(-10, 3, 3),
-		/*radius=*/	12.f,
+		/*radius=*/	10.f,
 		/*color=*/	glm::vec3(1.f, 0.f, 0.f),
 		/*int=*/	20
 	);
@@ -422,7 +425,7 @@ void MakeLights()
 	gSpotLights[slIdx].SetSpotLight(
 		/*pos=*/	glm::vec3(0, 2, 6),
 		/*dir=*/	glm::vec3(-2, -0.5f, -0.2f),
-		/*radius=*/	20.f,
+		/*radius=*/	12.f,
 		/*hOuter=*/	30.f,
 		/*hInner=*/	20.f,
 		/*color=*/	glm::vec3(0.f, 0.f, 1.f),
@@ -758,8 +761,8 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 	// draw models
 	gGBufferMaterial.Use();
 
-	glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), 1.0f);
-	glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), 0.3f);
+	gGBufferMaterial.SetParameter("metallic", 1.0f);
+	gGBufferMaterial.SetParameter("roughness", 0.3f);
 	
 	for (int i = 0; i < 3; ++i)
 	{
@@ -768,8 +771,8 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		modelMat = glm::rotate(modelMat, 45.f, glm::vec3(0, 1, 0));
 		modelMat = glm::scale(modelMat, glm::vec3(1.5f, 1.f, 1.2f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		gGBufferMaterial.SetParameter("modelMat", modelMat);
+		gGBufferMaterial.SetParameter("normalMat", normalMat);
 
 		gCubeMesh->Draw();
 	}
@@ -779,11 +782,11 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glm::mat4 modelMat(1);
 		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 5));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		gGBufferMaterial.SetParameter("modelMat", modelMat);
+		gGBufferMaterial.SetParameter("normalMat", normalMat);
 
-		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), 1.f);
-		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), i * 0.45f + 0.1f);
+		gGBufferMaterial.SetParameter("metallic", 1.f);
+		gGBufferMaterial.SetParameter("roughness", i * 0.45f + 0.1f);
 
 		gSphereMesh->Draw();
 	}
@@ -793,11 +796,11 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		glm::mat4 modelMat(1);
 		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 7.5));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		gGBufferMaterial.SetParameter("modelMat", modelMat);
+		gGBufferMaterial.SetParameter("normalMat", normalMat);
 
-		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("metallic"), i * 0.5f);
-		glUniform1f(gGBufferMaterial.shader->GetUniformLocation("roughness"), 0.4f);
+		gGBufferMaterial.SetParameter("metallic", i * 0.5f);
+		gGBufferMaterial.SetParameter("roughness", 0.4f);
 
 		gSphereMesh->Draw();
 	}
@@ -817,11 +820,11 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 
 			material->Use();
 
-			glUniformMatrix4fv(material->shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-			glUniformMatrix3fv(material->shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+			material->SetParameter("modelMat", modelMat);
+			material->SetParameter("normalMat", normalMat);
 
-			glUniform1f(material->shader->GetUniformLocation("metallic"), 0.f);
-			glUniform1f(material->shader->GetUniformLocation("roughness"), 0.3f);
+			material->SetParameter("metallic", 0.f);
+			material->SetParameter("roughness", 0.3f);
 
 			gNanosuitMeshes[i]->Draw();
 		}
@@ -835,12 +838,12 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 		modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.2f, 0.f));
 		modelMat = glm::scale(modelMat, glm::vec3(16.f, 0.2f, 12.f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gGBufferColorMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		glUniformMatrix3fv(gGBufferColorMaterial.shader->GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
+		gGBufferColorMaterial.SetParameter("modelMat", modelMat);
+		gGBufferColorMaterial.SetParameter("normalMat", normalMat);
 
-		glUniform1f(gGBufferColorMaterial.shader->GetUniformLocation("metallic"), 0.f);
-		glUniform1f(gGBufferColorMaterial.shader->GetUniformLocation("roughness"), 1.f);
-		glUniform3fv(gGBufferColorMaterial.shader->GetUniformLocation("color"), 1, glm::value_ptr(glm::vec3(0.2f)));
+		gGBufferColorMaterial.SetParameter("metallic", 0.f);
+		gGBufferColorMaterial.SetParameter("roughness", 1.f);
+		gGBufferColorMaterial.SetParameter("color", glm::vec3(0.2f));
 
 		gCubeColorMesh->Draw();
 	}
@@ -867,15 +870,14 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 
 	gDirectionalLightMaterial.Use();
 
-	//glUniform3fv(gDirectionalLightShader.GetUniformLocation("viewPos"), 1, glm::value_ptr(mainViewpoint.position));
+	gDirectionalLightMaterial.SetParameter("lightCount", (int)gDirectionalLights.size());
 
 	// set light
-	for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; ++i)
+	for (int i = 0; i < gDirectionalLights.size(); ++i)
 	{
-		//glUniform3fv(gDirectionalLightShader.GetUniformLocation("lights", i, "position"), 1, glm::value_ptr(gDirectionalLights[i].GetPositionViewSpace(mainViewpoint.viewMat)));
-		glUniform3fv(gDirectionalLightMaterial.shader->GetUniformLocation("lights", i, "direction"), 1, glm::value_ptr(gDirectionalLights[i].GetDirectionVS(mainViewpoint.viewMat)));
-		glUniform3fv(gDirectionalLightMaterial.shader->GetUniformLocation("lights", i, "color"), 1, glm::value_ptr(gDirectionalLights[i].colorIntensity));
-		glUniform4fv(gDirectionalLightMaterial.shader->GetUniformLocation("lights", i, "attenParams"), 1, glm::value_ptr(gDirectionalLights[i].attenParams));
+		gDirectionalLightMaterial.SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), gDirectionalLights[i].GetDirectionVSRAB(mainViewpoint.viewMat));
+		gDirectionalLightMaterial.SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), gDirectionalLights[i].colorIntensity);
+		gDirectionalLightMaterial.SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), gDirectionalLights[i].attenParams);
 	}
 
 	// draw quad
@@ -969,7 +971,7 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 			// prepass
 			prepassRenderState.Apply();
 			gPrepassMaterial.Use();
-			glUniformMatrix4fv(gPrepassMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+			gPrepassMaterial.SetParameter("modelMat", modelMat);
 			lightVolumePrepassMesh->Draw();
 
 			// draw light
@@ -977,13 +979,12 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 		}
 
 		gLightVolumeMaterial.Use();
+		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), lights[i].GetPositionVSInvR(mainViewpoint.viewMat));
+		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), lights[i].GetDirectionVSRAB(mainViewpoint.viewMat));
+		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("color").c_str(), lights[i].colorIntensity);
+		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), lights[i].attenParams);
 
-		glUniform4fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "positionInvR"), 1, glm::value_ptr(lights[i].GetPositionVSInvR(mainViewpoint.viewMat)));
-		glUniform3fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "direction"), 1, glm::value_ptr(lights[i].GetDirectionVS(mainViewpoint.viewMat)));
-		glUniform3fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "color"), 1, glm::value_ptr(lights[i].colorIntensity));
-		glUniform4fv(gLightVolumeMaterial.shader->GetUniformLocation("light", "attenParams"), 1, glm::value_ptr(lights[i].attenParams));
-
-		glUniformMatrix4fv(gLightVolumeMaterial.shader->GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
+		gLightVolumeMaterial.SetParameter("modelMat", modelMat);
 
 		lightVolumeMesh->Draw();
 
@@ -1030,7 +1031,7 @@ void DebugForwardPass()
 	renderState.Apply();
 
 	// draw debug
-	gLightDebugShader.Use();
+	gLightDebugMaterial.Use();
 
 	for (int i = 0; i < gPointLights.size(); ++i)
 	{
@@ -1038,9 +1039,8 @@ void DebugForwardPass()
 		modelMat = glm::translate(modelMat, gPointLights[i].position);
 		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		//glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].colorIntensity));
+		gLightDebugMaterial.SetParameter("modelMat", modelMat);
+		gLightDebugMaterial.SetParameter("color", gPointLights[i].colorIntensity);
 
 		gPointLightDebugMesh->Draw();
 	}
@@ -1053,9 +1053,8 @@ void DebugForwardPass()
 		modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
 		modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius) / gSpotLights[i].radius * 0.6f);
 		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-		//glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-		glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gSpotLights[i].colorIntensity));
+		gLightDebugMaterial.SetParameter("modelMat", modelMat);
+		gLightDebugMaterial.SetParameter("color", gSpotLights[i].colorIntensity);
 
 		gSpotLightDebugMesh->Draw();
 	}
@@ -1063,7 +1062,7 @@ void DebugForwardPass()
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	//glDisable(GL_CULL_FACE);
 
-	//gLightDebugShader.Use();
+	//gLightDebugMaterial.Use();
 
 	//for (int i = 0; i < gPointLights.size(); ++i)
 	//{
@@ -1072,12 +1071,27 @@ void DebugForwardPass()
 	//	modelMat = glm::translate(modelMat, gPointLights[i].position);
 	//	modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
 	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-	//			
-	//	glUniformMatrix4fv(gLightDebugShader.GetUniformLocation("modelMat"), 1, GL_FALSE, glm::value_ptr(modelMat));
-	//	glUniformMatrix3fv(gLightDebugShader.GetUniformLocation("normalMat"), 1, GL_FALSE, glm::value_ptr(normalMat));
-	//	glUniform3fv(gLightDebugShader.GetUniformLocation("color"), 1, glm::value_ptr(gPointLights[i].colorIntensity));
+
+	//	gLightDebugMaterial.SetParameter("modelMat", modelMat);
+	//	gLightDebugMaterial.SetParameter("color", gPointLights[i].colorIntensity);
 
 	//	gPointLightDebugMesh->Draw();
+
+	//}
+
+	//for (int i = 0; i < gSpotLights.size(); ++i)
+	//{
+	//	// model
+	//	glm::mat4 modelMat(1);
+	//	modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
+	//	modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
+	//	modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius));
+	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+
+	//	gLightDebugMaterial.SetParameter("modelMat", modelMat);
+	//	gLightDebugMaterial.SetParameter("color", gSpotLights[i].colorIntensity);
+
+	//	gSpotLightDebugMesh->Draw();
 
 	//}
 
@@ -1124,7 +1138,7 @@ void UIPass()
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
 			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
-			float timeRatio = glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			float timeRatio = (float)glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
 			ImGui::Text("%s \t %.3f ms %.2f%%", displayName.c_str(), it->second, timeRatio * 100);
 			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
 		}
@@ -1134,7 +1148,7 @@ void UIPass()
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
 			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
-			float timeRatio = glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			float timeRatio = (float)glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
 			ImGui::Text("%s \t %.3f ms %.2f%%", displayName.c_str(), it->second, timeRatio * 100);
 			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
 		}

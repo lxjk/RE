@@ -89,7 +89,7 @@ public:
 
 		glBindVertexArray(VAO);
 		glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
-		glBindVertexArray(VAO);
+		glBindVertexArray(0);
 	}
 
 	void InitResource()

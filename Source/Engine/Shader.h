@@ -10,6 +10,37 @@
 
 #include "ShaderLoader.h"
 
+class ShaderNameBuilder
+{
+public:
+	static const size_t bufferSize = 128;
+	char buffer[bufferSize];
+
+	ShaderNameBuilder(const char* inName)
+	{
+		strcpy_s(buffer, inName);
+	}
+
+	inline ShaderNameBuilder& operator[] (int index)
+	{
+		int len = strlen(buffer);
+		sprintf_s(buffer + len, bufferSize - len, "[%d]", index);
+		return *this;
+	}
+
+	inline ShaderNameBuilder& operator() (const char* name)
+	{
+		int len = strlen(buffer);
+		sprintf_s(buffer + len, bufferSize - len, ".%s", name);
+		return *this;
+	}
+
+	inline const char* c_str()
+	{
+		return buffer;
+	}
+};
+
 class Shader
 {
 public:
@@ -22,13 +53,13 @@ public:
 	static const GLuint gAlbedoTexUnit = 2;
 	static const GLuint gMaterialTexUnit = 3;
 
-	static const int deferredPassTexCount = 4;
+	static const GLuint deferredPassTexCount = 4;
 
 	// post process pass
 	//static const GLuint gDepthStencilTexUnit = 0; reuse
 	static const GLuint gSceneColorTexUnit = 1;
 
-	static const int postProcessPassTexCount = 2;
+	static const GLuint postProcessPassTexCount = 2;
 
 	GLuint programID;
 
@@ -37,10 +68,13 @@ public:
 	GLint tangentIdx;
 	GLint texCoordsIdx;
 
+	GLuint nextTexUnit;
+
 	GLchar vertexFilePath[512];
 	GLchar fragmentFilePath[512];
 
-	std::map<std::string, GLuint> TexUnitMap;
+	std::map<std::string, GLint> TexUnitMap;
+	std::map<std::string, GLint> UniformLocationMap;
 
 	Shader()
 	{
@@ -182,24 +216,26 @@ public:
 		BindUniformBlock("RenderInfo", RenderInfoBP);
 		
 		// process uniforms
-		int texUnitStart = 0;
+		nextTexUnit = 0;
 		if (bUseDeferredPassTex)
-			texUnitStart = deferredPassTexCount;
+			nextTexUnit = deferredPassTexCount;
 		else if (bUsePostProcessPassTex)
-			texUnitStart = postProcessPassTexCount;
+			nextTexUnit = postProcessPassTexCount;
 
 		TexUnitMap.clear();
+		UniformLocationMap.clear();
 		for (int shaderInfoIdx = 0; shaderInfoIdx < 2; ++shaderInfoIdx)
 		{
 			ShaderInfo* shaderInfo = shaderInfoList[shaderInfoIdx];
 			for (auto it = shaderInfo->shaderUniforms.typeMap.begin(); it != shaderInfo->shaderUniforms.typeMap.end(); ++it)
 			{
-				if (it->first.compare("sampler2D") == 0)
+				for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
 				{
-					for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
+					UniformLocationMap[it->second[nameIdx]] = -1;
+					if (it->first.compare("sampler2D") == 0)
 					{
-						TexUnitMap[it->second[nameIdx]] = texUnitStart;
-						++texUnitStart;
+						// custom texture unit, init to be -1, don't bind it unless used
+						TexUnitMap[it->second[nameIdx]] = -1;
 					}
 				}
 			}
@@ -223,10 +259,10 @@ public:
 			SetTextureUnit("gSceneColorTex", gSceneColorTexUnit);
 		}
 		// custom
-		for (auto it = TexUnitMap.begin(); it != TexUnitMap.end(); ++it)
-		{
-			SetTextureUnit(it->first.c_str(), it->second);
-		}
+		//for (auto it = TexUnitMap.begin(); it != TexUnitMap.end(); ++it)
+		//{
+		//	SetTextureUnit(it->first.c_str(), it->second);
+		//}
 	}
 
 	void Use()
@@ -245,7 +281,7 @@ public:
 		return location;
 	}
 
-	GLint GetUniformLocation(const GLchar* name)
+	GLint GetUniformLocation_Internal(const GLchar* name)
 	{
 		GLint location = -1;
 		location = glGetUniformLocation(programID, name);
@@ -256,30 +292,19 @@ public:
 		return location;
 	}
 
-	GLint GetUniformLocation(const GLchar* name,  const GLchar* memberName)
+	GLint GetUniformLocation(const GLchar* name)
 	{
-		char combinedName[128];
-		sprintf_s(combinedName, "%s.%s", name, memberName);
-		GLint location = -1;
-		location = glGetUniformLocation(programID, combinedName);
-		if (location == -1)
+		auto it = UniformLocationMap.find(name);
+		if (it != UniformLocationMap.end())
 		{
-			printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", combinedName, vertexFilePath, fragmentFilePath);
+			if (it->second < 0)
+			{
+				// we haven't store this uniform location yet
+				it->second = GetUniformLocation_Internal(name);
+			}
+			return it->second;
 		}
-		return location;
-	}
-
-	GLint GetUniformLocation(const GLchar* name, int index, const GLchar* memberName)
-	{
-		char combinedName[128];
-		sprintf_s(combinedName, "%s[%d].%s", name, index, memberName);
-		GLint location = -1;
-		location = glGetUniformLocation(programID, combinedName);
-		if (location == -1)
-		{
-			printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", combinedName, vertexFilePath, fragmentFilePath);
-		}
-		return location;
+		return -1;
 	}
 
 	void BindUniformBlock(const GLchar* name, GLuint bindingPoint)
@@ -291,7 +316,8 @@ public:
 
 	void SetTextureUnit(const GLchar* name, GLuint texUnit)
 	{
-		GLint location = GetUniformLocation(name);
+		// use internal here, since reserved texture is not in uniform map, and we only get texture location once
+		GLint location = GetUniformLocation_Internal(name);
 		if (location != -1)
 			glUniform1i(location, texUnit);
 	}
@@ -301,6 +327,13 @@ public:
 		auto it = TexUnitMap.find(name);
 		if (it != TexUnitMap.end())
 		{
+			if (it->second < 0)
+			{
+				// we haven't bind this texture yet, bind it now
+				it->second = nextTexUnit;
+				SetTextureUnit(it->first.c_str(), it->second);
+				++nextTexUnit;
+			}
 			return it->second;
 		}
 		printf("%s is not a valid texture name! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);

@@ -51,9 +51,44 @@ public:
 		}
 	}
 
-	void SetTexture(const char* name, Texture2D* tex)
+	inline void SetTexture(const char* name, Texture2D* tex)
 	{
 		textureMap[name] = tex;
+	}
+
+	inline void SetParameter(const char* name, const glm::vec4& value)
+	{
+		glUniform4fv(shader->GetUniformLocation(name), 1, glm::value_ptr(value));
+	}
+
+	inline void SetParameter(const char* name, const glm::vec3& value)
+	{
+		glUniform3fv(shader->GetUniformLocation(name), 1, glm::value_ptr(value));
+	}
+
+	inline void SetParameter(const char* name, const glm::vec2& value)
+	{
+		glUniform2fv(shader->GetUniformLocation(name), 1, glm::value_ptr(value));
+	}
+
+	inline void SetParameter(const char* name, float value)
+	{
+		glUniform1f(shader->GetUniformLocation(name), value);
+	}
+
+	inline void SetParameter(const char* name, int value)
+	{
+		glUniform1i(shader->GetUniformLocation(name), value);
+	}
+
+	inline void SetParameter(const char* name, const glm::mat4& value)
+	{
+		glUniformMatrix4fv(shader->GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(value));
+	}
+
+	inline void SetParameter(const char* name, const glm::mat3& value)
+	{
+		glUniformMatrix3fv(shader->GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(value));
 	}
 };
 

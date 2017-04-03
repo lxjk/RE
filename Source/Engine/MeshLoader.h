@@ -9,7 +9,7 @@
 void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene, std::vector<Material*>& materials)
 {
 	// add mesh
-	int idx = output.size();
+	int idx = (int)output.size();
 	output.push_back(Mesh::Create());
 	Mesh* outputMesh = output[idx];
 

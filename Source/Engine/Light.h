@@ -16,6 +16,7 @@ public:
 
 	glm::vec3 colorIntensity;
 	float invRadius;
+	float radialAttenuationBlend;
 	float outerCosHalfAngle;
 	float invDiffCosHalfAngle;
 	float endRadius;
@@ -30,9 +31,20 @@ public:
 		intensity = 0;
 		radius = 1;
 		invRadius = 1;
+		radialAttenuationBlend = 0;
 		outerCosHalfAngle = 0;
 		invDiffCosHalfAngle = 1;
 		attenParams = glm::vec4(0, 0, 0, 1);
+	}
+
+	void SetRadius(float inRadius)
+	{
+		radius = inRadius;
+		if (radius > KINDA_SMALL_NUMBER)
+		{
+			invRadius = 1.f / radius;
+			radialAttenuationBlend = glm::clamp((radius - 2.5f) / 9.f, 0.f, 1.f);
+		}
 	}
 
 	void SetDirectionLight(glm::vec3 inDir, glm::vec3 inColor, float inIntensity)
@@ -52,12 +64,12 @@ public:
 	void SetPointLight(glm::vec3 inPos, float inRadius, glm::vec3 inColor, float inIntensity)
 	{
 		position = inPos;
-		radius = inRadius;
 		color = inColor;
 		intensity = inIntensity;
+
+		SetRadius(inRadius);
 		
 		colorIntensity = color * intensity;
-		invRadius = 1.f / radius;
 
 		attenParams.x = 1;
 		attenParams.y = 0;
@@ -69,14 +81,14 @@ public:
 	{
 		position = inPos;
 		direction = glm::normalize(inDir);
-		radius = inRadius;
 		color = inColor;
 		intensity = inIntensity;
 		outerHalfAngle = inOuterHalfAngle;
 		innerHalfAngle = inInnerHalfAngle;
 
+		SetRadius(inRadius);
+
 		colorIntensity = color * intensity;
-		invRadius = 1.f / radius;
 		float outerRad = glm::radians(outerHalfAngle);
 		float innerRad = glm::radians(innerHalfAngle);
 		outerCosHalfAngle = glm::cos(outerRad);
@@ -96,8 +108,8 @@ public:
 		return result;
 	}
 
-	glm::vec3 GetDirectionVS(const glm::mat4& viewMat) const
+	glm::vec4 GetDirectionVSRAB(const glm::mat4& viewMat) const
 	{
-		return glm::mat3(viewMat) * direction;
+		return glm::vec4(glm::mat3(viewMat) * direction, radialAttenuationBlend);
 	}
 };

@@ -6,7 +6,7 @@
 struct Light 
 {
 	vec4 positionInvR; // xyz position, w invRadius
-	vec3 direction;
+	vec4 directionRAB; // xyz direction, w radial attenuation blend value
 	vec3 color;
 	vec4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
 };
@@ -89,7 +89,7 @@ vec3 GetGBufferPositionVS(float depth, mat4 projMat, vec3 fragPosVS)
 
 vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, float metallic, float roughness)
 {
-	vec3 light = -lightData.direction;
+	vec3 light = -lightData.directionRAB.xyz;
 	float attenuation = 1.f;
 	if(lightData.attenParams.x > 0.5f)
 	{
@@ -97,16 +97,22 @@ vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, f
 		float dist = length(light);
 		light /= dist;
 		float attRatio = min(dist * lightData.positionInvR.w, 1.f);
-		// based on unreal
 		//attenuation = (1 - attRatio) * (1 - attRatio);
-		attenuation = (1 - attRatio * attRatio * attRatio * attRatio);
+		// based on unreal, unreal uses attRatio ^ 4
+		// we want more control over how it falloff, basically large radius allow more aggressive (up to ^8) which is closer to real physics
+		// but small radius we bend it more (low as ^2) to have smoother edge, this blend value is sent in, but should be a lerp based on radius
+		float attRatio4 = attRatio * attRatio;
+		attRatio4 *= attRatio4;
+		attRatio = mix(attRatio, attRatio4, lightData.directionRAB.w);
+		//attRatio *= attRatio;
+		attenuation = (1 - attRatio * attRatio);
 		attenuation = (attenuation * attenuation) / (dist * dist + 1);
 	}
 	if(lightData.attenParams.y > 0.5f)
 	{
 		//float spotRatio = min((1 - dot(light, -lightData.direction)) / (1 - lightData.cosHalfAngle), 1.f);
 		//attenuation *= (1 - spotRatio);
-		float spotRatio = clamp((dot(light, -lightData.direction) - lightData.attenParams.z) * lightData.attenParams.w, 0.f, 1.f);
+		float spotRatio = clamp((dot(light, -lightData.directionRAB.xyz) - lightData.attenParams.z) * lightData.attenParams.w, 0.f, 1.f);
 		attenuation *= spotRatio;
 	}
 	

@@ -1,6 +1,6 @@
 #version 330 core
 
-#define LIGHT_COUNT 4
+#define MAX_LIGHT_COUNT 4
 
 #include "Include/CommonUBO.incl"
 #include "Include/DeferredLighting.incl"
@@ -14,7 +14,8 @@ in VS_OUT
 
 out vec4 color;
 
-uniform Light lights[LIGHT_COUNT];
+uniform int lightCount;
+uniform Light lights[MAX_LIGHT_COUNT];
 
 void main() 
 {	
@@ -34,7 +35,8 @@ void main()
 	
 	vec3 ambient = vec3(0.01f) * albedo;
 	vec3 result = ambient;
-	for(int i = 0; i < LIGHT_COUNT; ++i)
+	int clampedLightCount = min(lightCount, MAX_LIGHT_COUNT);
+	for(int i = 0; i < clampedLightCount; ++i)
 	{
 		result += CalcLight(lights[i], normal, position, view, albedo, metallic, roughness);
 	}
