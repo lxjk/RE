@@ -5,7 +5,7 @@
 #include "SDL_image.h"
 
 // glew
-#include "gl\glew.h"
+#include "gl/glew.h"
 
 // opengl
 #include "SDL_opengl.h"
@@ -31,19 +31,11 @@
 #include "Engine/Viewpoint.h"
 #include "Engine/Camera.h"
 #include "Engine/Math.h"
+#include "Engine/Profiler.h"
 
 // imgui
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl.h"
-
-#define PROFILE 1
-#if PROFILE
-#define CPU_SCOPED_PROFILE(name) ScopedProfileTimer _cpu_macro_profiler(name, false)
-#define GPU_SCOPED_PROFILE(name) ScopedProfileTimer _gpu_macro_profiler(name, true)
-#else
-#define CPU_SCOPED_PROFILE(name) 
-#define GPU_SCOPED_PROFILE(name) 
-#endif
 
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
@@ -210,73 +202,6 @@ bool gMouseCaptured = false;
 float gMouseWheel;
 const Uint8* gKeyStates;
 
-class ScopedProfileTimer
-{
-	Uint64 start;
-	glm::uvec2 query;
-	std::string name;
-	bool bGPUTimer;
-
-public:
-	static std::map<std::string, double> timerMapCPU;
-	static std::map<std::string, double> timerMapGPU;
-	static std::map<std::string, std::vector<glm::uvec2>> timeStampPairMapGPU[2];
-	static int GPUMapWriteIdx;
-	static std::string fullName;
-
-	ScopedProfileTimer(std::string inName, bool inGPUTimer)
-	{
-		name = inName;
-		bGPUTimer = inGPUTimer;
-		// add to prefix
-		fullName.append("/");
-		fullName.append(name);
-		if (bGPUTimer)
-		{
-			glGenQueries(2, glm::value_ptr(query));
-			glQueryCounter(query[0], GL_TIMESTAMP);
-		}
-		else
-			start = SDL_GetPerformanceCounter();
-	}
-
-	~ScopedProfileTimer()
-	{
-		if (bGPUTimer)
-		{
-			glQueryCounter(query[1], GL_TIMESTAMP);
-			timeStampPairMapGPU[GPUMapWriteIdx][fullName].push_back(query);
-			auto it = timerMapGPU.find(fullName);
-			if (it == timerMapGPU.end())
-			{
-				timerMapGPU[fullName] = 0;
-			}
-		}
-		else
-		{
-			Uint64 end = SDL_GetPerformanceCounter();
-			double deltaTime = (double)((end - start) * 1000) * gInvPerformanceFreq;
-			auto it = timerMapCPU.find(fullName);
-			if (it != timerMapCPU.end())
-			{
-				// find it
-				it->second += deltaTime;
-			}
-			else
-			{
-				timerMapCPU[fullName] = deltaTime;
-			}
-		}
-		// remove from full name
-		fullName = fullName.substr(0, fullName.size() - name.size() - 1);
-	}
-};
-std::map<std::string, double> ScopedProfileTimer::timerMapCPU;
-std::map<std::string, double> ScopedProfileTimer::timerMapGPU;
-std::map<std::string, std::vector<glm::uvec2>> ScopedProfileTimer::timeStampPairMapGPU[2];
-int ScopedProfileTimer::GPUMapWriteIdx = 0;
-std::string ScopedProfileTimer::fullName;
-
 
 bool Init();
 bool InitEngine();
@@ -340,11 +265,11 @@ bool Init()
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->AddFontFromFileTTF("Content/Fonts/DroidSans.ttf", 22.0f);
 
-	//Use Vsync
-	//if (SDL_GL_SetSwapInterval(1) < 0)
-	//{
-	//	printf("Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError());
-	//}
+	//Use Vsync (or do not?)
+	if (SDL_GL_SetSwapInterval(0) < 0)
+	{
+		printf("Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError());
+	}
 
 	//Initialize Engine
 	if (!InitEngine())
@@ -372,7 +297,7 @@ void MakeLights()
 {
 	// directional lights
 	int dlIdx = 0;
-	gDirectionalLights.push_back(Light());
+	gDirectionalLights.push_back(Light(gDirectionalLightMesh, 0));
 	dlIdx = (int)gDirectionalLights.size() - 1;
 	gDirectionalLights[dlIdx].SetDirectionLight(
 		/*dir=*/	glm::vec3(0, -1, -2),
@@ -391,7 +316,8 @@ void MakeLights()
 	//gPointLights[plIdx].intensity = 1;
 	//gPointLights[plIdx].radius = 20.f;
 
-	gPointLights.push_back(Light());
+	gPointLights.push_back(
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(0, 2, 3),
@@ -400,7 +326,8 @@ void MakeLights()
 		/*int=*/	20
 	);
 
-	gPointLights.push_back(Light());
+	gPointLights.push_back(
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(10, 2, 0),
@@ -409,7 +336,8 @@ void MakeLights()
 		/*int=*/	20
 	);
 
-	gPointLights.push_back(Light());
+	gPointLights.push_back(
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(-10, 3, 3),
@@ -418,9 +346,24 @@ void MakeLights()
 		/*int=*/	20
 	);
 
+	for (int i = 0; i < 1000; ++i)
+	{
+		gPointLights.push_back(
+			Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
+		plIdx = (int)gPointLights.size() - 1;
+		gPointLights[plIdx].SetPointLight(
+			/*pos=*/	glm::vec3(-10, 3, 3),
+			/*radius=*/	10.f,
+			/*color=*/	glm::vec3(1.f, 0.f, 0.f),
+			/*int=*/	20
+		);
+
+	}
+
 	// spot lights
 	int slIdx = 0;
-	gSpotLights.push_back(Light());
+	gSpotLights.push_back(
+		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader)), gSpotLightPrepassMesh));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
 		/*pos=*/	glm::vec3(0, 2, 6),
@@ -759,7 +702,6 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
 	// draw models
-	gGBufferMaterial.Use();
 
 	gGBufferMaterial.SetParameter("metallic", 1.0f);
 	gGBufferMaterial.SetParameter("roughness", 0.3f);
@@ -818,8 +760,6 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 			if (!material)
 				continue;
 
-			material->Use();
-
 			material->SetParameter("modelMat", modelMat);
 			material->SetParameter("normalMat", normalMat);
 
@@ -829,8 +769,6 @@ void GeometryPass(const Viewpoint& mainViewpoint)
 			gNanosuitMeshes[i]->Draw();
 		}
 	}
-
-	gGBufferColorMaterial.Use();
 
 	// floor
 	{
@@ -867,8 +805,6 @@ void DirectionalLightPass(const Viewpoint& mainViewpoint)
 
 	// directional light
 	renderState.Apply();
-
-	gDirectionalLightMaterial.Use();
 
 	gDirectionalLightMaterial.SetParameter("lightCount", (int)gDirectionalLights.size());
 
@@ -932,29 +868,17 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 
-	for (int i = 0; i < lights.size(); ++i)
+	for (int i = 0, ni = (int)lights.size(); i < ni; ++i)
 	{
-		bool bSpot = (lights[i].attenParams.y > 0);
-		// model
-		glm::mat4 modelMat(1);
-		if (bSpot)
-		{
-			modelMat = Math::MakeMatFromForward(lights[i].direction);
-			modelMat[3] = glm::vec4(lights[i].position, 1);
-			modelMat = glm::scale(modelMat, glm::vec3(lights[i].endRadius, lights[i].endRadius, lights[i].radius));
-		}
-		else
-		{
-			modelMat = glm::translate(modelMat, gPointLights[i].position);
-			modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
-		}
+		const Light& light = lights.data()[i];
+		bool bSpot = (light.attenParams.y > 0);
 
 		// camera in light volume?
-		glm::vec3 lightToCamera = mainViewpoint.position - lights[i].position;
-		bool isInLightVolume = (Math::SizeSquared(lightToCamera) <	lights[i].radius * lights[i].radius * 1.01f * 1.01f);
+		glm::vec3 lightToCamera = mainViewpoint.position - light.position;
+		bool isInLightVolume = (Math::SizeSquared(lightToCamera) <	light.radius * light.radius * 1.01f * 1.01f);
 		if (bSpot)
 		{
-			isInLightVolume &= (glm::dot(glm::normalize(lightToCamera), lights[i].direction) > lights[i].outerCosHalfAngle - KINDA_SMALL_NUMBER);
+			isInLightVolume &= (glm::dot(glm::normalize(lightToCamera), light.direction) > light.outerCosHalfAngle - KINDA_SMALL_NUMBER);
 		}
 		if (isInLightVolume)
 		{
@@ -970,23 +894,19 @@ void LightVolumePass(const Viewpoint& mainViewpoint, const std::vector<Light>& l
 
 			// prepass
 			prepassRenderState.Apply();
-			gPrepassMaterial.Use();
-			gPrepassMaterial.SetParameter("modelMat", modelMat);
-			lightVolumePrepassMesh->Draw();
+			light.PrepassMesh->material->SetParameter("modelMat", light.modelMat);
+			light.PrepassMesh->Draw();
 
 			// draw light
 			lightingRenderState.Apply();
 		}
 
-		gLightVolumeMaterial.Use();
-		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), lights[i].GetPositionVSInvR(mainViewpoint.viewMat));
-		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), lights[i].GetDirectionVSRAB(mainViewpoint.viewMat));
-		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("color").c_str(), lights[i].colorIntensity);
-		gLightVolumeMaterial.SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), lights[i].attenParams);
-
-		gLightVolumeMaterial.SetParameter("modelMat", modelMat);
-
-		lightVolumeMesh->Draw();
+		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(mainViewpoint.viewMat));
+		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(mainViewpoint.viewMat));
+		//light.LightMesh->material->SetParameter("", glm::vec4(0));
+		light.LightMesh->material->SetParameter("modelMat", light.modelMat);
+		
+		light.LightMesh->Draw();
 
 	}
 
@@ -1031,19 +951,17 @@ void DebugForwardPass()
 	renderState.Apply();
 
 	// draw debug
-	gLightDebugMaterial.Use();
+	//for (int i = 0; i < gPointLights.size(); ++i)
+	//{
+	//	glm::mat4 modelMat(1);
+	//	modelMat = glm::translate(modelMat, gPointLights[i].position);
+	//	modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
+	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+	//	gLightDebugMaterial.SetParameter("modelMat", modelMat);
+	//	gLightDebugMaterial.SetParameter("color", gPointLights[i].colorIntensity);
 
-	for (int i = 0; i < gPointLights.size(); ++i)
-	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, gPointLights[i].position);
-		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		gLightDebugMaterial.SetParameter("modelMat", modelMat);
-		gLightDebugMaterial.SetParameter("color", gPointLights[i].colorIntensity);
-
-		gPointLightDebugMesh->Draw();
-	}
+	//	gPointLightDebugMesh->Draw();
+	//}
 
 	for (int i = 0; i < gSpotLights.size(); ++i)
 	{
@@ -1061,8 +979,6 @@ void DebugForwardPass()
 
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	//glDisable(GL_CULL_FACE);
-
-	//gLightDebugMaterial.Use();
 
 	//for (int i = 0; i < gPointLights.size(); ++i)
 	//{
@@ -1109,8 +1025,6 @@ void PostProcessPass()
 
 	renderState.Apply();
 
-	gToneMapShader.Use();
-
 	// draw quad
 	gToneMapMesh->Draw();
 }
@@ -1133,7 +1047,7 @@ void UIPass()
 		ImGui::TextColored(fpsColor, "FPS %.1f \t %.3f ms", fps, averageFrameTime);
 
 		// profiling cpu
-		for (auto it = ScopedProfileTimer::timerMapCPU.begin(); it != ScopedProfileTimer::timerMapCPU.end(); ++it)
+		for (auto it = ScopedProfileTimerCPU::timerMapCPU.begin(); it != ScopedProfileTimerCPU::timerMapCPU.end(); ++it)
 		{
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
@@ -1143,7 +1057,7 @@ void UIPass()
 			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
 		}
 		// profiling gpu
-		for (auto &it = ScopedProfileTimer::timerMapGPU.begin(); it != ScopedProfileTimer::timerMapGPU.end(); ++it)
+		for (auto &it = ScopedProfileTimerGPU::timerMapGPU.begin(); it != ScopedProfileTimerGPU::timerMapGPU.end(); ++it)
 		{
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
@@ -1282,15 +1196,15 @@ int main(int argc, char **argv)
 			{
 
 				// profiling cpu
-				for (auto it = ScopedProfileTimer::timerMapCPU.begin(); it != ScopedProfileTimer::timerMapCPU.end(); ++it)
+				for (auto it = ScopedProfileTimerCPU::timerMapCPU.begin(); it != ScopedProfileTimerCPU::timerMapCPU.end(); ++it)
 				{
 					// clear
 					it->second = 0;
 				}
 				// profiling gpu
-				int GPUMapReadIdx = 1 - ScopedProfileTimer::GPUMapWriteIdx;
-				ScopedProfileTimer::GPUMapWriteIdx = GPUMapReadIdx;
-				for (auto &it = ScopedProfileTimer::timeStampPairMapGPU[GPUMapReadIdx].begin(); it != ScopedProfileTimer::timeStampPairMapGPU[GPUMapReadIdx].end(); ++it)
+				int GPUMapReadIdx = 1 - ScopedProfileTimerGPU::GPUMapWriteIdx;
+				ScopedProfileTimerGPU::GPUMapWriteIdx = GPUMapReadIdx;
+				for (auto &it = ScopedProfileTimerGPU::timeStampPairMapGPU[GPUMapReadIdx].begin(); it != ScopedProfileTimerGPU::timeStampPairMapGPU[GPUMapReadIdx].end(); ++it)
 				{
 					double elapsed = 0;
 					for (int pairIdx = 0; pairIdx < it->second.size(); ++pairIdx)
@@ -1304,10 +1218,10 @@ int main(int argc, char **argv)
 					if (elapsed > 0)
 					{
 						// update
-						if (ScopedProfileTimer::timerMapGPU[it->first] > 0)
-							ScopedProfileTimer::timerMapGPU[it->first] = glm::mix(ScopedProfileTimer::timerMapGPU[it->first], elapsed, 0.2);
+						if (ScopedProfileTimerGPU::timerMapGPU[it->first] > 0)
+							ScopedProfileTimerGPU::timerMapGPU[it->first] = glm::mix(ScopedProfileTimerGPU::timerMapGPU[it->first], elapsed, 0.2);
 						else
-							ScopedProfileTimer::timerMapGPU[it->first] = elapsed;
+							ScopedProfileTimerGPU::timerMapGPU[it->first] = elapsed;
 					}
 					// clear
 					it->second.clear();

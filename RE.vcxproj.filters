@@ -87,5 +87,8 @@
     <ClInclude Include="Source\imgui\stb_truetype.h">
       <Filter>Source\imgui</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\Profiler.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

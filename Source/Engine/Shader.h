@@ -1,6 +1,6 @@
 #pragma once
 
-#include <map>
+#include <unordered_map>
 
 // glew
 #include "gl/glew.h"
@@ -9,6 +9,8 @@
 #include "SDL_opengl.h"
 
 #include "ShaderLoader.h"
+
+#include "Engine/Profiler.h"
 
 class ShaderNameBuilder
 {
@@ -38,6 +40,18 @@ public:
 	inline const char* c_str()
 	{
 		return buffer;
+	}
+};
+
+struct ValuePair
+{
+	char key[128];
+	GLint value;
+
+	ValuePair(const char* inKey, GLint inValue) :
+		value(inValue)
+	{
+		strcpy_s(key, inKey);
 	}
 };
 
@@ -73,8 +87,8 @@ public:
 	GLchar vertexFilePath[512];
 	GLchar fragmentFilePath[512];
 
-	std::map<std::string, GLint> TexUnitMap;
-	std::map<std::string, GLint> UniformLocationMap;
+	std::unordered_map <std::string, GLint> TexUnitMap;
+	std::vector <ValuePair> UniformLocationMap;
 
 	Shader()
 	{
@@ -231,7 +245,8 @@ public:
 			{
 				for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
 				{
-					UniformLocationMap[it->second[nameIdx]] = -1;
+					//UniformLocationMap[it->second[nameIdx]] = -1;
+					UniformLocationMap.push_back(ValuePair(it->second[nameIdx].c_str(), -1));
 					if (it->first.compare("sampler2D") == 0)
 					{
 						// custom texture unit, init to be -1, don't bind it unless used
@@ -294,17 +309,29 @@ public:
 
 	GLint GetUniformLocation(const GLchar* name)
 	{
-		auto it = UniformLocationMap.find(name);
-		if (it != UniformLocationMap.end())
+		return GetUniformLocation_Internal(name);
+		//auto it = UniformLocationMap.find(name);
+		//if (it != UniformLocationMap.end())
+		//{
+		//	if (it->second < 0)
+		//	{
+		//		// we haven't store this uniform location yet
+		//		it->second = GetUniformLocation_Internal(name);
+		//	}
+		//	return it->second;
+		//}
+		//return -1;
+		for (int i = 0, ni = (int)UniformLocationMap.size(); i < ni; ++i)
 		{
-			if (it->second < 0)
+			ValuePair& pair = UniformLocationMap.data()[i];
+			if (strcmp(pair.key, name) == 0)
 			{
-				// we haven't store this uniform location yet
-				it->second = GetUniformLocation_Internal(name);
+				if(pair.value < 0)
+					pair.value = GetUniformLocation_Internal(name);
+				return pair.value;
 			}
-			return it->second;
 		}
-		return -1;
+		return - 1;
 	}
 
 	void BindUniformBlock(const GLchar* name, GLuint bindingPoint)

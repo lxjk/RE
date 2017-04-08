@@ -2,6 +2,9 @@
 
 #include "glm/glm.hpp"
 
+#include "Mesh.h"
+#include "Material.h"
+
 class Light
 {
 public:
@@ -23,8 +26,15 @@ public:
 
 	glm::vec4 attenParams; // bRadial, bSpot, outerCosHalfAngle, invDiffCosHalfAngle
 
-	Light()
+	glm::mat4 modelMat;
+
+	Mesh* LightMesh;
+	Mesh* PrepassMesh;
+
+	Light(Mesh* inLightMesh, Mesh* inPrepassMesh)
 	{
+		LightMesh = inLightMesh;
+		PrepassMesh = inPrepassMesh;
 		position = glm::vec3(0, 0, 0);
 		direction = glm::vec3(0, 0, -1);
 		color = glm::vec3(0, 0, 0);
@@ -59,6 +69,9 @@ public:
 		attenParams.y = 0;
 		attenParams.z = outerCosHalfAngle;
 		attenParams.w = invDiffCosHalfAngle;
+
+		//LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity);
+		//LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);
 	}
 
 	void SetPointLight(glm::vec3 inPos, float inRadius, glm::vec3 inColor, float inIntensity)
@@ -75,6 +88,13 @@ public:
 		attenParams.y = 0;
 		attenParams.z = outerCosHalfAngle;
 		attenParams.w = invDiffCosHalfAngle;
+
+		modelMat = glm::mat4(1);
+		modelMat = glm::translate(modelMat, position);
+		modelMat = glm::scale(modelMat, glm::vec3(radius));
+
+		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity);
+		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);
 	}
 
 	void SetSpotLight(glm::vec3 inPos, glm::vec3 inDir, float inRadius, float inOuterHalfAngle, float inInnerHalfAngle, glm::vec3 inColor, float inIntensity)
@@ -99,6 +119,13 @@ public:
 		attenParams.y = 1;
 		attenParams.z = outerCosHalfAngle;
 		attenParams.w = invDiffCosHalfAngle;
+
+		modelMat = Math::MakeMatFromForward(direction);
+		modelMat[3] = glm::vec4(position, 1);
+		modelMat = glm::scale(modelMat, glm::vec3(endRadius, endRadius, radius));
+
+		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity);
+		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);
 	}
 
 	glm::vec4 GetPositionVSInvR(const glm::mat4& viewMat) const

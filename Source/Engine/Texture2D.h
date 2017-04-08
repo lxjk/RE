@@ -62,7 +62,7 @@ public:
 		SDL_Surface* image = IMG_Load(name);
 		if (!image)
 		{
-			printf("Fail to load image %s\n", name);
+			printf("Fail to load image %s, error : %s\n", name, IMG_GetError());
 			return;
 		}
 
