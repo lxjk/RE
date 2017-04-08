@@ -4,7 +4,8 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include <map>
+#include <unordered_map>
+#include <cassert>
 
 #include "Util.h"
 
@@ -14,7 +15,7 @@ class ShaderUniforms
 {
 public:
 	// <type, nameArray>
-	std::map<std::string, std::vector<std::string>> typeMap;
+	std::unordered_map<std::string, std::vector<std::string>> typeMap;
 
 	void Append(const ShaderUniforms& other)
 	{
@@ -35,7 +36,7 @@ class ShaderStructs
 {
 public:
 	// <struct type, content>
-	std::map<std::string, ShaderUniforms> structTypeMap;
+	std::unordered_map<std::string, ShaderUniforms> structTypeMap;
 
 	void Append(const ShaderStructs& other)
 	{
@@ -55,7 +56,7 @@ class ShaderDefines
 {
 public:
 	// <define name, value>
-	std::map<std::string, std::string> defineMap;
+	std::unordered_map<std::string, std::string> defineMap;
 
 	void Append(const ShaderDefines& other)
 	{
@@ -100,9 +101,9 @@ public:
 
 const int MAX_INCLUDE_DEPTH = 8;
 
-std::map<std::string, ShaderInfo> gShaderFileCache;
+extern std::unordered_map<std::string, ShaderInfo> gShaderFileCache;
 
-bool ParseVariable(ShaderInfo& shaderInfo, ShaderUniforms& outputUniforms, std::string line, size_t offset = 0)
+static bool ParseVariable(ShaderInfo& shaderInfo, ShaderUniforms& outputUniforms, std::string line, size_t offset = 0)
 {
 	size_t nameEnd = line.find(';');
 	if (nameEnd != std::string::npos)
@@ -180,7 +181,7 @@ bool ParseVariable(ShaderInfo& shaderInfo, ShaderUniforms& outputUniforms, std::
 	return false;
 }
 
-bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 0)
+static bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 0)
 {
 	if (includeDepth > MAX_INCLUDE_DEPTH)
 	{

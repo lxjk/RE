@@ -42,6 +42,8 @@ void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene,
 			idxList.push_back(face.mIndices[j]);
 	}
 
+	meshData->CacheCount();
+
 	if (mesh->mMaterialIndex >= 0)
 	{
 		// find material
@@ -97,7 +99,7 @@ void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShade
 			std::string texPath = localPath;
 			texPath.append(str.C_Str());
 			Texture2D* tex = Texture2D::FindOrCreate(texPath.c_str(), true, GL_REPEAT, GL_REPEAT);
-			material->SetTexture("diffuseTex", tex);
+			material->SetParameter("diffuseTex", tex);
 		}
 
 		// normal
@@ -108,7 +110,7 @@ void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShade
 			std::string texPath = localPath;
 			texPath.append(str.C_Str());
 			Texture2D* tex = Texture2D::FindOrCreate(texPath.c_str(), false, GL_REPEAT, GL_REPEAT);
-			material->SetTexture("normalTex", tex);
+			material->SetParameter("normalTex", tex);
 		}
 	}
 

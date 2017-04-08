@@ -4,6 +4,7 @@
 layout(std140) uniform RenderInfo
 {
 	mat4 viewMat;
+	mat4 invViewMat;
 	mat4 projMat;
 	vec2 resolution;
 };

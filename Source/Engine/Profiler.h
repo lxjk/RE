@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <string>
 
@@ -25,18 +26,33 @@ extern double gInvPerformanceFreq;
 class ScopedProfileTimerCPU
 {
 	Uint64 start;
-	std::string name;
+	size_t nameSize;
 
 public:
-	static std::map<std::string, double> timerMapCPU;
-	static std::string fullName;
+	static std::map<std::string, double> timerMap;
+	static std::unordered_map<std::string, double> timeStampMap[2];
+	static int MapWriteIdx;
+	static char fullName[1024];
 
-	ScopedProfileTimerCPU(std::string inName)
+	static void Swap()
 	{
-		name = inName;
+		int MapReadIdx = 1 - MapWriteIdx;
+		MapWriteIdx = MapReadIdx;
+		for (auto it = timeStampMap[MapReadIdx].begin(); it != timeStampMap[MapReadIdx].end(); ++it)
+		{
+			// update
+			timerMap[it->first] = it->second;
+			// clear
+			it->second = 0;
+		}
+	}
+
+	ScopedProfileTimerCPU(const char* inName)
+	{
+		nameSize = strlen(inName);
 		// add to prefix
-		fullName.append("/");
-		fullName.append(name);
+		strcat_s(fullName, "/");
+		strcat_s(fullName, inName);
 
 		start = SDL_GetPerformanceCounter();
 	}
@@ -45,40 +61,67 @@ public:
 	{
 		Uint64 end = SDL_GetPerformanceCounter();
 		double deltaTime = (double)((end - start) * 1000) * gInvPerformanceFreq;
-		auto it = timerMapCPU.find(fullName);
-		if (it != timerMapCPU.end())
+		auto it = timeStampMap[MapWriteIdx].find(fullName);
+		if (it != timeStampMap[MapWriteIdx].end())
 		{
 			// find it
 			it->second += deltaTime;
 		}
 		else
 		{
-			timerMapCPU[fullName] = deltaTime;
+			timeStampMap[MapWriteIdx][fullName] = deltaTime;
 		}
 		// remove from full name
-		fullName = fullName.substr(0, fullName.size() - name.size() - 1);
+		size_t len = strlen(fullName);
+		fullName[len - nameSize - 1] = 0;
 	}
 };
-std::map<std::string, double> ScopedProfileTimerCPU::timerMapCPU;
-std::string ScopedProfileTimerCPU::fullName;
 
 class ScopedProfileTimerGPU
 {
 	glm::uvec2 query;
-	std::string name;
+	size_t nameSize;
 
 public:
-	static std::map<std::string, double> timerMapGPU;
-	static std::map<std::string, std::vector<glm::uvec2>> timeStampPairMapGPU[2];
-	static int GPUMapWriteIdx;
-	static std::string fullName;
+	static std::map<std::string, double> timerMap;
+	static std::unordered_map<std::string, std::vector<glm::uvec2>> timeStampPairMap[2];
+	static int MapWriteIdx;
+	static char fullName[1024];
 
-	ScopedProfileTimerGPU(std::string inName)
+	static void Swap()
 	{
-		name = inName;
+		int MapReadIdx = 1 - MapWriteIdx;
+		MapWriteIdx = MapReadIdx;
+		for (auto &it = timeStampPairMap[MapReadIdx].begin(); it != timeStampPairMap[MapReadIdx].end(); ++it)
+		{
+			double elapsed = 0;
+			for (int pairIdx = 0; pairIdx < it->second.size(); ++pairIdx)
+			{
+				GLuint64 elapsedStart = 0, elapsedEnd = 0;
+				glGetQueryObjectui64v(it->second[pairIdx][0], GL_QUERY_RESULT, &elapsedStart);
+				glGetQueryObjectui64v(it->second[pairIdx][1], GL_QUERY_RESULT, &elapsedEnd);
+				glDeleteQueries(2, glm::value_ptr(it->second[pairIdx]));
+				elapsed += (double)(elapsedEnd - elapsedStart) / (double)1000000;
+			}
+			if (elapsed > 0)
+			{
+				// update
+				if (timerMap[it->first] > 0)
+					timerMap[it->first] = glm::mix(timerMap[it->first], elapsed, 0.2);
+				else
+					timerMap[it->first] = elapsed;
+			}
+			// clear
+			it->second.clear();
+		}
+	}
+
+	ScopedProfileTimerGPU(const char* inName)
+	{
+		nameSize = strlen(inName);
 		// add to prefix
-		fullName.append("/");
-		fullName.append(name);
+		strcat_s(fullName, "/");
+		strcat_s(fullName, inName);
 
 		glGenQueries(2, glm::value_ptr(query));
 		glQueryCounter(query[0], GL_TIMESTAMP);
@@ -87,17 +130,14 @@ public:
 	~ScopedProfileTimerGPU()
 	{
 		glQueryCounter(query[1], GL_TIMESTAMP);
-		timeStampPairMapGPU[GPUMapWriteIdx][fullName].push_back(query);
-		auto it = timerMapGPU.find(fullName);
-		if (it == timerMapGPU.end())
-		{
-			timerMapGPU[fullName] = 0;
-		}
+		timeStampPairMap[MapWriteIdx][fullName].push_back(query);
+		//auto it = timerMap.find(fullName);
+		//if (it == timerMap.end())
+		//{
+		//	timerMap[fullName] = 0;
+		//}
 		// remove from full name
-		fullName = fullName.substr(0, fullName.size() - name.size() - 1);
+		size_t len = strlen(fullName);
+		fullName[len - nameSize - 1] = 0;
 	}
 };
-std::map<std::string, double> ScopedProfileTimerGPU::timerMapGPU;
-std::map<std::string, std::vector<glm::uvec2>> ScopedProfileTimerGPU::timeStampPairMapGPU[2];
-int ScopedProfileTimerGPU::GPUMapWriteIdx = 0;
-std::string ScopedProfileTimerGPU::fullName;

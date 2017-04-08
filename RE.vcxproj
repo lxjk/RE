@@ -19,6 +19,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Source\Engine\Material.cpp" />
+    <ClCompile Include="Source\Engine\Mesh.cpp" />
+    <ClCompile Include="Source\Engine\Profiler.cpp" />
+    <ClCompile Include="Source\Engine\Shader.cpp" />
+    <ClCompile Include="Source\Engine\Texture2D.cpp" />
     <ClCompile Include="Source\imgui\imgui.cpp" />
     <ClCompile Include="Source\imgui\imgui_demo.cpp" />
     <ClCompile Include="Source\imgui\imgui_draw.cpp" />
@@ -33,6 +38,7 @@
     <ClInclude Include="Source\Engine\Mesh.h" />
     <ClInclude Include="Source\Engine\MeshLoader.h" />
     <ClInclude Include="Source\Engine\Profiler.h" />
+    <ClInclude Include="Source\Engine\Render.h" />
     <ClInclude Include="Source\Engine\Shader.h" />
     <ClInclude Include="Source\Engine\ShaderLoader.h" />
     <ClInclude Include="Source\Engine\Texture2D.h" />

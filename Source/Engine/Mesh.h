@@ -1,6 +1,5 @@
 #pragma once
 
-#include "GL/glew.h"
 #include "glm/glm.hpp"
 
 #include <vector>
@@ -39,11 +38,17 @@ public:
 		return md;
 	}
 
+	void CacheCount()
+	{
+		vertCount = (GLsizei)vertices.size();
+		idxCount = (GLsizei)indices.size();
+	}
+
 	std::vector<Vertex> vertices;
 	std::vector<GLuint> indices;
+	GLsizei vertCount;
+	GLsizei idxCount;
 };
-
-std::vector<MeshData*> MeshData::gMeshDataContainer;
 
 class Mesh
 {
@@ -74,100 +79,18 @@ public:
 	, EBO(0)
 	{}
 
-	void Init(MeshData* inMeshData, Material* inMaterial)
-	{
-		meshData = inMeshData;
-		material = inMaterial;
-
-		InitResource();
-	}
-
-	void Draw() const
-	{
-		if (!meshData || !material || !material->shader)
-			return;
-
-		material->Use();
-
-		//glBindVertexArray(VAO);
-		//glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
-		//glBindVertexArray(0);
-	}
-
-	void InitResource()
-	{
-		if (!meshData || !material || !material->shader)
-			return;
-
-		// clear old buffer
-		if (VAO)
-			glDeleteBuffers(1, &VAO);
-		if (VBO)
-			glDeleteBuffers(1, &VBO);
-		if (EBO)
-			glDeleteBuffers(1, &EBO);
-		
-		// create buffer
-		glGenVertexArrays(1, &VAO);
-		glGenBuffers(1, &VBO);
-		glGenBuffers(1, &EBO);
-
-		glBindVertexArray(VAO);
-		// VBO data
-		glBindBuffer(GL_ARRAY_BUFFER, VBO);
-		glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(Vertex), meshData->vertices.data(), GL_STATIC_DRAW);
-		// EBO data
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(GLuint), meshData->indices.data(), GL_STATIC_DRAW);
-
-		glBindVertexArray(0);
-
-		SetAttributes();
-
-	}
-
-	void SetAttributes()
-	{
-		if (VAO == 0)
-			return;
-
-		glBindVertexArray(VAO);
-		glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
-		// set attributes
-		if (material->shader->positionIdx >= 0)
-		{
-			glEnableVertexAttribArray(material->shader->positionIdx);
-			glVertexAttribPointer(material->shader->positionIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)0);
-		}
-		if (material->shader->normalIdx >= 0)
-		{
-			glEnableVertexAttribArray(material->shader->normalIdx);
-			glVertexAttribPointer(material->shader->normalIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, normal));
-		}
-		if (material->shader->tangentIdx >= 0)
-		{
-			glEnableVertexAttribArray(material->shader->tangentIdx);
-			glVertexAttribPointer(material->shader->tangentIdx, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, tangent));
-		}
-		if (material->shader->texCoordsIdx >= 0)
-		{
-			glEnableVertexAttribArray(material->shader->texCoordsIdx);
-			glVertexAttribPointer(material->shader->texCoordsIdx, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, texCoords));
-		}
-
-		glBindVertexArray(0);
-	}
+	void Init(MeshData* inMeshData, Material* inMaterial);
+	void Draw(struct RenderContext& renderContext) const;
+	void InitResource();
+	void SetAttributes();
 
 protected:
 
 	GLuint VAO, VBO, EBO;
 };
 
-std::vector<Mesh*> Mesh::gMeshContainer;
 
-
-void MakeCube(MeshData& meshData)
+static void MakeCube(MeshData& meshData)
 {
 	std::vector<Vertex>& vertList = meshData.vertices;
 	std::vector<GLuint>& idxList = meshData.indices;
@@ -215,9 +138,11 @@ void MakeCube(MeshData& meshData)
 		idxList.push_back(i * 4 + 2);
 		idxList.push_back(i * 4 + 3);
 	}
+
+	meshData.CacheCount();
 }
 
-void MakeSphere(MeshData& meshData, int div)
+static void MakeSphere(MeshData& meshData, int div)
 {
 	std::vector<Vertex>& vertList = meshData.vertices;
 	std::vector<GLuint>& idxList = meshData.indices;
@@ -290,9 +215,10 @@ void MakeSphere(MeshData& meshData, int div)
 
 	assert(vertList.size() == vertCount);
 	assert(idxList.size() == idxCount);
+	meshData.CacheCount();
 }
 
-glm::vec3 GetTangent(glm::vec3 normal)
+static glm::vec3 GetTangent(glm::vec3 normal)
 {
 	glm::vec3 up(0, 1, 0);
 	glm::vec3 tangent = glm::cross(up, normal);
@@ -301,7 +227,7 @@ glm::vec3 GetTangent(glm::vec3 normal)
 	return glm::normalize(tangent);
 }
 
-void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
+static void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 {
 	std::vector<Vertex>& vertList = meshData.vertices;
 	std::vector<GLuint>& idxList = meshData.indices;
@@ -395,9 +321,11 @@ void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 		idxList.push_back(prevRingStart + ringIdx);
 		idxList.push_back(curRingStart);
 	}
+
+	meshData.CacheCount();
 }
 
-int FindNewVert(const std::vector<glm::ivec3>& newVertTable, int i0, int i1)
+static int FindNewVert(const std::vector<glm::ivec3>& newVertTable, int i0, int i1)
 {
 	for (int i = 0; i < newVertTable.size(); ++i)
 	{
@@ -408,7 +336,7 @@ int FindNewVert(const std::vector<glm::ivec3>& newVertTable, int i0, int i1)
 	return -1;
 }
 
-void MakeIcosahedron(MeshData& meshData, int tesLevel)
+static void MakeIcosahedron(MeshData& meshData, int tesLevel)
 {
 	std::vector<Vertex>& vertList = meshData.vertices;
 	std::vector<GLuint>& idxList = meshData.indices;
@@ -535,9 +463,10 @@ void MakeIcosahedron(MeshData& meshData, int tesLevel)
 		}
 	}
 
+	meshData.CacheCount();
 }
 
-void MakeQuad(MeshData& meshData)
+static void MakeQuad(MeshData& meshData)
 {
 	std::vector<Vertex>& vertList = meshData.vertices;
 	std::vector<GLuint>& idxList = meshData.indices;
@@ -556,4 +485,6 @@ void MakeQuad(MeshData& meshData)
 	idxList.push_back(0);
 	idxList.push_back(2);
 	idxList.push_back(3);
+
+	meshData.CacheCount();
 }

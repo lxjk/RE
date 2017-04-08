@@ -57,6 +57,24 @@ public:
 		}
 	}
 
+	void BuildModelMat()
+	{
+		if (attenParams.y > 0)
+		{
+			// spot light
+			modelMat = Math::MakeMatFromForward(direction);
+			modelMat[3] = glm::vec4(position, 1);
+			modelMat = glm::scale(modelMat, glm::vec3(endRadius, endRadius, radius));
+		}
+		else if (attenParams.x > 0)
+		{
+			// point light
+			modelMat = glm::mat4(1);
+			modelMat = glm::translate(modelMat, position);
+			modelMat = glm::scale(modelMat, glm::vec3(radius));
+		}
+	}
+
 	void SetDirectionLight(glm::vec3 inDir, glm::vec3 inColor, float inIntensity)
 	{
 		direction = glm::normalize(inDir);
@@ -89,9 +107,7 @@ public:
 		attenParams.z = outerCosHalfAngle;
 		attenParams.w = invDiffCosHalfAngle;
 
-		modelMat = glm::mat4(1);
-		modelMat = glm::translate(modelMat, position);
-		modelMat = glm::scale(modelMat, glm::vec3(radius));
+		BuildModelMat();
 
 		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity);
 		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);
@@ -120,12 +136,16 @@ public:
 		attenParams.z = outerCosHalfAngle;
 		attenParams.w = invDiffCosHalfAngle;
 
-		modelMat = Math::MakeMatFromForward(direction);
-		modelMat[3] = glm::vec4(position, 1);
-		modelMat = glm::scale(modelMat, glm::vec3(endRadius, endRadius, radius));
+		BuildModelMat();
 
 		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity);
 		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);
+	}
+
+	void SetDirection(const glm::vec3& inDirection)
+	{
+		direction = inDirection;
+		BuildModelMat();
 	}
 
 	glm::vec4 GetPositionVSInvR(const glm::mat4& viewMat) const

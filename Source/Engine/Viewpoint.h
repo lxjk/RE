@@ -20,24 +20,22 @@ public:
 	GLfloat farPlane;
 
 	glm::mat4 viewMat;
+	glm::mat4 invViewMat;
 	glm::mat4 projMat;
 
 	void CacheMatrices()
 	{
-		// view
-#if 0
+		// invView
 		// rotation
-		glm::mat4 invViewMat = glm::mat4_cast(rotation);
+		invViewMat = glm::mat4_cast(rotation);
 		// translation
 		invViewMat[3] = glm::vec4(position, 1.f);
-		viewMat = glm::inverse(invViewMat);
-#else
+		// view
 		// invert rotation
 		viewMat = glm::transpose(glm::mat3_cast(rotation));
 		// invert translation
 		//viewMat[3] = viewMat * glm::vec4((-position), 1.f);
 		viewMat = glm::translate(viewMat, -position);
-#endif
 		// proj
 		projMat = glm::perspectiveFov(fov / width * height, width, height, nearPlane, farPlane);
 	}

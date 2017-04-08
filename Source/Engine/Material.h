@@ -16,6 +16,7 @@ enum class EMaterialParameterType
 	VEC4,
 	MAT3,
 	MAT4,
+	TEX2D,
 };
 
 class MaterialParameter
@@ -24,36 +25,64 @@ public:
 	char name[64];
 	int offset = 0;
 	int count = 0;
-	int uniformLocation = -1;
+	int location = -1; // uniform location for parameters, tex unit for textures
 	EMaterialParameterType type;
 
-	inline void SetUniform(char* parameterValues)
+	inline void SetLocation(Shader* shader)
 	{
-		if (uniformLocation < 0)
+		switch (type)
+		{
+		case EMaterialParameterType::INT:
+		case EMaterialParameterType::FLOAT:
+		case EMaterialParameterType::VEC2:
+		case EMaterialParameterType::VEC3:
+		case EMaterialParameterType::VEC4:
+		case EMaterialParameterType::MAT3:
+		case EMaterialParameterType::MAT4:
+			location = shader->GetUniformLocation(name);
+			break;
+		case EMaterialParameterType::TEX2D:
+			location = shader->GetTextureUnit(name);
+			break;
+		}
+
+	}
+
+	inline void SendValue(Shader* shader, char* parameterValues)
+	{
+		if (location < 0)
+		{
+			SetLocation(shader);
+		}
+
+		if(location < 0)
 			return;
 
 		switch(type)
 		{
 		case EMaterialParameterType::INT:
-			glUniform1i(uniformLocation, *(GLint*)(parameterValues + offset));
+			glUniform1i(location, *(GLint*)(parameterValues + offset));
 			break;
 		case EMaterialParameterType::FLOAT:
-			glUniform1f(uniformLocation, *(GLfloat*)(parameterValues + offset));
+			glUniform1f(location, *(GLfloat*)(parameterValues + offset));
 			break;
 		case EMaterialParameterType::VEC2:
-			glUniform2fv(uniformLocation, 1, (GLfloat*)(parameterValues + offset));
+			glUniform2fv(location, 1, (GLfloat*)(parameterValues + offset));
 			break;
 		case EMaterialParameterType::VEC3:
-			glUniform3fv(uniformLocation, 1, (GLfloat*)(parameterValues + offset));
+			glUniform3fv(location, 1, (GLfloat*)(parameterValues + offset));
 			break;
 		case EMaterialParameterType::VEC4:
-			glUniform4fv(uniformLocation, 1, (GLfloat*)(parameterValues + offset));
+			glUniform4fv(location, 1, (GLfloat*)(parameterValues + offset));
 			break;
 		case EMaterialParameterType::MAT3:
-			glUniformMatrix3fv(uniformLocation, 1, GL_FALSE, (GLfloat*)(parameterValues + offset));
+			glUniformMatrix3fv(location, 1, GL_FALSE, (GLfloat*)(parameterValues + offset));
 			break;
 		case EMaterialParameterType::MAT4:
-			glUniformMatrix4fv(uniformLocation, 1, GL_FALSE, (GLfloat*)(parameterValues + offset));
+			glUniformMatrix4fv(location, 1, GL_FALSE, (GLfloat*)(parameterValues + offset));
+			break;
+		case EMaterialParameterType::TEX2D:
+			((Texture2D*)(parameterValues + offset))->Bind(location);
 			break;
 		}
 	}
@@ -73,8 +102,7 @@ public:
 	}
 
 	Shader* shader;
-	std::unordered_map<const char*, Texture2D*> textureMap;
-	std::vector<char> parameterValues;
+	std::vector<char> parameterData;
 	std::vector<MaterialParameter> parameterList;
 
 	Material() {}
@@ -83,131 +111,48 @@ public:
 		shader = inShader;
 	}
 
-	void Use()
+	void Reload();
+	void Use(struct RenderContext& renderContext);
+
+	void SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type);
+
+	inline void SetParameter(const char* name, Texture2D* tex)
 	{
-		if (!shader)
-			return;
-
-		// use shader
-		shader->Use();
-
-		// bind textures
-		for (auto it = textureMap.begin(); it != textureMap.end(); ++it)
-		{
-			if (!it->second)
-				continue;
-
-			GLint texUnit = shader->GetTextureUnit(it->first);
-			if (texUnit < 0)
-				continue;
-
-			it->second->Bind(texUnit);
-		}
-
-		// set parameters
-		for (int i = 0, ni = (int)parameterList.size(); i < ni; ++i)
-		{
-			MaterialParameter& param = parameterList.data()[i];
-			if (param.uniformLocation < 0)
-				param.uniformLocation = shader->GetUniformLocation(param.name);
-			param.SetUniform(parameterValues.data());
-		}
-	}
-
-	inline void SetTexture(const char* name, Texture2D* tex)
-	{
-		textureMap[name] = tex;
-	}
-
-	inline void SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type)
-	{
-		MaterialParameter* params = 0;
-		int paramListSize = (int)parameterList.size();
-		for (int i = 0; i < paramListSize; ++i)
-		{
-			//if (parameterList.data()[i].name[0] == name[0])
-			if (strcmp(parameterList.data()[i].name, name) == 0)
-			{
-				params = &parameterList.data()[i];
-				break;
-			}
-		}
-		if (!params)
-		{
-			parameterList.push_back(MaterialParameter());
-			params = &parameterList[paramListSize];
-			strcpy_s(params->name, name);
-			params->offset = parameterValues.size();
-			params->count = bytes;
-			params->type = type;
-
-			// add data
-			parameterValues.resize(params->offset + bytes);
-			memcpy_s(parameterValues.data() + params->offset, params->count, data, bytes);
-		}
-		else
-		{
-			assert(params->count == bytes);
-			assert(params->type == type);
-			memcpy_s(parameterValues.data() + params->offset, params->count, data, bytes);
-		}
+		SetParameter(name, (char*)tex, sizeof(Texture2D*), EMaterialParameterType::TEX2D);
 	}
 	
-	inline void SetParameter(const char* name, const glm::vec4& value, bool immediate = false)
+	inline void SetParameter(const char* name, const glm::vec4& value)
 	{
-		if (immediate)
-			glUniform4fv(shader->GetUniformLocation(name), 1, glm::value_ptr(value));
-		else
-			SetParameter(name, (char*)glm::value_ptr(value), 4 * sizeof(GLfloat), EMaterialParameterType::VEC4);
+		SetParameter(name, (char*)glm::value_ptr(value), 4 * sizeof(GLfloat), EMaterialParameterType::VEC4);
 	}
 
-	inline void SetParameter(const char* name, const glm::vec3& value, bool immediate = false)
+	inline void SetParameter(const char* name, const glm::vec3& value)
 	{
-		if (immediate)
-			glUniform3fv(shader->GetUniformLocation(name), 1, glm::value_ptr(value));
-		else
-			SetParameter(name, (char*)glm::value_ptr(value), 3 * sizeof(GLfloat), EMaterialParameterType::VEC3);
+		SetParameter(name, (char*)glm::value_ptr(value), 3 * sizeof(GLfloat), EMaterialParameterType::VEC3);
 	}
 
-	inline void SetParameter(const char* name, const glm::vec2& value, bool immediate = false)
+	inline void SetParameter(const char* name, const glm::vec2& value)
 	{
-		if (immediate)
-			glUniform2fv(shader->GetUniformLocation(name), 1, glm::value_ptr(value));
-		else
-			SetParameter(name, (char*)glm::value_ptr(value), 2 * sizeof(GLfloat), EMaterialParameterType::VEC2);
+		SetParameter(name, (char*)glm::value_ptr(value), 2 * sizeof(GLfloat), EMaterialParameterType::VEC2);
 	}
 
-	inline void SetParameter(const char* name, GLfloat value, bool immediate = false)
+	inline void SetParameter(const char* name, GLfloat value)
 	{
-		if (immediate)
-			glUniform1f(shader->GetUniformLocation(name), value);
-		else
-			SetParameter(name, (char*)(&value), sizeof(GLfloat), EMaterialParameterType::FLOAT);
+		SetParameter(name, (char*)(&value), sizeof(GLfloat), EMaterialParameterType::FLOAT);
 	}
 
-	inline void SetParameter(const char* name, GLint value, bool immediate = false)
+	inline void SetParameter(const char* name, GLint value)
 	{
-		if (immediate)
-			glUniform1i(shader->GetUniformLocation(name), value);
-		else
-			SetParameter(name, (char*)(&value), sizeof(GLint), EMaterialParameterType::INT);
+		SetParameter(name, (char*)(&value), sizeof(GLint), EMaterialParameterType::INT);
 	}
 
-	inline void SetParameter(const char* name, const glm::mat4& value, bool immediate = false)
+	inline void SetParameter(const char* name, const glm::mat4& value)
 	{
-		if (immediate)
-			glUniformMatrix4fv(shader->GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(value));
-		else
-			SetParameter(name, (char*)glm::value_ptr(value), 16 * sizeof(GLfloat), EMaterialParameterType::MAT4);
+		SetParameter(name, (char*)glm::value_ptr(value), 16 * sizeof(GLfloat), EMaterialParameterType::MAT4);
 	}
 
-	inline void SetParameter(const char* name, const glm::mat3& value, bool immediate = false)
+	inline void SetParameter(const char* name, const glm::mat3& value)
 	{
-		if (immediate)
-			glUniformMatrix3fv(shader->GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(value));
-		else
-			SetParameter(name, (char*)glm::value_ptr(value), 9 * sizeof(GLfloat), EMaterialParameterType::MAT3);
+		SetParameter(name, (char*)glm::value_ptr(value), 9 * sizeof(GLfloat), EMaterialParameterType::MAT3);
 	}
 };
-
-std::vector<Material*> Material::gMaterialContainer;
