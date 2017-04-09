@@ -48,7 +48,7 @@ public:
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE,
 		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_LINEAR);
 
-	void AllocateForFrameBuffer(int width, int height, GLint internalFormat, GLenum format, GLenum type);
+	void AllocateForFrameBuffer(int width, int height, GLint internalFormat, GLenum format, GLenum type, bool bShadowMap = false);
 
 	void Reallocate(int width, int height);
 

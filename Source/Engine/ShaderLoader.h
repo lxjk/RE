@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <cassert>
 
+#include "Shader.h"
 #include "Util.h"
 
 #define DUMP_SHADER 0
@@ -80,6 +81,8 @@ public:
 	ShaderStructs shaderStructs;
 	ShaderDefines shaderDefines;
 
+	EVertexType vertexType = EVertexType::None;
+
 	bool bUseDeferredPassTex = false;
 	bool bUsePostProcessPassTex = false;
 
@@ -91,6 +94,11 @@ public:
 		shaderDefines.Append(other.shaderDefines);
 		bUseDeferredPassTex |= other.bUseDeferredPassTex;
 		bUsePostProcessPassTex |= other.bUsePostProcessPassTex;
+		if (other.vertexType != EVertexType::None)
+		{
+			assert(vertexType == EVertexType::None);
+			vertexType = other.vertexType;
+		}
 	}
 
 	bool IsValid()
@@ -304,6 +312,7 @@ static bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 
 				size_t hintStart = tokenStart + tokenLenHint;
 				std::string hint = line.substr(hintStart);
 				trim(hint);
+				// texture hint
 				if (hint.compare("UseDeferredPassTex") == 0)
 				{
 					localOutput.bUseDeferredPassTex = true;
@@ -313,6 +322,11 @@ static bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 
 				{
 					localOutput.bUsePostProcessPassTex = true;
 					bShouldProcessUniform = false;
+				}
+				// vertex type hint
+				else if (hint.compare("CommonVertex") == 0)
+				{
+					localOutput.vertexType = EVertexType::Common;
 				}
 			}
 		}

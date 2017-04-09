@@ -1,8 +1,7 @@
 #version 330 core
 
 #include "Include/CommonUBO.incl"
-
-in vec3 position;
+#include "Include/CommonVertexInput.incl"
 
 out VS_OUT
 {

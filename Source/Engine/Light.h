@@ -29,12 +29,10 @@ public:
 	glm::mat4 modelMat;
 
 	Mesh* LightMesh;
-	Mesh* PrepassMesh;
 
-	Light(Mesh* inLightMesh, Mesh* inPrepassMesh)
+	Light(Mesh* inLightMesh)
 	{
 		LightMesh = inLightMesh;
-		PrepassMesh = inPrepassMesh;
 		position = glm::vec3(0, 0, 0);
 		direction = glm::vec3(0, 0, -1);
 		color = glm::vec3(0, 0, 0);

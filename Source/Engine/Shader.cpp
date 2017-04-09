@@ -95,6 +95,7 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAs
 
 	bool bUseDeferredPassTex = false;
 	bool bUsePostProcessPassTex = false;
+	vertexType = EVertexType::None;
 	// process hint
 	ShaderInfo* shaderInfoList[2] = { &vShaderInfo, &fShaderInfo };
 	for (int shaderInfoIdx = 0; shaderInfoIdx < 2; ++shaderInfoIdx)
@@ -103,6 +104,11 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAs
 
 		bUseDeferredPassTex |= shaderInfo->bUseDeferredPassTex;
 		bUsePostProcessPassTex |= shaderInfo->bUsePostProcessPassTex;
+		if (shaderInfo->vertexType != EVertexType::None)
+		{
+			assert(vertexType == EVertexType::None);
+			vertexType = shaderInfo->vertexType;
+		}
 	}
 	if (bUseDeferredPassTex && bUsePostProcessPassTex)
 	{
@@ -123,12 +129,6 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAs
 	if (programID)
 		glDeleteProgram(programID);
 	programID = newProgramID;
-
-	// get attribute indices
-	positionIdx = GetAttribuleLocation("position");
-	normalIdx = GetAttribuleLocation("normal");
-	tangentIdx = GetAttribuleLocation("tangent");
-	texCoordsIdx = GetAttribuleLocation("texCoords");
 
 	// uniform buffer index
 	BindUniformBlock("RenderInfo", RenderInfoBP);

@@ -38,7 +38,22 @@ void main()
 	int clampedLightCount = min(lightCount, MAX_LIGHT_COUNT);
 	for(int i = 0; i < clampedLightCount; ++i)
 	{
-		result += CalcLight(lights[i], normal, position, view, albedo, metallic, roughness);
+		vec4 posWS = (invViewMat * vec4(position, 1.f));
+		float shadowFactor = 1;
+		for(int c = 0; c < lights[i].shadowDataCount; ++c)
+		{
+			if(position.z <= lights[i].shadowData[c].dist)
+			{
+				// convert to light clip space
+				vec4 posLCS = lights[i].shadowData[c].lightViewProjMat * posWS;
+				posLCS /= posLCS.w;
+				float posDepth = posLCS.z * 0.5 + 0.5;
+				float shadowMapDepth = texture(lights[i].shadowData[c].shadowMap, (posLCS.xy * 0.5 + 0.5)).r;
+				shadowFactor = posDepth < shadowMapDepth ? 0 : 1;
+				break;
+			}
+		}
+		result += CalcLight(lights[i], normal, position, view, albedo, metallic, roughness) * shadowFactor;
 	}
 	color = vec4(result, 1.0f);
 	//color = vec4(albedo, 1.0f);

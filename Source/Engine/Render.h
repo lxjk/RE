@@ -21,6 +21,7 @@
 struct RenderContext
 {
 	Material* currentMaterial = 0;
+	GLint currentVAO = -1;
 	Viewpoint viewPoint;
 };
 

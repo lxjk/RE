@@ -9,6 +9,12 @@
 #include <vector>
 #include <cassert>
 
+enum class EVertexType
+{
+	None,
+	Common,
+};
+
 class ShaderNameBuilder
 {
 public:
@@ -74,10 +80,7 @@ public:
 
 	GLuint programID;
 
-	GLint positionIdx;
-	GLint normalIdx;
-	GLint tangentIdx;
-	GLint texCoordsIdx;
+	EVertexType vertexType;
 
 	GLuint nextTexUnit;
 

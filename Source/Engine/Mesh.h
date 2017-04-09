@@ -14,6 +14,11 @@ struct Vertex
 	glm::vec4 tangent;
 	glm::vec2 texCoords;
 
+	const static GLint positionIdx	= 0;
+	const static GLint normalIdx	= 1;
+	const static GLint tangentIdx	= 2;
+	const static GLint texCoordsIdx	= 3;
+
 	Vertex(glm::vec3 inPosition,
 		glm::vec3 inNormal,
 		glm::vec4 inTangent,
@@ -38,16 +43,28 @@ public:
 		return md;
 	}
 
+	MeshData() :
+	VAO(0)
+	, VBO(0)
+	, EBO(0)
+	, bHasResource(0)
+	{}
+
 	void CacheCount()
 	{
 		vertCount = (GLsizei)vertices.size();
 		idxCount = (GLsizei)indices.size();
 	}
 
+	void InitResource();
+
 	std::vector<Vertex> vertices;
 	std::vector<GLuint> indices;
 	GLsizei vertCount;
 	GLsizei idxCount;
+
+	bool bHasResource;
+	GLuint VAO, VBO, EBO;
 };
 
 class Mesh
@@ -73,20 +90,8 @@ public:
 	MeshData* meshData;
 	Material* material;
 
-	Mesh() : 
-	  VAO(0)
-	, VBO(0)
-	, EBO(0)
-	{}
-
 	void Init(MeshData* inMeshData, Material* inMaterial);
-	void Draw(struct RenderContext& renderContext) const;
-	void InitResource();
-	void SetAttributes();
-
-protected:
-
-	GLuint VAO, VBO, EBO;
+	void Draw(struct RenderContext& renderContext, Material* overrideMaterial = 0) const;
 };
 
 

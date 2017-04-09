@@ -7,34 +7,9 @@
 
 std::vector<MeshData*> MeshData::gMeshDataContainer;
 
-std::vector<Mesh*> Mesh::gMeshContainer;
-
-void Mesh::Init(MeshData* inMeshData, Material* inMaterial)
+void MeshData::InitResource()
 {
-	meshData = inMeshData;
-	material = inMaterial;
-
-	InitResource();
-}
-
-void Mesh::Draw(RenderContext& renderContext) const
-{
-	if (!meshData || !material || !material->shader)
-		return;
-
-	//if(renderContext.currentMaterial != material)
-		material->Use(renderContext);
-
-	glBindVertexArray(VAO);
-	//glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
-	glDrawElements(GL_TRIANGLES, meshData->idxCount, GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
-}
-
-void Mesh::InitResource()
-{
-	if (!meshData || !material || !material->shader)
-		return;
+	bHasResource = true;
 
 	// clear old buffer
 	if (VAO)
@@ -52,46 +27,62 @@ void Mesh::InitResource()
 	glBindVertexArray(VAO);
 	// VBO data
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(Vertex), meshData->vertices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, vertCount * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
 	// EBO data
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(GLuint), meshData->indices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, idxCount * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+	
+	// position
+	{
+		glEnableVertexAttribArray(Vertex::positionIdx);
+		glVertexAttribPointer(Vertex::positionIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)0);
+	}
+	// normal
+	{
+		glEnableVertexAttribArray(Vertex::normalIdx);
+		glVertexAttribPointer(Vertex::normalIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, normal));
+	}
+	// tangent
+	{
+		glEnableVertexAttribArray(Vertex::tangentIdx);
+		glVertexAttribPointer(Vertex::tangentIdx, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, tangent));
+	}
+	// texCoordes
+	{
+		glEnableVertexAttribArray(Vertex::texCoordsIdx);
+		glVertexAttribPointer(Vertex::texCoordsIdx, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, texCoords));
+	}
 
 	glBindVertexArray(0);
-
-	SetAttributes();
-
 }
 
-void Mesh::SetAttributes()
+std::vector<Mesh*> Mesh::gMeshContainer;
+
+void Mesh::Init(MeshData* inMeshData, Material* inMaterial)
 {
-	if (VAO == 0)
+	meshData = inMeshData;
+	material = inMaterial;
+
+	if (!meshData->bHasResource)
+		meshData->InitResource();
+}
+
+void Mesh::Draw(RenderContext& renderContext, Material* overrideMaterial) const
+{
+	Material* drawMaterial = overrideMaterial ? overrideMaterial : material;
+
+	if (!meshData || !drawMaterial || !drawMaterial->shader)
 		return;
 
-	glBindVertexArray(VAO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	//if(renderContext.currentMaterial != material)
+	drawMaterial->Use(renderContext);
 
-	// set attributes
-	if (material->shader->positionIdx >= 0)
+	if (meshData->VAO != renderContext.currentVAO)
 	{
-		glEnableVertexAttribArray(material->shader->positionIdx);
-		glVertexAttribPointer(material->shader->positionIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)0);
+		renderContext.currentVAO = meshData->VAO;
+		glBindVertexArray(meshData->VAO);
 	}
-	if (material->shader->normalIdx >= 0)
-	{
-		glEnableVertexAttribArray(material->shader->normalIdx);
-		glVertexAttribPointer(material->shader->normalIdx, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, normal));
-	}
-	if (material->shader->tangentIdx >= 0)
-	{
-		glEnableVertexAttribArray(material->shader->tangentIdx);
-		glVertexAttribPointer(material->shader->tangentIdx, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, tangent));
-	}
-	if (material->shader->texCoordsIdx >= 0)
-	{
-		glEnableVertexAttribArray(material->shader->texCoordsIdx);
-		glVertexAttribPointer(material->shader->texCoordsIdx, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, texCoords));
-	}
-
-	glBindVertexArray(0);
+	//glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_TRIANGLES, meshData->idxCount, GL_UNSIGNED_INT, 0);
+	//glBindVertexArray(0);
 }

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="Source\Engine\Material.cpp" />
     <ClCompile Include="Source\Engine\Mesh.cpp" />
+    <ClCompile Include="Source\Engine\MeshComponent.cpp" />
     <ClCompile Include="Source\Engine\Profiler.cpp" />
     <ClCompile Include="Source\Engine\Shader.cpp" />
     <ClCompile Include="Source\Engine\Texture2D.cpp" />
@@ -32,10 +33,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Engine\Camera.h" />
+    <ClInclude Include="Source\Engine\Component.h" />
     <ClInclude Include="Source\Engine\Light.h" />
     <ClInclude Include="Source\Engine\Material.h" />
     <ClInclude Include="Source\Engine\Math.h" />
     <ClInclude Include="Source\Engine\Mesh.h" />
+    <ClInclude Include="Source\Engine\MeshComponent.h" />
     <ClInclude Include="Source\Engine\MeshLoader.h" />
     <ClInclude Include="Source\Engine\Profiler.h" />
     <ClInclude Include="Source\Engine\Render.h" />

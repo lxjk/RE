@@ -100,6 +100,12 @@ public:
 		gMaterialContainer.push_back(mat);
 		return mat;
 	}
+	static Material* Create(Material* otherMaterial)
+	{
+		Material* mat = new Material(otherMaterial);
+		gMaterialContainer.push_back(mat);
+		return mat;
+	}
 
 	Shader* shader;
 	std::vector<char> parameterData;
@@ -109,6 +115,12 @@ public:
 	Material(Shader* inShader)
 	{
 		shader = inShader;
+	}
+	Material(Material* otherMaterial)
+	{
+		shader = otherMaterial->shader;
+		parameterData = otherMaterial->parameterData;
+		parameterList = otherMaterial->parameterList;
 	}
 
 	void Reload();

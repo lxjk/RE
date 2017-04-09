@@ -26,6 +26,7 @@
 #include "Engine/ShaderLoader.h"
 #include "Engine/Material.h"
 #include "Engine/Mesh.h"
+#include "Engine/MeshComponent.h"
 #include "Engine/MeshLoader.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Light.h"
@@ -74,6 +75,9 @@ GLuint gSceneBuffer = 0;
 Texture2D gSceneColorTex, gSceneDepthStencilTex;
 GLuint gSceneDepthStencilRBO;
 
+GLuint gShadowBuffer = 0;
+Texture2D gShadowTex;
+
 // shader
 Shader gGBufferShader;
 Shader gGBufferColorShader;
@@ -107,13 +111,9 @@ Mesh* gSphereMesh;
 Mesh* gFSQuadMesh;
 std::vector<Mesh*> gNanosuitMeshes;
 
-Mesh* gCubeColorMesh;
-
 Mesh* gDirectionalLightMesh;
 Mesh* gPointLightMesh;
-Mesh* gPointLightPrepassMesh;
 Mesh* gSpotLightMesh;
-Mesh* gSpotLightPrepassMesh;
 
 Mesh* gToneMapMesh;
 
@@ -235,7 +235,7 @@ void MakeLights()
 {
 	// directional lights
 	int dlIdx = 0;
-	gDirectionalLights.push_back(Light(gDirectionalLightMesh, 0));
+	gDirectionalLights.push_back(Light(gDirectionalLightMesh));
 	dlIdx = (int)gDirectionalLights.size() - 1;
 	gDirectionalLights[dlIdx].SetDirectionLight(
 		/*dir=*/	glm::vec3(0, -1, -2),
@@ -255,7 +255,7 @@ void MakeLights()
 	//gPointLights[plIdx].radius = 20.f;
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(0, 2, 3),
@@ -265,7 +265,7 @@ void MakeLights()
 	);
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(10, 2, 0),
@@ -275,7 +275,7 @@ void MakeLights()
 	);
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(-10, 3, 3),
@@ -287,7 +287,7 @@ void MakeLights()
 	//for (int i = 0; i < 100; ++i)
 	//{
 	//	gPointLights.push_back(
-	//		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader)), gPointLightPrepassMesh));
+	//		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	//	plIdx = (int)gPointLights.size() - 1;
 	//	gPointLights[plIdx].SetPointLight(
 	//		/*pos=*/	glm::vec3(-10, 3, 3),
@@ -301,10 +301,10 @@ void MakeLights()
 	// spot lights
 	int slIdx = 0;
 	gSpotLights.push_back(
-		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader)), gSpotLightPrepassMesh));
+		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader))));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
-		/*pos=*/	glm::vec3(0, 2, 6),
+		/*pos=*/	glm::vec3(0, 2, 10),
 		/*dir=*/	glm::vec3(-2, -0.5f, -0.2f),
 		/*radius=*/	12.f,
 		/*hOuter=*/	30.f,
@@ -312,6 +312,74 @@ void MakeLights()
 		/*color=*/	glm::vec3(0.f, 0.f, 1.f),
 		/*int=*/	100
 	);
+}
+
+void MakeMeshComponents()
+{
+
+	// box
+	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+	boxMesh->material->SetParameter("metallic", 1.0f);
+	boxMesh->material->SetParameter("roughness", 0.3f);
+	for (int i = 0; i < 3; ++i)
+	{
+		MeshComponent* meshComp = MeshComponent::Create();
+		meshComp->meshList.push_back(boxMesh);
+		meshComp->SetPosition(glm::vec3(-10 + i * 10, 0, 0));
+		meshComp->SetRotation(glm::vec3(0, 45, 0));
+		meshComp->SetScale(glm::vec3(1.5f, 1.f, 1.2f));
+	}
+
+	// sphere
+	for (int i = 0; i < 20; ++i)
+	{
+		Mesh* sphereMesh = Mesh::Create(&gSphereMeshData, Material::Create(gGBufferMaterial));
+		sphereMesh->material->SetParameter("metallic", 1.f);
+		sphereMesh->material->SetParameter("roughness", i * 0.045f + 0.1f);
+		MeshComponent* meshComp = MeshComponent::Create();
+		meshComp->meshList.push_back(sphereMesh);
+		meshComp->SetPosition(glm::vec3(-20 + i * 2.5, 0, 7.5));
+	}
+
+	for (int i = 0; i < 20; ++i)
+	{
+		Mesh* sphereMesh = Mesh::Create(&gSphereMeshData, Material::Create(gGBufferMaterial));
+		sphereMesh->material->SetParameter("metallic", i * 0.05f);
+		sphereMesh->material->SetParameter("roughness", 0.4f);
+		MeshComponent* meshComp = MeshComponent::Create();
+		meshComp->meshList.push_back(sphereMesh);
+		meshComp->SetPosition(glm::vec3(-20 + i * 2.5, 0, 12.5));
+	}
+
+	// nanosuit
+	{
+		MeshComponent* meshComp = MeshComponent::Create();
+		meshComp->meshList = gNanosuitMeshes;
+		meshComp->SetPosition(glm::vec3(5, -1, 5));
+		meshComp->SetScale(glm::vec3(0.3f, 0.3f, 0.3f));
+
+		for (int i = 0; i < meshComp->meshList.size(); ++i)
+		{
+			Material* material = meshComp->meshList[i]->material;
+			if (!material)
+				continue;
+
+			material->SetParameter("metallic", 0.f);
+			material->SetParameter("roughness", 0.3f);
+		}
+	}
+
+	// floor
+	{
+		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(&gGBufferColorShader));
+		floorMesh->material->SetParameter("metallic", 0.f);
+		floorMesh->material->SetParameter("roughness", 1.f);
+		floorMesh->material->SetParameter("color", glm::vec3(0.2f));
+		MeshComponent* meshComp = MeshComponent::Create();
+		meshComp->meshList.push_back(floorMesh);
+		meshComp->SetPosition(glm::vec3(0.f, -1.2f, 0.f));
+		meshComp->SetScale(glm::vec3(32.f, 0.2f, 32.f));
+	}
 }
 
 void SetupFrameBuffers()
@@ -390,6 +458,14 @@ void SetupFrameBuffers()
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
 
+	// Shadow Buffer
+	if (!gShadowBuffer)
+	{
+		glGenFramebuffers(1, &gShadowBuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, gShadowBuffer);
+
+	}
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -449,13 +525,9 @@ bool InitEngine()
 	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader);
 	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader);
 
-	gCubeColorMesh = Mesh::Create(&gCubeMeshData, gGBufferColorMaterial);
-
 	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, gDirectionalLightMaterial);
 	gPointLightMesh = Mesh::Create(&gIcosahedronMeshData, gLightVolumeMaterial);
-	gPointLightPrepassMesh = Mesh::Create(&gIcosahedronMeshData, gPrepassMaterial);
 	gSpotLightMesh = Mesh::Create(&gConeMeshData, gLightVolumeMaterial);
-	gSpotLightPrepassMesh = Mesh::Create(&gConeMeshData, gPrepassMaterial);
 
 	gToneMapMesh = Mesh::Create(&gQuadMeshData, gToneMapMaterial);
 
@@ -472,6 +544,9 @@ bool InitEngine()
 
 	// light
 	MakeLights();
+
+	// mesh components
+	MakeMeshComponents();
 	
 	// camera
 	gCamera.fov = glm::radians(90.f);
@@ -633,6 +708,13 @@ void Update(float deltaTime)
 		gSpotLights[0].SetDirection(glm::normalize(glm::mix(startDir, endDir, ratio)));
 	}
 
+	// end of frame
+	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
+	for (int i = 0, ni = MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+	{
+		meshCompListPtr[i]->UpdateEndOfFrame(deltaTime);
+	}
+
 	// update imgui
 	ImGui_Impl_NewFrame(gWindow);
 }
@@ -652,88 +734,10 @@ void GeometryPass(RenderContext& renderContext)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
 	// draw models
-
-	gGBufferMaterial->SetParameter("metallic", 1.0f);
-	gGBufferMaterial->SetParameter("roughness", 0.3f);
-	
-	for (int i = 0; i < 3; ++i)
+	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
+	for (int i = 0, ni = MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 0));
-		modelMat = glm::rotate(modelMat, 45.f, glm::vec3(0, 1, 0));
-		modelMat = glm::scale(modelMat, glm::vec3(1.5f, 1.f, 1.2f));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		gGBufferMaterial->SetParameter("modelMat", modelMat);
-		gGBufferMaterial->SetParameter("normalMat", normalMat);
-
-		gCubeMesh->Draw(renderContext);
-	}
-
-	for (int i = 0; i < 3; ++i)
-	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 5));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		gGBufferMaterial->SetParameter("modelMat", modelMat);
-		gGBufferMaterial->SetParameter("normalMat", normalMat);
-
-		gGBufferMaterial->SetParameter("metallic", 1.f);
-		gGBufferMaterial->SetParameter("roughness", i * 0.45f + 0.1f);
-
-		gSphereMesh->Draw(renderContext);
-	}
-
-	for (int i = 0; i < 3; ++i)
-	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, glm::vec3(-10 + i * 10, 0, 7.5));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		gGBufferMaterial->SetParameter("modelMat", modelMat);
-		gGBufferMaterial->SetParameter("normalMat", normalMat);
-
-		gGBufferMaterial->SetParameter("metallic", i * 0.5f);
-		gGBufferMaterial->SetParameter("roughness", 0.4f);
-
-		gSphereMesh->Draw(renderContext);
-	}
-	
-	// nanosuit
-	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, glm::vec3(5, -1, 5));
-		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-
-		for (int i = 0; i < gNanosuitMeshes.size(); ++i)
-		{
-			Material* material = gNanosuitMeshes[i]->material;
-			if (!material)
-				continue;
-
-			material->SetParameter("modelMat", modelMat);
-			material->SetParameter("normalMat", normalMat);
-
-			material->SetParameter("metallic", 0.f);
-			material->SetParameter("roughness", 0.3f);
-
-			gNanosuitMeshes[i]->Draw(renderContext);
-		}
-	}
-
-	// floor
-	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.2f, 0.f));
-		modelMat = glm::scale(modelMat, glm::vec3(16.f, 0.2f, 12.f));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
-		gGBufferColorMaterial->SetParameter("modelMat", modelMat);
-		gGBufferColorMaterial->SetParameter("normalMat", normalMat);
-
-		gGBufferColorMaterial->SetParameter("metallic", 0.f);
-		gGBufferColorMaterial->SetParameter("roughness", 1.f);
-		gGBufferColorMaterial->SetParameter("color", glm::vec3(0.2f));
-
-		gCubeColorMesh->Draw(renderContext);
+		meshCompListPtr[i]->Draw(renderContext);
 	}
 }
 
@@ -764,13 +768,16 @@ void DirectionalLightPass(RenderContext& renderContext)
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), gDirectionalLights[i].GetDirectionVSRAB(renderContext.viewPoint.viewMat));
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), gDirectionalLights[i].colorIntensity);
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), gDirectionalLights[i].attenParams);
+		// shadow
+		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("csmCount").c_str(), 0);
+
 	}
 
 	// draw quad
 	gDirectionalLightMesh->Draw(renderContext);
 }
 
-void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights, const Mesh* lightVolumePrepassMesh, const Mesh* lightVolumeMesh)
+void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights, const Mesh* lightVolumeMesh)
 {
 	//GPU_SCOPED_PROFILE("light volume");
 
@@ -859,8 +866,8 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 			// set mask
 			glStencilFunc(prepassRenderState.stencilTestFunc, mask, mask);
 
-			light.PrepassMesh->material->SetParameter("modelMat", light.modelMat);
-			light.PrepassMesh->Draw(renderContext);
+			gPrepassMaterial->SetParameter("modelMat", light.modelMat);
+			light.LightMesh->Draw(renderContext, gPrepassMaterial);
 		}
 
 		// draw light
@@ -908,13 +915,13 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 void PointLightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("point light");
-	LightVolumePass(renderContext, gPointLights, gPointLightPrepassMesh, gPointLightMesh);
+	LightVolumePass(renderContext, gPointLights, gPointLightMesh);
 }
 
 void SpotLightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("spot light");
-	LightVolumePass(renderContext, gSpotLights, gSpotLightPrepassMesh, gSpotLightMesh);
+	LightVolumePass(renderContext, gSpotLights, gSpotLightMesh);
 }
 
 void LightPass(RenderContext& renderContext)
@@ -931,6 +938,11 @@ void LightPass(RenderContext& renderContext)
 	DirectionalLightPass(renderContext);
 	PointLightPass(renderContext);
 	SpotLightPass(renderContext);
+
+}
+
+void ShaderPass(RenderContext& renderContext)
+{
 
 }
 
@@ -1160,9 +1172,9 @@ int main(int argc, char **argv)
 						Material** materialContainerPtr = Material::gMaterialContainer.data();
 						for (int i = 0, ni = (int)Material::gMaterialContainer.size(); i < ni; ++i)
 							materialContainerPtr[i]->Reload();
-						Mesh** meshlContainerPtr = Mesh::gMeshContainer.data();
-						for (int i = 0, ni = (int)Mesh::gMeshContainer.size(); i < ni; ++i)
-							meshlContainerPtr[i]->SetAttributes();
+						//Mesh** meshlContainerPtr = Mesh::gMeshContainer.data();
+						//for (int i = 0, ni = (int)Mesh::gMeshContainer.size(); i < ni; ++i)
+						//	meshlContainerPtr[i]->SetAttributes();
 					}
 				}
 				else if (event.type == SDL_WINDOWEVENT)

@@ -3,12 +3,23 @@
 
 #include "CommonConst.incl"
 
+#define MAX_CSM_COUNT 3
+
+struct ShadowData
+{
+	mat4 lightViewProjMat;
+	float dist;
+	sampler2D shadowMap;
+};
+
 struct Light 
 {
 	vec4 positionInvR; // xyz position, w invRadius
 	vec4 directionRAB; // xyz direction, w radial attenuation blend value
 	vec3 color;
 	vec4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
+	int shadowDataCount;
+	ShadowData shadowData[MAX_CSM_COUNT];
 };
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)
@@ -90,9 +101,12 @@ vec3 GetGBufferPositionVS(float depth, mat4 projMat, vec3 fragPosVS)
 vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, float metallic, float roughness)
 {
 	vec3 light = -lightData.directionRAB.xyz;
+	
+	// attenuation
 	float attenuation = 1.f;
 	if(lightData.attenParams.x > 0.5f)
 	{
+		// radial
 		light = lightData.positionInvR.xyz - pos;
 		float dist = length(light);
 		light /= dist;
@@ -110,6 +124,7 @@ vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, f
 	}
 	if(lightData.attenParams.y > 0.5f)
 	{
+		// spot
 		//float spotRatio = min((1 - dot(light, -lightData.direction)) / (1 - lightData.cosHalfAngle), 1.f);
 		//attenuation *= (1 - spotRatio);
 		float spotRatio = clamp((dot(light, -lightData.directionRAB.xyz) - lightData.attenParams.z) * lightData.attenParams.w, 0.f, 1.f);

@@ -50,7 +50,7 @@ void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLi
 	SDL_FreeSurface(image);
 }
 
-void Texture2D::AllocateForFrameBuffer(int width, int height, GLint internalFormat, GLenum format, GLenum type)
+void Texture2D::AllocateForFrameBuffer(int width, int height, GLint internalFormat, GLenum format, GLenum type, bool bShadowMap)
 {
 	this->width = width;
 	this->height = height;
@@ -62,10 +62,17 @@ void Texture2D::AllocateForFrameBuffer(int width, int height, GLint internalForm
 		glDeleteTextures(1, &textureID);
 	glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
+	if(width > 0 && height > 0)
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
+	//if (bShadowMap)
+	//{
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	//}
 }
 
 void Texture2D::Reallocate(int width, int height)
