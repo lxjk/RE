@@ -95,3 +95,10 @@ struct RenderState
 			glDisable(GL_CULL_FACE);
 	}
 };
+
+struct RenderSettings
+{
+	bool bDrawShadow;
+	bool bDrawBounds;
+	bool bDrawLightVolume;
+};

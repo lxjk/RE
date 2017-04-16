@@ -3,15 +3,6 @@
 
 #include "CommonConst.incl"
 
-#define MAX_CSM_COUNT 3
-
-struct ShadowData
-{
-	mat4 lightViewProjMat;
-	float dist;
-	sampler2D shadowMap;
-};
-
 struct Light 
 {
 	vec4 positionInvR; // xyz position, w invRadius
@@ -19,7 +10,6 @@ struct Light
 	vec3 color;
 	vec4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
 	int shadowDataCount;
-	ShadowData shadowData[MAX_CSM_COUNT];
 };
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)

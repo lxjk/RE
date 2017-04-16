@@ -35,6 +35,7 @@
 #include "Engine/Math.h"
 #include "Engine/Profiler.h"
 #include "Engine/Render.h"
+#include "Engine/Bounds.h"
 
 // imgui
 #include "imgui/imgui.h"
@@ -64,6 +65,9 @@ float gDeltaTimeBuffer[20];
 int gDeltaTimeBufferCount;
 int gDeltaTimeBufferIdx;
 
+// settings
+RenderSettings gRenderSettings;
+
 // ubo
 GLuint gUBO_Matrices = 0;
 
@@ -75,7 +79,7 @@ GLuint gSceneBuffer = 0;
 Texture2D gSceneColorTex, gSceneDepthStencilTex;
 GLuint gSceneDepthStencilRBO;
 
-GLuint gShadowBuffer = 0;
+GLuint gDepthOnlyBuffer = 0;
 Texture2D gShadowTex;
 
 // shader
@@ -243,16 +247,30 @@ void MakeLights()
 		/*int=*/	1
 	);
 
+	// setup shadow maps
+	for (int i = 0; i < gDirectionalLights.size(); ++i)
+	{
+		for (int j = 0; j < MAX_CASCADE_COUNT; ++j)
+		{
+			Texture2D* shadowMap = Texture2D::Create();
+			shadowMap->AllocateForFrameBuffer(1024, 1024, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT, true);
+			gDirectionalLights[i].shadowData[j].shadowMap = shadowMap;
+		}
+	}
+
 	assert(gDirectionalLights.size() <= MAX_DIRECTIONAL_LIGHT_COUNT);
 
 	// point lights
 	int plIdx = 0;
-	//gPointLights.push_back(Light());
-	//plIdx = gPointLights.size() - 1;
-	//gPointLights[plIdx].position = glm::vec3(0, 10, 10);
-	//gPointLights[plIdx].color = glm::vec3(1.f, 1.f, 1.f);
-	//gPointLights[plIdx].intensity = 1;
-	//gPointLights[plIdx].radius = 20.f;
+	//gPointLights.push_back(
+	//	Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
+	//plIdx = (int)gPointLights.size() - 1;
+	//gPointLights[plIdx].SetPointLight(
+	//	/*pos=*/	glm::vec3(0, 10, 20),
+	//	/*radius=*/	4.f,
+	//	/*color=*/	glm::vec3(1.f, 1.f, 1.f),
+	//	/*int=*/	20
+	//);
 
 	gPointLights.push_back(
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
@@ -324,7 +342,7 @@ void MakeMeshComponents()
 	for (int i = 0; i < 3; ++i)
 	{
 		MeshComponent* meshComp = MeshComponent::Create();
-		meshComp->meshList.push_back(boxMesh);
+		meshComp->AddMesh(boxMesh);
 		meshComp->SetPosition(glm::vec3(-10 + i * 10, 0, 0));
 		meshComp->SetRotation(glm::vec3(0, 45, 0));
 		meshComp->SetScale(glm::vec3(1.5f, 1.f, 1.2f));
@@ -337,7 +355,7 @@ void MakeMeshComponents()
 		sphereMesh->material->SetParameter("metallic", 1.f);
 		sphereMesh->material->SetParameter("roughness", i * 0.045f + 0.1f);
 		MeshComponent* meshComp = MeshComponent::Create();
-		meshComp->meshList.push_back(sphereMesh);
+		meshComp->AddMesh(sphereMesh);
 		meshComp->SetPosition(glm::vec3(-20 + i * 2.5, 0, 7.5));
 	}
 
@@ -347,20 +365,21 @@ void MakeMeshComponents()
 		sphereMesh->material->SetParameter("metallic", i * 0.05f);
 		sphereMesh->material->SetParameter("roughness", 0.4f);
 		MeshComponent* meshComp = MeshComponent::Create();
-		meshComp->meshList.push_back(sphereMesh);
+		meshComp->AddMesh(sphereMesh);
 		meshComp->SetPosition(glm::vec3(-20 + i * 2.5, 0, 12.5));
 	}
 
 	// nanosuit
 	{
 		MeshComponent* meshComp = MeshComponent::Create();
-		meshComp->meshList = gNanosuitMeshes;
+		meshComp->SetMeshList(gNanosuitMeshes);
 		meshComp->SetPosition(glm::vec3(5, -1, 5));
 		meshComp->SetScale(glm::vec3(0.3f, 0.3f, 0.3f));
 
-		for (int i = 0; i < meshComp->meshList.size(); ++i)
+		const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
+		for (int i = 0; i < meshList.size(); ++i)
 		{
-			Material* material = meshComp->meshList[i]->material;
+			Material* material = meshList[i]->material;
 			if (!material)
 				continue;
 
@@ -376,7 +395,7 @@ void MakeMeshComponents()
 		floorMesh->material->SetParameter("roughness", 1.f);
 		floorMesh->material->SetParameter("color", glm::vec3(0.2f));
 		MeshComponent* meshComp = MeshComponent::Create();
-		meshComp->meshList.push_back(floorMesh);
+		meshComp->AddMesh(floorMesh);
 		meshComp->SetPosition(glm::vec3(0.f, -1.2f, 0.f));
 		meshComp->SetScale(glm::vec3(32.f, 0.2f, 32.f));
 	}
@@ -459,10 +478,17 @@ void SetupFrameBuffers()
 	}
 
 	// Shadow Buffer
-	if (!gShadowBuffer)
+	if (!gDepthOnlyBuffer)
 	{
-		glGenFramebuffers(1, &gShadowBuffer);
-		glBindFramebuffer(GL_FRAMEBUFFER, gShadowBuffer);
+		glGenFramebuffers(1, &gDepthOnlyBuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, gDepthOnlyBuffer);
+
+
+
+		glDrawBuffer(GL_NONE);
+
+		//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		//	printf("Error: Shadow buffer not complete!\n");
 
 	}
 
@@ -486,6 +512,11 @@ void LoadShaders(bool bReload)
 
 bool InitEngine()
 {
+	// settings
+	gRenderSettings.bDrawShadow = true;
+	gRenderSettings.bDrawBounds = false;
+	gRenderSettings.bDrawLightVolume = false;
+
 	// frame buffers
 	SetupFrameBuffers();
 
@@ -710,7 +741,7 @@ void Update(float deltaTime)
 
 	// end of frame
 	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
-	for (int i = 0, ni = MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
 		meshCompListPtr[i]->UpdateEndOfFrame(deltaTime);
 	}
@@ -735,7 +766,7 @@ void GeometryPass(RenderContext& renderContext)
 	
 	// draw models
 	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
-	for (int i = 0, ni = MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
 		meshCompListPtr[i]->Draw(renderContext);
 	}
@@ -763,13 +794,31 @@ void DirectionalLightPass(RenderContext& renderContext)
 	gDirectionalLightMaterial->SetParameter("lightCount", (int)gDirectionalLights.size());
 
 	// set light
-	for (int i = 0; i < gDirectionalLights.size(); ++i)
+	int shadowIdx = 0;
+	Light* lightPtr = gDirectionalLights.data();
+	for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
 	{
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), gDirectionalLights[i].GetDirectionVSRAB(renderContext.viewPoint.viewMat));
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), gDirectionalLights[i].colorIntensity);
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), gDirectionalLights[i].attenParams);
+		Light& light = lightPtr[i];
+		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
+		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity);
+		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams);
 		// shadow
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("csmCount").c_str(), 0);
+		if (gRenderSettings.bDrawShadow)
+		{
+			int shadowCount = MAX_CASCADE_COUNT;
+			gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
+			for (int j = 0; j < shadowCount; ++j)
+			{
+				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
+				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("farPlane").c_str(), light.shadowData[j].farPlane);
+				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
+			}
+			shadowIdx += shadowCount;
+		}
+		else
+		{
+			gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), 0);
+		}
 
 	}
 
@@ -941,9 +990,149 @@ void LightPass(RenderContext& renderContext)
 
 }
 
-void ShaderPass(RenderContext& renderContext)
+void ShadowPass(RenderContext& renderContext)
 {
+	GPU_SCOPED_PROFILE("shadow");
+	CPU_SCOPED_PROFILE("shadow");
 
+	const static RenderState renderState([](RenderState& s) {
+		// don't write color
+		s.bColorWrite = false;
+	});
+
+	renderState.Apply();
+
+	const static glm::mat4 remapMat(
+		glm::vec4(0.5f, 0.f, 0.f, 0.0f),
+		glm::vec4(0.f, 0.5f, 0.f, 0.0f),
+		glm::vec4(0.f, 0.f, 0.5f, 0.0f),
+		glm::vec4(0.5f, 0.5f, 0.5f, 1.f)
+		);
+
+	const static float cascadeRatio[MAX_CASCADE_COUNT] = {
+		0.09f, 0.3f, 1.f
+	};
+
+	glm::vec3 clipPoints[4];
+
+	Viewpoint& viewPoint = renderContext.viewPoint;
+	
+	float aspectRatio = viewPoint.height / viewPoint.width;
+	float tanHF = glm::tan(viewPoint.fov * 0.5f) * sqrt(1 + aspectRatio * aspectRatio);
+	float tanHF2 = tanHF * tanHF;
+
+	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
+
+	Light* lightPtr = gDirectionalLights.data();
+	for (int lightIdx = 0, nlightIdx = (int)gDirectionalLights.size(); lightIdx < nlightIdx; ++lightIdx)
+	{
+		Light& light = lightPtr[lightIdx];
+
+		// calculate light space bounds
+		for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+		{
+			const glm::mat4& adjustMat = light.lightViewMat * meshCompListPtr[i]->modelMat;
+			// tranform bounds into light space
+			meshCompListPtr[i]->bounds.TransformBounds(adjustMat, meshCompListPtr[i]->boundsLS);
+		}
+
+		glm::mat4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
+		
+		for (int cascadeIdx = 0; cascadeIdx < MAX_CASCADE_COUNT; ++cascadeIdx)
+		{
+			// near and far plane for this cascade
+			float n = (cascadeIdx == 0) ? viewPoint.nearPlane : viewPoint.farPlane * cascadeRatio[cascadeIdx-1];
+			float f = viewPoint.farPlane * cascadeRatio[cascadeIdx];
+
+			// minimal bounding sphere diameter
+			float diameter = ((f + n) * tanHF2 >= (f - n)) ?
+				2 * f * tanHF :
+				sqrt((f - n)*(f - n) + 2 * (f*f + n*n) * tanHF2 + (f + n)*(f + n)*tanHF2*tanHF2);
+
+			float pixelRate = diameter / light.shadowData[cascadeIdx].shadowMap->width;
+
+			// process frustum bounds
+			BoxBounds frustumBounds;
+			viewPoint.GetClipPoints(-n, clipPoints);
+			for (int i = 0; i < 4; ++i)
+				frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
+			viewPoint.GetClipPoints(-f, clipPoints);
+			for (int i = 0; i < 4; ++i)
+				frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
+
+			// extent test bound max(near plane) a little bit to include geometry behind us
+			// this value need to be increased if we are missing shadow
+			const float stepBack = 30.f;
+			frustumBounds.max.z += stepBack;
+			
+			std::vector<MeshComponent*> involvedMeshComps;
+			involvedMeshComps.reserve(MeshComponent::gMeshComponentContainer.size());
+
+			// process scene bounds and do frustum culling
+			BoxBounds sceneBounds;
+			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+			{
+				// overlap test
+				if (frustumBounds.IsOverlap(meshCompListPtr[i]->boundsLS))
+				{
+					sceneBounds += meshCompListPtr[i]->boundsLS;
+					involvedMeshComps.push_back(meshCompListPtr[i]);
+				}
+			}
+			
+			// skip if we have no mesh to render
+			if (involvedMeshComps.size() == 0)
+				continue;
+
+			// only change far plane if scene bounds are closer, don't extend it
+			frustumBounds.min.z = glm::max(sceneBounds.min.z, frustumBounds.min.z);
+			// for near plane simply use what scene bounds has,
+			// since we need to include any mesh behind us (in light space) that will cast shadow
+			frustumBounds.max.z = sceneBounds.max.z;
+
+			// adjust based on diameter
+			frustumBounds.min.x = floorf(frustumBounds.min.x / pixelRate) * pixelRate;
+			frustumBounds.min.y = floorf(frustumBounds.min.y / pixelRate) * pixelRate;
+			frustumBounds.max.x = frustumBounds.min.x + diameter;
+			frustumBounds.max.y = frustumBounds.min.y + diameter;
+
+			// the bounds are mapped as (+x, -x, +y, -y, +z, -z) -> (r, l, t, b, -n, -f)
+			// ref: http://www.songho.ca/opengl/gl_projectionmatrix.html
+			glm::mat4 lightProjMat = glm::ortho(
+				frustumBounds.min.x, frustumBounds.max.x,
+				frustumBounds.min.y, frustumBounds.max.y,
+				-frustumBounds.max.z, -frustumBounds.min.z);
+
+			light.shadowData[cascadeIdx].farPlane = f;
+			light.shadowData[cascadeIdx].shadowMat = remapMat * lightProjMat * viewToLight;
+
+			// attach to frame buffers
+			Texture2D* shadowMap = light.shadowData[cascadeIdx].shadowMap;
+			shadowMap->AttachToFrameBuffer(GL_DEPTH_ATTACHMENT);
+
+			// set viewport
+			glViewport(0, 0, shadowMap->width, shadowMap->height);
+
+			// update ubo
+			RenderInfo shadowRenderInfo;
+			shadowRenderInfo.View = light.lightViewMat;
+			shadowRenderInfo.Proj = lightProjMat;
+			glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
+			glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &shadowRenderInfo, GL_DYNAMIC_DRAW);
+			glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+			// clear depth
+			glClearDepth(1);
+			glClear(GL_DEPTH_BUFFER_BIT);
+
+			// draw models
+			MeshComponent** involvedMeshCompListPtr = involvedMeshComps.data();
+			for (int i = 0, ni = (int)involvedMeshComps.size(); i < ni; ++i)
+			{
+				involvedMeshCompListPtr[i]->Draw(renderContext, gPrepassMaterial);
+			}
+		}
+	}
 }
 
 void DebugForwardPass(RenderContext& renderContext)
@@ -981,41 +1170,70 @@ void DebugForwardPass(RenderContext& renderContext)
 		gSpotLightDebugMesh->Draw(renderContext);
 	}
 
-	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	//glDisable(GL_CULL_FACE);
+	// wireframes
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	glDisable(GL_CULL_FACE);
 
-	//for (int i = 0; i < gPointLights.size(); ++i)
-	//{
-	//	// model
-	//	glm::mat4 modelMat(1);
-	//	modelMat = glm::translate(modelMat, gPointLights[i].position);
-	//	modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
-	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+	if (gRenderSettings.bDrawBounds)
+	{
+		// bounds
+		MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
+		for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+		{
+			// draw bounds
+			MeshComponent* meshComp = meshCompListPtr[i];
+			glm::vec3 center = meshComp->bounds.GetCenter();
+			glm::vec3 extent = meshComp->bounds.GetExtent();
 
-	//	gLightDebugMaterial->SetParameter("modelMat", modelMat);
-	//	gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity);
+			glm::mat4 boundMat(1);
+			boundMat = glm::scale(boundMat, extent);
+			boundMat[3] = glm::vec4(center, 1.f);
 
-	//	gPointLightDebugMesh->Draw(renderContext);
+			glm::mat4 modelMat = meshComp->modelMat * boundMat;
 
-	//}
+			gLightDebugMaterial->SetParameter("modelMat", modelMat);
+			gLightDebugMaterial->SetParameter("color", glm::vec3(1, 0, 0));
 
-	//for (int i = 0; i < gSpotLights.size(); ++i)
-	//{
-	//	// model
-	//	glm::mat4 modelMat(1);
-	//	modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
-	//	modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
-	//	modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius));
-	//	glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+			gCubeMesh->Draw(renderContext, gLightDebugMaterial);
+		}
+	}
 
-	//	gLightDebugMaterial->SetParameter("modelMat", modelMat);
-	//	gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity);
 
-	//	gSpotLightDebugMesh->Draw(renderContext);
+	if (gRenderSettings.bDrawLightVolume)
+	{
+		for (int i = 0; i < gPointLights.size(); ++i)
+		{
+			// model
+			glm::mat4 modelMat(1);
+			modelMat = glm::translate(modelMat, gPointLights[i].position);
+			modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
+			glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 
-	//}
+			gLightDebugMaterial->SetParameter("modelMat", modelMat);
+			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity);
 
-	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+			gPointLightDebugMesh->Draw(renderContext);
+
+		}
+
+		for (int i = 0; i < gSpotLights.size(); ++i)
+		{
+			// model
+			glm::mat4 modelMat(1);
+			modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
+			modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
+			modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius));
+			glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+
+			gLightDebugMaterial->SetParameter("modelMat", modelMat);
+			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity);
+
+			gSpotLightDebugMesh->Draw(renderContext);
+
+		}
+	}
+
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 void PostProcessPass(RenderContext& renderContext)
@@ -1076,6 +1294,17 @@ void UIPass()
 		ImGui::End();
 	}
 
+	{
+		static bool open = true;
+		ImGui::Begin("settings", &open);
+
+		ImGui::Checkbox("shadow", &gRenderSettings.bDrawShadow);
+		ImGui::Checkbox("bounds", &gRenderSettings.bDrawBounds);
+		ImGui::Checkbox("light volume", &gRenderSettings.bDrawLightVolume);
+
+		ImGui::End();
+	}
+
 	//{
 	//	static bool open = true;
 	//	ImGui::SetNextWindowPos(ImVec2(650, 20), ImGuiSetCond_FirstUseEver);
@@ -1091,7 +1320,14 @@ void Render()
 	CPU_SCOPED_PROFILE("render");
 
 	RenderContext renderContext;
-	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 1000.f);
+	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 100.f);
+	
+	if (gRenderSettings.bDrawShadow)
+	{
+		// bind shadow buffer
+		glBindFramebuffer(GL_FRAMEBUFFER, gDepthOnlyBuffer);
+		ShadowPass(renderContext);
+	}
 
 	glViewport(0, 0, gWindowWidth, gWindowHeight);
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);

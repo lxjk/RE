@@ -56,7 +56,6 @@ public:
 
 	void Bind(GLuint textureUnitOffset);
 
-protected:
 	GLuint textureID;
 	int width;
 	int height;

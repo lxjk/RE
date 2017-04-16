@@ -5,6 +5,17 @@
 #include "Mesh.h"
 #include "Material.h"
 
+#define MAX_CASCADE_COUNT 3
+
+struct ShadowData
+{
+	Texture2D* shadowMap;
+	float farPlane;
+
+	// this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
+	glm::mat4 shadowMat;
+};
+
 class Light
 {
 public:
@@ -27,6 +38,9 @@ public:
 	glm::vec4 attenParams; // bRadial, bSpot, outerCosHalfAngle, invDiffCosHalfAngle
 
 	glm::mat4 modelMat;
+	glm::mat4 lightViewMat;
+
+	ShadowData shadowData[MAX_CASCADE_COUNT];
 
 	Mesh* LightMesh;
 
@@ -63,6 +77,9 @@ public:
 			modelMat = Math::MakeMatFromForward(direction);
 			modelMat[3] = glm::vec4(position, 1);
 			modelMat = glm::scale(modelMat, glm::vec3(endRadius, endRadius, radius));
+
+			lightViewMat = glm::transpose(Math::MakeMatFromForward(direction));
+			lightViewMat = glm::translate(lightViewMat, -position);
 		}
 		else if (attenParams.x > 0)
 		{
@@ -70,6 +87,13 @@ public:
 			modelMat = glm::mat4(1);
 			modelMat = glm::translate(modelMat, position);
 			modelMat = glm::scale(modelMat, glm::vec3(radius));
+
+			lightViewMat = glm::mat4(1);
+			lightViewMat[3] = glm::vec4(-position, 1.f);
+		}
+		else
+		{
+			lightViewMat = glm::transpose(Math::MakeMatFromForward(direction));
 		}
 	}
 
@@ -85,6 +109,8 @@ public:
 		attenParams.y = 0;
 		attenParams.z = outerCosHalfAngle;
 		attenParams.w = invDiffCosHalfAngle;
+
+		BuildModelMat();
 
 		//LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity);
 		//LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);

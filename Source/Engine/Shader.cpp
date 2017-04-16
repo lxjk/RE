@@ -150,7 +150,8 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAs
 			for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
 			{
 				UniformLocationList.push_back(ValuePair(it->second[nameIdx].c_str(), -1));
-				if (it->first.compare("sampler2D") == 0)
+				if (it->first.compare("sampler2D") == 0 || 
+					it->first.compare("sampler2DShadow") == 0)
 				{
 					// custom texture unit, init to be -1, don't bind it unless used
 					TexUnitList.push_back(ValuePair(it->second[nameIdx].c_str(), -1));

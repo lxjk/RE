@@ -6,6 +6,7 @@
 
 #include "Math.h"
 #include "Material.h"
+#include "Bounds.h"
 
 struct Vertex
 {
@@ -62,6 +63,8 @@ public:
 	std::vector<GLuint> indices;
 	GLsizei vertCount;
 	GLsizei idxCount;
+
+	BoxBounds bounds;
 
 	bool bHasResource;
 	GLuint VAO, VBO, EBO;

@@ -54,6 +54,10 @@ void MeshData::InitResource()
 	}
 
 	glBindVertexArray(0);
+
+	// calculate bounds
+	for (int i = 0; i < vertCount; ++i)
+		bounds += vertices[i].position;
 }
 
 std::vector<Mesh*> Mesh::gMeshContainer;

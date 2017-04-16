@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iostream>
 #include <unordered_map>
+#include <stack>
 #include <cassert>
 
 #include "Shader.h"
@@ -107,19 +108,163 @@ public:
 	}
 };
 
+class ExpressionParser
+{
+	std::unordered_map<char, int> priority;
+	std::stack<int> numStack;
+	std::stack<char> opStack;
+
+public:
+
+	ExpressionParser()
+	{
+		priority['+'] = 1;
+		priority['-'] = 1;
+		priority['*'] = 2;
+		priority['/'] = 2;
+	}
+
+	int Calculate(int num1, int num2, char op)
+	{
+		switch (op)
+		{
+		case '+': return num1 + num2;
+		case '-': return num1 - num2;
+		case '*': return num1 * num2;
+		case '/': return num1 / num2;
+		}
+		assert(false);
+		return 0;
+	}
+
+	int ProcessStack(int inNum, int inPriority)
+	{
+		// current num
+		int num2 = inNum;
+
+		bool bClearTillBracket = (inPriority < 0);
+
+		// look at stack see if we need to to calculation first
+		while (opStack.size() > 0)
+		{
+			const char& topOp = opStack.top();
+
+			// stop at bracket
+			if (topOp == '(')
+			{
+				if (bClearTillBracket)
+					opStack.pop();
+				break;
+			}
+
+			if (bClearTillBracket || inPriority <= priority[topOp])
+			{
+				// do calculation
+				int num1 = numStack.top();
+				num2 = Calculate(num1, num2, topOp);
+				opStack.pop();
+				numStack.pop();
+			}
+			else
+				break;
+		}
+
+		return num2;
+	}
+
+	int Parse(std::string expression)
+	{
+		numStack.empty();
+		opStack.empty();
+
+		int sign = 1;
+		bool bProcessingNum = false;
+		int absNum = 0;
+
+		for (int i = 0; i < expression.length(); ++i)
+		{
+			bool bResetNum = false;
+
+			const char& c = expression[i];
+			// digit
+			if (c >= '0' && c <= '9')
+			{
+				absNum = absNum * 10 + (c - '0');
+				bProcessingNum = true;
+			}
+			// negative sign
+			else if(c == '-' && !bProcessingNum)
+			{
+				sign = -sign;
+			}
+			else if (c == '+' && !bProcessingNum)
+			{
+				// skip
+			}
+			// operator
+			else if (priority.find(c) != priority.end())
+			{
+				assert(bProcessingNum);
+
+				// process stack
+				int result = ProcessStack(sign * absNum, priority[c]);
+
+				// push num
+				numStack.push(result);
+
+				// push op
+				opStack.push(c);
+
+				// reset number
+				bProcessingNum = false;
+				sign = 1;
+				absNum = 0;
+			}
+			else if (c == '(')
+			{
+				opStack.push(c);
+			}
+			else if (c == ')')
+			{
+				// process stack
+				int result = ProcessStack(sign * absNum, -1);
+
+				// set processing num
+				bProcessingNum = true;
+				sign = result >= 0 ? 1 : -1;
+				absNum = abs(result);
+			}
+		}
+
+		if (bProcessingNum)
+		{
+			return ProcessStack(sign * absNum, -1);
+		}
+		return numStack.top();
+	};
+
+};
+
 const int MAX_INCLUDE_DEPTH = 8;
 
 extern std::unordered_map<std::string, ShaderInfo> gShaderFileCache;
 
 static bool ParseVariable(ShaderInfo& shaderInfo, ShaderUniforms& outputUniforms, std::string line, size_t offset = 0)
 {
+	static ExpressionParser expressionParser;
+
 	size_t nameEnd = line.find(';');
 	if (nameEnd != std::string::npos)
 	{
 		std::string typeName = line.substr(offset, nameEnd - offset);
 		trim(typeName);
 		size_t typeEnd = typeName.find_first_of(" \t");
-		size_t nameStart = typeName.find_last_of(" \t");
+		size_t nameStart = std::string::npos;
+		size_t arrayStartInTypeName = typeName.find('[');
+		if (arrayStartInTypeName != std::string::npos)
+			nameStart = typeName.find_last_of(" \t", arrayStartInTypeName);
+		else
+			nameStart = typeName.find_last_of(" \t");
 		if (typeEnd != std::string::npos && nameStart != std::string::npos)
 		{
 			std::string type = typeName.substr(0, typeEnd);
@@ -133,14 +278,23 @@ static bool ParseVariable(ShaderInfo& shaderInfo, ShaderUniforms& outputUniforms
 				std::string arrayCountStr = name.substr(arrayStart + 1, arrayEnd - arrayStart - 1);
 				trim(arrayCountStr);
 				name = name.substr(0, arrayStart);
-				// check define
-				auto defineIt = shaderInfo.shaderDefines.defineMap.find(arrayCountStr);
-				while (defineIt != shaderInfo.shaderDefines.defineMap.end())
+				std::unordered_map<std::string, std::string>& defineMap = shaderInfo.shaderDefines.defineMap;
+				// replace define
+				bool hasDefine = false;
+				do
 				{
-					arrayCountStr = defineIt->second;
-					defineIt = shaderInfo.shaderDefines.defineMap.find(arrayCountStr);
-				}
-				elemCount = atoi(arrayCountStr.c_str());
+					hasDefine = false;
+					for (auto defineIt = defineMap.begin(); defineIt != defineMap.end(); ++defineIt)
+					{
+						size_t definePos = arrayCountStr.find(defineIt->first);
+						if (definePos != std::string::npos)
+						{
+							hasDefine = true;
+							arrayCountStr.replace(definePos, defineIt->first.length(), defineIt->second);
+						}
+					}
+				} while (hasDefine);
+				elemCount = expressionParser.Parse(arrayCountStr);
 			}
 			// is the type a known struct?
 			auto structIt = shaderInfo.shaderStructs.structTypeMap.find(type);

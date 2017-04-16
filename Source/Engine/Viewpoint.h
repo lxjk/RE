@@ -8,6 +8,8 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/matrix_inverse.hpp"
 
+#include "Math.h"
+
 class Viewpoint
 {
 public:
@@ -22,7 +24,7 @@ public:
 	glm::mat4 viewMat;
 	glm::mat4 invViewMat;
 	glm::mat4 projMat;
-
+	
 	void CacheMatrices()
 	{
 		// invView
@@ -37,6 +39,18 @@ public:
 		//viewMat[3] = viewMat * glm::vec4((-position), 1.f);
 		viewMat = glm::translate(viewMat, -position);
 		// proj
-		projMat = glm::perspectiveFov(fov / width * height, width, height, nearPlane, farPlane);
+		//projMat = glm::perspectiveFov(fov / width * height, width, height, nearPlane, farPlane);
+		projMat = Math::PerspectiveFov(fov, width, height, nearPlane, farPlane);
+	}
+
+	// we don't do bound check here, expect an array of at least 4 elements
+	void GetClipPoints(float z, glm::vec3* outPoints)
+	{
+		float x = z / projMat[0][0];
+		float y = z / projMat[1][1];
+		outPoints[0] = invViewMat * glm::vec4(-x, y, z, 1.f);
+		outPoints[1] = invViewMat * glm::vec4(-x, -y, z, 1.f);
+		outPoints[2] = invViewMat * glm::vec4(x, -y, z, 1.f);
+		outPoints[3] = invViewMat * glm::vec4(x, y, z, 1.f);
 	}
 };

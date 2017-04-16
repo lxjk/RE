@@ -34,4 +34,25 @@ namespace Math
 		return glm::mat3(x, y, z);
 		//return glm::mat4(glm::vec4(x, 0), glm::vec4(y, 0), glm::vec4(z, 0), glm::vec4(0));
 	}
+
+	inline glm::mat4 PerspectiveFov(float fov, float width, float height, float zNear, float zFar)
+	{
+		float w = glm::cos(0.5f * fov) / glm::sin(0.5f * fov);
+		float h = w * width / height;
+
+		glm::mat4 Result(0);
+		Result[0][0] = w;
+		Result[1][1] = h;
+		Result[2][3] = -1;
+
+		#if GLM_DEPTH_CLIP_SPACE == GLM_DEPTH_ZERO_TO_ONE
+			Result[2][2] = zFar / (zNear - zFar);
+			Result[3][2] = -(zFar * zNear) / (zFar - zNear);
+		#else
+			Result[2][2] = - (zFar + zNear) / (zFar - zNear);
+			Result[3][2] = - (2 * zFar * zNear) / (zFar - zNear);
+		#endif
+
+		return Result;
+	}
 }

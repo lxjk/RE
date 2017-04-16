@@ -27,9 +27,10 @@ public:
 	glm::mat4 modelMat;
 	glm::mat3 normalMat;
 
-	std::vector<Mesh*> meshList;
 
-	bool bRenderTransformDirty;
+	BoxBounds bounds;
+
+	BoxBounds boundsLS;
 
 	MeshComponent()
 	: position(glm::vec3(0))
@@ -42,12 +43,13 @@ public:
 		glm::vec3 inPosition = glm::vec3(0),
 		glm::vec3 inRotation = glm::vec3(0),
 		glm::vec3 inScale = glm::vec3(1))
-		: meshList(inMeshList)
-		, position(inPosition)
+		: position(inPosition)
 		, rotation(inRotation)
 		, scale(inScale)
 		, bRenderTransformDirty(true)
-	{}
+	{
+		SetMeshList(inMeshList);
+	}
 
 	inline void SetPosition(const glm::vec3& inPosition)
 	{
@@ -70,8 +72,16 @@ public:
 
 	virtual void UpdateEndOfFrame(float deltaTime) override;
 
+	const std::vector<Mesh*>& GetMeshList() { return meshList; }
+	void SetMeshList(const std::vector<Mesh*>& inMeshList);
+	void AddMesh(Mesh* inMesh);
+
 	void Draw(struct RenderContext& renderContext, Material* overrideMaterial = 0);
 
 protected:
+
+	std::vector<Mesh*> meshList;
+	bool bRenderTransformDirty;
+
 	void CacheRenderMatrices();
 };

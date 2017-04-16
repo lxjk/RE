@@ -103,7 +103,7 @@ public:
 				glDeleteQueries(2, glm::value_ptr(it->second[pairIdx]));
 				elapsed += (double)(elapsedEnd - elapsedStart) / (double)1000000;
 			}
-			if (elapsed > 0)
+			//if (elapsed > 0)
 			{
 				// update
 				if (timerMap[it->first] > 0)
