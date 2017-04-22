@@ -10,7 +10,7 @@
 struct ShadowData
 {
 	Texture2D* shadowMap;
-	float farPlane;
+	glm::vec3 bounds; // x cascade width, y cascade height, z far plane
 
 	// this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
 	glm::mat4 shadowMat;

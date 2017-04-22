@@ -58,6 +58,7 @@ std::unordered_map<std::string, ShaderInfo> gShaderFileCache;
 // time
 double gInvPerformanceFreq;
 Uint64 gPerformanceCounter;
+double gTime;
 float gLastDeltaTime;
 float gAverageDeltaTime;
 float gDeltaTimeAccum;
@@ -225,6 +226,7 @@ bool Init()
 
 	// time
 	gInvPerformanceFreq = (double)1 / (double)SDL_GetPerformanceFrequency();
+	gTime = 0;
 	gLastDeltaTime = 0;
 	gAverageDeltaTime = 0.03f;
 	gDeltaTimeAccum = 0.f;
@@ -242,7 +244,7 @@ void MakeLights()
 	gDirectionalLights.push_back(Light(gDirectionalLightMesh));
 	dlIdx = (int)gDirectionalLights.size() - 1;
 	gDirectionalLights[dlIdx].SetDirectionLight(
-		/*dir=*/	glm::vec3(0, -1, -2),
+		/*dir=*/	glm::vec3(-0.8, -1, -2),
 		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
 		/*int=*/	1
 	);
@@ -386,6 +388,21 @@ void MakeMeshComponents()
 			material->SetParameter("metallic", 0.f);
 			material->SetParameter("roughness", 0.3f);
 		}
+
+		//for (int i = 0; i < gNanosuitMeshes.size(); ++i)
+		//{
+		//	MeshComponent* meshComp = MeshComponent::Create();
+		//	meshComp->AddMesh(gNanosuitMeshes[i]);
+		//	meshComp->SetPosition(glm::vec3(5, -1, 5));
+		//	meshComp->SetScale(glm::vec3(0.3f, 0.3f, 0.3f));
+
+		//	Material* material = gNanosuitMeshes[i]->material;
+		//	if (!material)
+		//		continue;
+
+		//	material->SetParameter("metallic", 0.f);
+		//	material->SetParameter("roughness", 0.3f);
+		//}
 	}
 
 	// floor
@@ -810,7 +827,7 @@ void DirectionalLightPass(RenderContext& renderContext)
 			for (int j = 0; j < shadowCount; ++j)
 			{
 				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
-				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("farPlane").c_str(), light.shadowData[j].farPlane);
+				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds);
 				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
 			}
 			shadowIdx += shadowCount;
@@ -1010,7 +1027,7 @@ void ShadowPass(RenderContext& renderContext)
 		);
 
 	const static float cascadeRatio[MAX_CASCADE_COUNT] = {
-		0.09f, 0.3f, 1.f
+		0.12f, 0.36f, 1.f
 	};
 
 	glm::vec3 clipPoints[4];
@@ -1020,6 +1037,8 @@ void ShadowPass(RenderContext& renderContext)
 	float aspectRatio = viewPoint.height / viewPoint.width;
 	float tanHF = glm::tan(viewPoint.fov * 0.5f) * sqrt(1 + aspectRatio * aspectRatio);
 	float tanHF2 = tanHF * tanHF;
+
+	bool bFixedSize = false;
 
 	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
 
@@ -1090,11 +1109,21 @@ void ShadowPass(RenderContext& renderContext)
 			// since we need to include any mesh behind us (in light space) that will cast shadow
 			frustumBounds.max.z = sceneBounds.max.z;
 
-			// adjust based on diameter
-			frustumBounds.min.x = floorf(frustumBounds.min.x / pixelRate) * pixelRate;
-			frustumBounds.min.y = floorf(frustumBounds.min.y / pixelRate) * pixelRate;
-			frustumBounds.max.x = frustumBounds.min.x + diameter;
-			frustumBounds.max.y = frustumBounds.min.y + diameter;
+			if (bFixedSize || cascadeIdx == 0)
+			{
+				// adjust based on diameter
+				frustumBounds.min.x = floorf(frustumBounds.min.x / pixelRate) * pixelRate;
+				frustumBounds.min.y = floorf(frustumBounds.min.y / pixelRate) * pixelRate;
+				frustumBounds.max.x = frustumBounds.min.x + diameter;
+				frustumBounds.max.y = frustumBounds.min.y + diameter;
+			}
+			else
+			{
+				frustumBounds.min.x = glm::max(frustumBounds.min.x, sceneBounds.min.x);
+				frustumBounds.min.y = glm::max(frustumBounds.min.y, sceneBounds.min.y);
+				frustumBounds.max.x = glm::min(frustumBounds.max.x, sceneBounds.max.x);
+				frustumBounds.max.y = glm::min(frustumBounds.max.y, sceneBounds.max.y);
+			}
 
 			// the bounds are mapped as (+x, -x, +y, -y, +z, -z) -> (r, l, t, b, -n, -f)
 			// ref: http://www.songho.ca/opengl/gl_projectionmatrix.html
@@ -1103,7 +1132,10 @@ void ShadowPass(RenderContext& renderContext)
 				frustumBounds.min.y, frustumBounds.max.y,
 				-frustumBounds.max.z, -frustumBounds.min.z);
 
-			light.shadowData[cascadeIdx].farPlane = f;
+			light.shadowData[cascadeIdx].bounds = glm::vec3(
+				frustumBounds.max.x - frustumBounds.min.x,
+				frustumBounds.max.y - frustumBounds.min.y,
+				f);
 			light.shadowData[cascadeIdx].shadowMat = remapMat * lightProjMat * viewToLight;
 
 			// attach to frame buffers
@@ -1114,7 +1146,7 @@ void ShadowPass(RenderContext& renderContext)
 			glViewport(0, 0, shadowMap->width, shadowMap->height);
 
 			// update ubo
-			RenderInfo shadowRenderInfo;
+			RenderInfo shadowRenderInfo = gRenderInfo;
 			shadowRenderInfo.View = light.lightViewMat;
 			shadowRenderInfo.Proj = lightProjMat;
 			glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
@@ -1338,6 +1370,7 @@ void Render()
 	gRenderInfo.Proj = renderContext.viewPoint.projMat;
 	gRenderInfo.Resolution.x = renderContext.viewPoint.width;
 	gRenderInfo.Resolution.y = renderContext.viewPoint.height;
+	gRenderInfo.Time = (float)gTime;
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 	// maybe use glBufferSubData later?
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &gRenderInfo, GL_DYNAMIC_DRAW);
@@ -1433,7 +1466,15 @@ int main(int argc, char **argv)
 			
 			// time
 			Uint64 newPerformanceCounter = SDL_GetPerformanceCounter();
-			gLastDeltaTime = (float)((double)(newPerformanceCounter - gPerformanceCounter) * gInvPerformanceFreq);
+			Uint64 diff = (newPerformanceCounter - gPerformanceCounter);
+			if (newPerformanceCounter < gPerformanceCounter)
+			{
+				static const Uint64 max = Uint64(-1);
+				diff = newPerformanceCounter + (max - gPerformanceCounter);
+			}
+			double deltaTime = (double)(newPerformanceCounter - gPerformanceCounter) * gInvPerformanceFreq;
+			gTime += deltaTime;
+			gLastDeltaTime = (float)deltaTime;
 			gPerformanceCounter = newPerformanceCounter;
 			gDeltaTimeAccum = gDeltaTimeAccum - gDeltaTimeBuffer[gDeltaTimeBufferIdx] + gLastDeltaTime;
 			gDeltaTimeBuffer[gDeltaTimeBufferIdx] = gLastDeltaTime;

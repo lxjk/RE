@@ -27,10 +27,11 @@ struct RenderContext
 
 struct RenderInfo
 {
-	glm::mat4 View;
-	glm::mat4 InvView;
-	glm::mat4 Proj;
-	glm::vec2 Resolution;
+	glm::mat4 View;			// 16 * 4
+	glm::mat4 InvView;		// 16 * 4
+	glm::mat4 Proj;			// 16 * 4
+	glm::vec2 Resolution;	// 8
+	float Time;				// 4
 };
 
 struct RenderState
