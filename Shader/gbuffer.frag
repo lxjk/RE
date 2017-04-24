@@ -10,6 +10,7 @@ in VS_OUT
 out vec3 gNormal;
 out vec3 gAlbedo;
 out vec2 gMaterial;
+out vec2 gVelocity;
 
 uniform sampler2D diffuseTex;
 uniform sampler2D normalTex;

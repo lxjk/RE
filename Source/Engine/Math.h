@@ -35,7 +35,7 @@ namespace Math
 		//return glm::mat4(glm::vec4(x, 0), glm::vec4(y, 0), glm::vec4(z, 0), glm::vec4(0));
 	}
 
-	inline glm::mat4 PerspectiveFov(float fov, float width, float height, float zNear, float zFar)
+	inline glm::mat4 PerspectiveFov(float fov, float width, float height, float zNear, float zFar, float jitterX = 0, float jitterY = 0)
 	{
 		float w = glm::cos(0.5f * fov) / glm::sin(0.5f * fov);
 		float h = w * width / height;
@@ -45,12 +45,35 @@ namespace Math
 		Result[1][1] = h;
 		Result[2][3] = -1;
 
+		Result[2][0] = jitterX * 2.f / width;
+		Result[2][1] = jitterY * 2.f / height;
+
 		#if GLM_DEPTH_CLIP_SPACE == GLM_DEPTH_ZERO_TO_ONE
 			Result[2][2] = zFar / (zNear - zFar);
 			Result[3][2] = -(zFar * zNear) / (zFar - zNear);
 		#else
 			Result[2][2] = - (zFar + zNear) / (zFar - zNear);
 			Result[3][2] = - (2 * zFar * zNear) / (zFar - zNear);
+		#endif
+
+		return Result;
+	}
+
+	inline glm::mat4 Ortho(float left, float right, float bottom, float top, float zNear, float zFar
+		, float width = 1, float height = 1, float jitterX = 0, float jitterY = 0)
+	{
+		glm::mat4 Result(1);
+		Result[0][0] = 2.f / (right - left);
+		Result[1][1] = 2.f / (top - bottom);
+		Result[3][0] = -(right + left) / (right - left) + 2 * jitterX / width;
+		Result[3][1] = -(top + bottom) / (top - bottom) + 2 * jitterY / height;
+
+		#if GLM_DEPTH_CLIP_SPACE == GLM_DEPTH_ZERO_TO_ONE
+			Result[2][2] = -1.f / (zFar - zNear);
+			Result[3][2] = -zNear / (zFar - zNear);
+		#else
+			Result[2][2] = -2.f / (zFar - zNear);
+			Result[3][2] = -(zFar + zNear) / (zFar - zNear);
 		#endif
 
 		return Result;

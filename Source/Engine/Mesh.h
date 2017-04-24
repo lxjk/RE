@@ -83,7 +83,7 @@ public:
 		return mesh;
 	}
 
-	static Mesh* Create(MeshData* inMeshData, Material* inMaterial)
+	static Mesh* Create(MeshData* inMeshData, Material* inMaterial = 0)
 	{
 		Mesh* mesh = Create();
 		mesh->Init(inMeshData, inMaterial);

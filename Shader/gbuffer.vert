@@ -17,7 +17,7 @@ void main()
 {
 	// output everything in view space
 	
-	gl_Position = projMat * viewMat * modelMat * vec4(position, 1.0f);
+	gl_Position = viewProjMat * modelMat * vec4(position, 1.0f);
 	
 	// we can do this because mat3(viewMat) is guaranteed to be orthogonal (no scale)
 	mat3 viewNormalMat = mat3(viewMat) * normalMat;	

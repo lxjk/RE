@@ -4,8 +4,10 @@
 layout(std140) uniform RenderInfo
 {
 	mat4 viewMat;
-	mat4 invViewMat;
 	mat4 projMat;
+	mat4 viewProjMat;
+	mat4 invViewMat;
+	mat4 prevViewProjMat;
 	vec2 resolution;
 	float time;
 };

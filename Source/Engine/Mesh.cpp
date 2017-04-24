@@ -67,7 +67,7 @@ void Mesh::Init(MeshData* inMeshData, Material* inMaterial)
 	meshData = inMeshData;
 	material = inMaterial;
 
-	if (!meshData->bHasResource)
+	if (meshData && !meshData->bHasResource)
 		meshData->InitResource();
 }
 

@@ -56,6 +56,7 @@ SDL_GLContext gContext;
 std::unordered_map<std::string, ShaderInfo> gShaderFileCache;
 
 // time
+bool gIsFirstFrame;
 double gInvPerformanceFreq;
 Uint64 gPerformanceCounter;
 double gTime;
@@ -74,14 +75,33 @@ GLuint gUBO_Matrices = 0;
 
 // frame buffer
 GLuint gGBuffer = 0;
-Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gDepthStencilTex;
+Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gVelocityTex, gDepthStencilTex;
 
 GLuint gSceneBuffer = 0;
-Texture2D gSceneColorTex, gSceneDepthStencilTex;
+const int gSceneColorTexCount = 3;
+Texture2D gSceneColorTex[gSceneColorTexCount], gSceneDepthStencilTex;
 GLuint gSceneDepthStencilRBO;
+int gSceneColorReadIdx, gSceneColorWriteIdx, gSceneColorHistoryIdx, gSceneColorPrevHistoryIdx;
 
 GLuint gDepthOnlyBuffer = 0;
 Texture2D gShadowTex;
+
+// jitter
+#define JITTER_HALTON 1
+#if JITTER_HALTON
+const static int gJitterCount = 16;
+glm::vec2 gJitter[gJitterCount];
+#else
+const int gJitterCount = 4;
+glm::vec2 gJitter[gJitterCount] =
+{
+	glm::vec2(-2.f / 16.f, -6.f / 16.f),
+	glm::vec2(6.f / 16.f, -2.f / 16.f),
+	glm::vec2(2.f / 16.f,  6.f / 16.f),
+	glm::vec2(-6.f / 16.f,  2.f / 16.f)
+};
+#endif
+int gJitterIdx = 0;
 
 // shader
 Shader gGBufferShader;
@@ -92,6 +112,7 @@ Shader gLightVolumeShader;
 Shader gLightDebugShader;
 Shader gFSQuadShader;
 Shader gToneMapShader;
+Shader gTAAShader;
 
 // material
 Material* gGBufferMaterial;
@@ -102,6 +123,7 @@ Material* gLightVolumeMaterial;
 Material* gLightDebugMaterial;
 Material* gFSQuadMaterial;
 Material* gToneMapMaterial;
+Material* gTAAMaterial;
 
 // mesh data
 MeshData gCubeMeshData;
@@ -119,8 +141,6 @@ std::vector<Mesh*> gNanosuitMeshes;
 Mesh* gDirectionalLightMesh;
 Mesh* gPointLightMesh;
 Mesh* gSpotLightMesh;
-
-Mesh* gToneMapMesh;
 
 Mesh* gPointLightDebugMesh;
 Mesh* gSpotLightDebugMesh;
@@ -438,11 +458,14 @@ void SetupFrameBuffers()
 		// material: metallic + roughness
 		gMaterialTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
 		gMaterialTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT2);
+		// velocity
+		gVelocityTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RG16, GL_RG, GL_UNSIGNED_BYTE);
+		gVelocityTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT3);
 		// depth stencil
 		gDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
 		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 
-		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
 		glDrawBuffers(_countof(attachments), attachments);
 
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -458,6 +481,8 @@ void SetupFrameBuffers()
 		gMaterialTex.Reallocate(gWindowWidth, gWindowHeight);
 		// depth stencil
 		gDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
+		// depth stencil
+		gVelocityTex.Reallocate(gWindowWidth, gWindowHeight);
 	}
 
 
@@ -467,8 +492,10 @@ void SetupFrameBuffers()
 		glGenFramebuffers(1, &gSceneBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
 		// HDR scene color
-		gSceneColorTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
-		gSceneColorTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+		for (int i = 0; i < gSceneColorTexCount; ++i)
+		{
+			gSceneColorTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+		}
 		// depth stencil
 		//gSceneDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
 		//gSceneDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
@@ -479,13 +506,16 @@ void SetupFrameBuffers()
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gSceneDepthStencilRBO);
 
-		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-			printf("Error: Scene Buffer not complete!\n");
+		//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		//	printf("Error: Scene Buffer not complete!\n");
 	}
 	else
 	{
 		// HDR scene color
-		gSceneColorTex.Reallocate(gWindowWidth, gWindowHeight);
+		for (int i = 0; i < gSceneColorTexCount; ++i)
+		{
+			gSceneColorTex[i].Reallocate(gWindowWidth, gWindowHeight);
+		}
 		// depth stencil
 		//gSceneDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
 		// depth stencil rbo
@@ -523,19 +553,55 @@ void LoadShaders(bool bReload)
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
 	gLightVolumeShader.Load("Shader/lightVolume.vert", "Shader/lightVolume.frag", !bReload);
 	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
-	gFSQuadShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
+	gTAAShader.Load("Shader/fsQuad.vert", "Shader/fsQuadTAA.frag", !bReload);
+}
+
+float HaltonSeq(int prime, int index = 1)
+{
+	float r = 0.f;
+	float f = 1.f;
+	int i = index;
+	while (i > 0)
+	{
+		f /= prime;
+		r += f * (i % prime);
+		i = (int)floor(i / (float)prime);
+	}
+	return r;
+}
+
+void InitializeHalton_2_3()
+{
+	for (int i = 0; i < gJitterCount; ++i)
+	{
+		gJitter[i].x = HaltonSeq(2, i + 1) - 0.5f;
+		gJitter[i].y = HaltonSeq(3, i + 1) - 0.5f;
+	}
 }
 
 bool InitEngine()
 {
+	gIsFirstFrame = true;
+
+#if JITTER_HALTON
+	InitializeHalton_2_3();
+#endif
+
 	// settings
 	gRenderSettings.bDrawShadow = true;
 	gRenderSettings.bDrawBounds = false;
 	gRenderSettings.bDrawLightVolume = false;
+	gRenderSettings.bUseTAA = true;
+	gRenderSettings.bUseJitter = true;
 
 	// frame buffers
 	SetupFrameBuffers();
+	// scene buffer idx
+	gSceneColorWriteIdx = 0;
+	gSceneColorReadIdx = 1;
+	gSceneColorHistoryIdx = 2;
+	gSceneColorPrevHistoryIdx = -1;
 
 	// ubo
 	glGenBuffers(1, &gUBO_Matrices);
@@ -555,8 +621,8 @@ bool InitEngine()
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
 	gLightVolumeMaterial = Material::Create(&gLightVolumeShader);
 	gLightDebugMaterial = Material::Create(&gLightDebugShader);
-	gFSQuadMaterial = Material::Create(&gFSQuadShader);
 	gToneMapMaterial = Material::Create(&gToneMapShader);
+	gTAAMaterial = Material::Create(&gTAAShader);
 
 	// mesh data
 	MakeCube(gCubeMeshData);
@@ -568,7 +634,7 @@ bool InitEngine()
 	// mesh
 	gCubeMesh = Mesh::Create(&gCubeMeshData, gGBufferMaterial);
 	gSphereMesh = Mesh::Create(&gSphereMeshData, gGBufferMaterial);
-	gFSQuadMesh = Mesh::Create(&gQuadMeshData, gFSQuadMaterial);
+	gFSQuadMesh = Mesh::Create(&gQuadMeshData, gGBufferMaterial);
 
 	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader);
 	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader);
@@ -576,8 +642,6 @@ bool InitEngine()
 	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, gDirectionalLightMaterial);
 	gPointLightMesh = Mesh::Create(&gIcosahedronMeshData, gLightVolumeMaterial);
 	gSpotLightMesh = Mesh::Create(&gConeMeshData, gLightVolumeMaterial);
-
-	gToneMapMesh = Mesh::Create(&gQuadMeshData, gToneMapMaterial);
 
 	gPointLightDebugMesh = Mesh::Create(&gIcosahedronMeshData, gLightDebugMaterial);
 	gSpotLightDebugMesh = Mesh::Create(&gConeMeshData, gLightDebugMaterial);
@@ -1059,6 +1123,8 @@ void ShadowPass(RenderContext& renderContext)
 		
 		for (int cascadeIdx = 0; cascadeIdx < MAX_CASCADE_COUNT; ++cascadeIdx)
 		{
+			Texture2D* shadowMap = light.shadowData[cascadeIdx].shadowMap;
+
 			// near and far plane for this cascade
 			float n = (cascadeIdx == 0) ? viewPoint.nearPlane : viewPoint.farPlane * cascadeRatio[cascadeIdx-1];
 			float f = viewPoint.farPlane * cascadeRatio[cascadeIdx];
@@ -1068,7 +1134,7 @@ void ShadowPass(RenderContext& renderContext)
 				2 * f * tanHF :
 				sqrt((f - n)*(f - n) + 2 * (f*f + n*n) * tanHF2 + (f + n)*(f + n)*tanHF2*tanHF2);
 
-			float pixelRate = diameter / light.shadowData[cascadeIdx].shadowMap->width;
+			float pixelRate = diameter / shadowMap->width;
 
 			// process frustum bounds
 			BoxBounds frustumBounds;
@@ -1127,10 +1193,12 @@ void ShadowPass(RenderContext& renderContext)
 
 			// the bounds are mapped as (+x, -x, +y, -y, +z, -z) -> (r, l, t, b, -n, -f)
 			// ref: http://www.songho.ca/opengl/gl_projectionmatrix.html
-			glm::mat4 lightProjMat = glm::ortho(
+			glm::mat4 lightProjMat = Math::Ortho(
 				frustumBounds.min.x, frustumBounds.max.x,
 				frustumBounds.min.y, frustumBounds.max.y,
-				-frustumBounds.max.z, -frustumBounds.min.z);
+				-frustumBounds.max.z, -frustumBounds.min.z,
+				shadowMap->width, shadowMap->height,
+				viewPoint.jitterX, viewPoint.jitterY);
 
 			light.shadowData[cascadeIdx].bounds = glm::vec3(
 				frustumBounds.max.x - frustumBounds.min.x,
@@ -1139,7 +1207,6 @@ void ShadowPass(RenderContext& renderContext)
 			light.shadowData[cascadeIdx].shadowMat = remapMat * lightProjMat * viewToLight;
 
 			// attach to frame buffers
-			Texture2D* shadowMap = light.shadowData[cascadeIdx].shadowMap;
 			shadowMap->AttachToFrameBuffer(GL_DEPTH_ATTACHMENT);
 
 			// set viewport
@@ -1149,6 +1216,7 @@ void ShadowPass(RenderContext& renderContext)
 			RenderInfo shadowRenderInfo = gRenderInfo;
 			shadowRenderInfo.View = light.lightViewMat;
 			shadowRenderInfo.Proj = lightProjMat;
+			shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
 			glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 			glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &shadowRenderInfo, GL_DYNAMIC_DRAW);
 			glBindBuffer(GL_UNIFORM_BUFFER, 0);
@@ -1268,6 +1336,30 @@ void DebugForwardPass(RenderContext& renderContext)
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
+void SwapSceneColorReadWrite()
+{
+	int tmp = gSceneColorReadIdx;
+	gSceneColorReadIdx = gSceneColorWriteIdx;
+	gSceneColorWriteIdx = tmp;
+	if (gSceneColorWriteIdx == gSceneColorHistoryIdx)
+		gSceneColorWriteIdx = gSceneColorPrevHistoryIdx;
+}
+
+void PreparePostProcessPass(bool bClear = false)
+{
+	// swap
+	SwapSceneColorReadWrite();
+	// bind read texture
+	gSceneColorTex[gSceneColorReadIdx].Bind(Shader::gSceneColorTexUnit);
+	// attach write texture
+	gSceneColorTex[gSceneColorWriteIdx].AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+	if (bClear)
+	{
+		glClearColor(0, 0, 0, 0);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+}
+
 void PostProcessPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("post process");
@@ -1278,9 +1370,37 @@ void PostProcessPass(RenderContext& renderContext)
 	});
 
 	renderState.Apply();
+	
+	// find post process pass textures
+	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 
-	// draw quad
-	gToneMapMesh->Draw(renderContext);
+	// TAA
+	if(gRenderSettings.bUseTAA)
+	{
+		PreparePostProcessPass();
+		// for the first frame, just use the same frame for history
+		if (gIsFirstFrame)
+			gTAAMaterial->SetParameter("historyTex", &gSceneColorTex[gSceneColorReadIdx]);
+		else
+			gTAAMaterial->SetParameter("historyTex", &gSceneColorTex[gSceneColorHistoryIdx]);
+
+		// draw quad
+		gFSQuadMesh->Draw(renderContext, gTAAMaterial);
+
+		gSceneColorPrevHistoryIdx = gSceneColorHistoryIdx;
+		gSceneColorHistoryIdx = gSceneColorWriteIdx;
+	}
+	
+	// tone mapping
+	{
+		PreparePostProcessPass();
+
+		// unbind frame buffer, draw to screen
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// draw quad
+		gFSQuadMesh->Draw(renderContext, gToneMapMaterial);
+	}
 }
 
 void UIPass()
@@ -1333,6 +1453,8 @@ void UIPass()
 		ImGui::Checkbox("shadow", &gRenderSettings.bDrawShadow);
 		ImGui::Checkbox("bounds", &gRenderSettings.bDrawBounds);
 		ImGui::Checkbox("light volume", &gRenderSettings.bDrawLightVolume);
+		ImGui::Checkbox("TAA", &gRenderSettings.bUseTAA);
+		ImGui::Checkbox("Jitter", &gRenderSettings.bUseJitter);
 
 		ImGui::End();
 	}
@@ -1352,7 +1474,17 @@ void Render()
 	CPU_SCOPED_PROFILE("render");
 
 	RenderContext renderContext;
-	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 100.f);
+	float jitterX = 0, jitterY = 0;
+	if (gRenderSettings.bUseJitter)
+	{
+		jitterX = gJitter[gJitterIdx].x;
+		jitterY = -gJitter[gJitterIdx].y;
+
+		++gJitterIdx;
+		if (gJitterIdx >= gJitterCount)
+			gJitterIdx -= gJitterCount;
+	}
+	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 100.f, jitterX, jitterY);
 	
 	if (gRenderSettings.bDrawShadow)
 	{
@@ -1368,6 +1500,10 @@ void Render()
 	gRenderInfo.View = renderContext.viewPoint.viewMat;
 	gRenderInfo.InvView = renderContext.viewPoint.invViewMat;
 	gRenderInfo.Proj = renderContext.viewPoint.projMat;
+	gRenderInfo.PrevViewProj = gRenderInfo.ViewProj;
+	gRenderInfo.ViewProj = renderContext.viewPoint.viewProjMat;
+	if (gIsFirstFrame)
+		gRenderInfo.PrevViewProj = gRenderInfo.ViewProj;
 	gRenderInfo.Resolution.x = renderContext.viewPoint.width;
 	gRenderInfo.Resolution.y = renderContext.viewPoint.height;
 	gRenderInfo.Time = (float)gTime;
@@ -1383,6 +1519,8 @@ void Render()
 
 	// bind Scene-buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
+	// attach write texture
+	gSceneColorTex[gSceneColorWriteIdx].AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 	
 	// bind deferred pass textures
 	gNormalTex.Bind(Shader::gNormalTexUnit);
@@ -1393,13 +1531,6 @@ void Render()
 	LightPass(renderContext);
 
 	DebugForwardPass(renderContext);
-
-	// unbind frame buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	// find post process pass textures
-	gSceneColorTex.Bind(Shader::gSceneColorTexUnit);
-	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 
 	PostProcessPass(renderContext);
 
@@ -1491,6 +1622,8 @@ int main(int argc, char **argv)
 				ScopedProfileTimerGPU::Swap();
 			}
 #endif
+
+			gIsFirstFrame = false;
 		}
 	}
 

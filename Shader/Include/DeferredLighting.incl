@@ -76,7 +76,7 @@ vec3 CalcLightBlinnPhong(vec3 light, vec3 normal, vec3 view, vec3 lightColor, ve
 	return diff + spec;
 }
 
-vec3 GetGBufferPositionVS(float depth, mat4 projMat, vec3 fragPosVS)
+vec3 GetPositionVSFromDepth(float depth, mat4 projMat, vec3 fragPosVS)
 {
 	float ndcZ = depth * 2.f - 1.f;
 	float viewZ = projMat[3][2] / (projMat[2][3] * ndcZ - projMat[2][2]);

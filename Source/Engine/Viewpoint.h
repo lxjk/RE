@@ -15,15 +15,18 @@ class Viewpoint
 public:
 	glm::vec3 position;
 	glm::quat rotation;
-	GLfloat fov;
-	GLfloat width;
-	GLfloat height;
-	GLfloat nearPlane;
-	GLfloat farPlane;
+	float fov;
+	float width;
+	float height;
+	float nearPlane;
+	float farPlane;
+	float jitterX; // in pixel scale
+	float jitterY; // in pixel scale
 
 	glm::mat4 viewMat;
 	glm::mat4 invViewMat;
 	glm::mat4 projMat;
+	glm::mat4 viewProjMat;
 	
 	void CacheMatrices()
 	{
@@ -40,7 +43,9 @@ public:
 		viewMat = glm::translate(viewMat, -position);
 		// proj
 		//projMat = glm::perspectiveFov(fov / width * height, width, height, nearPlane, farPlane);
-		projMat = Math::PerspectiveFov(fov, width, height, nearPlane, farPlane);
+		projMat = Math::PerspectiveFov(fov, width, height, nearPlane, farPlane, jitterX, jitterY);
+
+		viewProjMat = projMat * viewMat;
 	}
 
 	// we don't do bound check here, expect an array of at least 4 elements

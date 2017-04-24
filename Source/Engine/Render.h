@@ -28,8 +28,10 @@ struct RenderContext
 struct RenderInfo
 {
 	glm::mat4 View;			// 16 * 4
-	glm::mat4 InvView;		// 16 * 4
 	glm::mat4 Proj;			// 16 * 4
+	glm::mat4 ViewProj;		// 16 * 4
+	glm::mat4 InvView;		// 16 * 4
+	glm::mat4 PrevViewProj;	// 16 * 4
 	glm::vec2 Resolution;	// 8
 	float Time;				// 4
 };
@@ -102,4 +104,6 @@ struct RenderSettings
 	bool bDrawShadow;
 	bool bDrawBounds;
 	bool bDrawLightVolume;
+	bool bUseTAA;
+	bool bUseJitter;
 };

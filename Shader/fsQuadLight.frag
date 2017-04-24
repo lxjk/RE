@@ -33,15 +33,15 @@ const vec3 csmColor[MAX_CSM_COUNT] =
 	vec3(0, 1, 0),
 	vec3(0, 0, 1),
 };
-
+/*
 const vec2 poissonDisk[4] = vec2[](
   vec2( -0.94201624, -0.39906216 ),
   vec2( 0.94558609, -0.76890725 ),
   vec2( -0.094184101, -0.92938870 ),
   vec2( 0.34495938, 0.29387760 )
  );
+ */
  
- /*
  const vec2 poissonDisk[9] = vec2[](
 	vec2(0.6701438f, 0.0797466f),
 	vec2(-0.3487887f, 0.1811505f),
@@ -53,7 +53,7 @@ const vec2 poissonDisk[4] = vec2[](
 	vec2(0.4536706f, 0.7639304f),
 	vec2(-0.7440495f, -0.5962256f)
  );
- */
+ 
 
 const float W5[5][5] =
 {
@@ -74,7 +74,7 @@ float GetBias(vec3 normal, vec3 light, int cascade)
 {
 	float cosAlpha = dot(normal, light);
 	float sinAlpha = sqrt(1.0 - cosAlpha * cosAlpha);
-	return (0.002 /*+ 0.0015 * cascade*/) * sinAlpha / cosAlpha;
+	return (0.0025 /*+ 0.0015 * cascade*/) * sinAlpha / cosAlpha;
 	//float bias = 0.004 * (1.0 - abs(dot(normal, -lights[i].directionRAB.xyz)));  
 	//float bias = 0.008;
 }
@@ -135,8 +135,8 @@ float CalcShadowPoisson(vec3 viewPos, mat4 shadowMat, sampler2D shadowMap, float
 	posLCS.z -= posLCS.w * bias;
 	posLCS /= posLCS.w;
 	vec2 mapSize = textureSize(shadowMap, 0);
-	vec2 sampleScale = 1.8 / mapSize;
-	const int sampleCount = 4;
+	vec2 sampleScale = 1.5 / mapSize;
+	const int sampleCount = 9;
 	const float depthRange = bias;
 	float depthDiff = 0;
 	float randV = GetRandom(vec4(viewPos * 100, time));
@@ -154,7 +154,7 @@ float CalcShadowPoisson(vec3 viewPos, mat4 shadowMat, sampler2D shadowMap, float
 		//depthDiff += (texture(shadowMap, uv).r - posLCS.z);
 		depthDiff += clamp(texture(shadowMap, uv).r - posLCS.z, -depthRange, depthRange);
 	}
-	depthDiff /= sampleCount;
+	depthDiff /= float(sampleCount);
 	//return depthDiff >= 0 ? 1 : 0;
 	return smoothstep(-depthRange * 0.5f, depthRange * 0.5f, depthDiff);
 } 
@@ -168,7 +168,7 @@ void main()
 		discard;
 	vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
-	vec3 position = GetGBufferPositionVS(depth, projMat, fs_in.positionVS);
+	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
 	vec3 view = normalize(-position);	
 	vec3 albedo = texture(gAlbedoTex, uv).rgb;
 	vec4 material = texture(gMaterialTex, uv);

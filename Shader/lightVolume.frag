@@ -18,7 +18,7 @@ void main()
 	vec2 uv = gl_FragCoord.xy / resolution;
 	vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
 	float depth = texture(gDepthStencilTex, uv).r;
-	vec3 position = GetGBufferPositionVS(depth, projMat, fs_in.positionVS);
+	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
 	vec3 view = normalize(-position);	
 	vec3 albedo = texture(gAlbedoTex, uv).rgb;
 	vec4 material = texture(gMaterialTex, uv);
