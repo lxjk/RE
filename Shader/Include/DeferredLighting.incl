@@ -12,11 +12,10 @@ struct Light
 	int shadowDataCount;
 };
 
-float DistributionGGX(vec3 N, vec3 H, float roughness)
+float DistributionGGX(float NdotH, float roughness)
 {
 	float a = roughness * roughness;
 	float a2 = a*a;
-	float NdotH = max(dot(N, H), 0.f);
 	float dnom = (NdotH * NdotH) * (a2 - 1) + 1;
 	return a2 / (PI * dnom * dnom);
 }
@@ -27,10 +26,10 @@ float GeometrySchlickGGX(float NdotV, float roughness)
 	return NdotV / (NdotV * (1-k) + k);
 }
 
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+float GeometrySmith(float NdotL, float NdotV, float roughness)
 {
-	float ggx1 = GeometrySchlickGGX(max(dot(N, L), 0.f), roughness);
-	float ggx2 = GeometrySchlickGGX(max(dot(N, V), 0.f), roughness);
+	float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+	float ggx2 = GeometrySchlickGGX(NdotV, roughness);
 	return ggx1 * ggx2;
 }
 
@@ -44,6 +43,10 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
 vec3 CalcLightPBR(vec3 L, vec3 N, vec3 V, vec3 lightColor, vec3 albedo, float metallic, float roughness, float attenuation)
 {
 	vec3 H = normalize(L + V);
+	float NdotH = max(dot(N, H), 0.f);
+	float VdotH = max(dot(H, V), 0.f);
+	float NdotL = max(dot(N, L), 0.f);
+	float NdotV = max(dot(N, V), 0.f);
 	
 	vec3 F0 = vec3(0.04f);
 	F0 = mix(F0, albedo, metallic);
@@ -51,9 +54,9 @@ vec3 CalcLightPBR(vec3 L, vec3 N, vec3 V, vec3 lightColor, vec3 albedo, float me
 	vec3 radiance = lightColor * attenuation;
 	
 	// cook-torrance BRDF
-	float NDF = DistributionGGX(N, H, roughness);
-	float G = GeometrySmith(N, V, L, roughness);
-	vec3 F = FresnelSchlick(clamp(dot(H, V), 0.f, 1.f), F0);
+	float NDF = DistributionGGX(NdotH, roughness);
+	float G = GeometrySmith(NdotL, NdotV, roughness);
+	vec3 F = FresnelSchlick(VdotH, F0);
 	
 	vec3 kS = F;
 	vec3 kD = vec3(1.0f) - kS;
@@ -62,6 +65,82 @@ vec3 CalcLightPBR(vec3 L, vec3 N, vec3 V, vec3 lightColor, vec3 albedo, float me
 	vec3 brdf = (NDF * G * F) / (4 * max(dot(N, V), 0.f) * max(dot(N, L), 0.f) + 0.001f);
 		
 	return (kD * albedo / PI + brdf) * radiance * max(dot(N, L), 0.f);
+}
+
+// http://www.gdcvault.com/play/1024478/PBR-Diffuse-Lighting-for-GGX
+vec3 CalcLightPBR_op(vec3 L, vec3 N, vec3 V, vec3 lightColor, vec3 albedo, float metallic, float roughness, float attenuation)
+{
+	float NdotL = max(dot(N, L), 0.f);
+	float NdotV = max(dot(N, V), 0.f);
+	
+	float LdotV = dot(L, V); 
+	float rcpLen_LV = inversesqrt(2 + 2 * LdotV);
+	
+	float NdotH = (NdotL + NdotV) * rcpLen_LV;
+	float VdotH = rcpLen_LV + rcpLen_LV * LdotV;
+	
+	vec3 F0 = vec3(0.04f);
+	F0 = mix(F0, albedo, metallic);
+	
+	vec3 radiance = lightColor * attenuation;
+	
+	// cook-torrance BRDF
+	float NDF = DistributionGGX(NdotH, roughness);
+	float G = GeometrySmith(NdotL, NdotV, roughness);
+	vec3 F = FresnelSchlick(VdotH, F0);
+	
+	vec3 kS = F;
+	vec3 kD = vec3(1.0f) - kS;
+	kD *= (1.0f - metallic);
+	
+	vec3 brdf = (NDF * G * F) / (4 * NdotV * NdotL + 0.001f);
+		
+	return (kD * albedo / PI + brdf) * radiance * NdotL;
+}
+
+// http://www.gdcvault.com/play/1024478/PBR-Diffuse-Lighting-for-GGX
+vec3 CalcLightPBR2(vec3 L, vec3 N, vec3 V, vec3 lightColor, vec3 albedo, float metallic, float roughness, float attenuation)
+{
+	float NdotL = max(dot(N, L), 0.f);
+	float NdotV = max(dot(N, V), 0.f);
+	
+	float LdotV = dot(L, V); 
+	float rcpLen_LV = inversesqrt(2 + 2 * LdotV);
+	
+	float NdotH = (NdotL + NdotV) * rcpLen_LV;
+	float VdotH = rcpLen_LV + rcpLen_LV * LdotV;
+	
+	vec3 F0 = vec3(0.04f);
+	F0 = mix(F0, albedo, metallic);
+	
+	vec3 radiance = lightColor * attenuation;
+	
+#if 0
+	// cook-torrance BRDF
+	float NDF = DistributionGGX(NdotH, roughness);
+	vec3 F = FresnelSchlick(VdotH, F0);
+	
+	// geometry term baked in
+	vec3 brdf_spec = (NDF * F) / (2 * mix(2 * NdotL * NdotV, NdotL + NdotV, roughness) + 0.001f);
+#else	
+	float NDF = DistributionGGX(NdotH, roughness);
+	float G = GeometrySmith(NdotL, NdotV, roughness);
+	vec3 F = FresnelSchlick(VdotH, F0);
+#endif
+	
+	vec3 brdf_spec = (NDF * G * F) / (4 * NdotV * NdotL + 0.001f);
+	
+	float facing = 0.5 + 0.5 * LdotV;
+	float diffRough = facing * (0.9 - 0.4 * facing) * (0.5 + NdotH) / (NdotH + 0.001f);
+	float diffSmooth = 1.05 * (1 - pow(1-NdotL, 5)) * (1 - pow(1-NdotV, 5));
+	float single = mix(diffSmooth, diffRough, roughness) / PI;
+	float multi = 0.1159 * roughness;
+	
+	vec3 brdf_diff = albedo * (single + albedo * multi);
+		
+	//return ((1.0f - metallic) * (1 - F) * albedo / PI + brdf_spec) * radiance * NdotL;
+	//return (brdf_spec) * radiance * NdotL;
+	return ((1.0f - metallic) * brdf_diff + brdf_spec) * radiance * NdotL;
 }
 
 vec3 CalcLightBlinnPhong(vec3 light, vec3 normal, vec3 view, vec3 lightColor, vec3 albedo, float attenuation)
@@ -116,13 +195,15 @@ vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, f
 	{
 		// spot
 		//float spotRatio = min((1 - dot(light, -lightData.direction)) / (1 - lightData.cosHalfAngle), 1.f);
-		//attenuation *= (1 - spotRatio);
 		float spotRatio = clamp((dot(light, -lightData.directionRAB.xyz) - lightData.attenParams.z) * lightData.attenParams.w, 0.f, 1.f);
+		//attenuation *= (1 - spotRatio);
 		attenuation *= spotRatio;
 	}
 	
 	//return CalcLightBlinnPhong(light, normal, view, lightData.color, albedo, attenuation);
-	return CalcLightPBR(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);
+	//return CalcLightPBR(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);
+	//return CalcLightPBR_op(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);
+	return CalcLightPBR2(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);
 }
 
 #endif
