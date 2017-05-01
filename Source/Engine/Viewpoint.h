@@ -15,7 +15,7 @@ class Viewpoint
 public:
 	glm::vec3 position;
 	glm::quat rotation;
-	float fov;
+	float fov; // radian
 	float width;
 	float height;
 	float nearPlane;

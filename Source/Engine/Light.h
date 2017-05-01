@@ -175,6 +175,12 @@ public:
 		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);
 	}
 
+	void SetPosition(const glm::vec3& inPosition)
+	{
+		position = inPosition;
+		BuildModelMat();
+	}
+
 	void SetDirection(const glm::vec3& inDirection)
 	{
 		direction = inDirection;

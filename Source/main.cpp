@@ -661,7 +661,7 @@ bool InitEngine()
 	MakeMeshComponents();
 	
 	// camera
-	gCamera.fov = glm::radians(90.f);
+	gCamera.fov = 90.f;
 	gCamera.position = glm::vec3(0.f, 5.f, 20.f);
 	gCamera.euler = glm::vec3(-10.f, 0.f, 0.f);
 
@@ -816,12 +816,12 @@ void Update(float deltaTime)
 		float ratio = spotLightLocalTime / totalTime;
 		ratio = glm::abs(ratio * 2 - 1); // [0 - 1] -> [1 - 0 - 1]
 
-		const glm::vec3 startPos(12.5f, 1, 6);
-		const glm::vec3 endPos(-12.5f, 1, 6);
+		const glm::vec3 startPos(-3, 3, 10);
+		const glm::vec3 endPos(3, 3, 10);
 		const glm::vec3 startDir(-2, -0.5f, -0.2f);
 		const glm::vec3 endDir(2, -0.5f, -0.2f);
 		
-		//gSpotLights[0].position = glm::mix(startPos, endPos, ratio);
+		gSpotLights[0].SetPosition(glm::mix(startPos, endPos, ratio));
 		gSpotLights[0].SetDirection(glm::normalize(glm::mix(startDir, endDir, ratio)));
 	}
 

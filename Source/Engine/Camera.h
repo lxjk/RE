@@ -8,8 +8,8 @@ class Camera
 {
 public:
 	glm::vec3 position;
-	glm::vec3 euler;
-	GLfloat fov;
+	glm::vec3 euler; // degree
+	GLfloat fov; // degree
 
 	const Viewpoint& ProcessCamera(float width, float height, float nearPlane, float farPlane, float jitterX = 0, float jitterY = 0)
 	{
@@ -22,7 +22,7 @@ public:
 
 		viewpoint.position = position;
 		viewpoint.rotation = glm::quat(glm::radians(euler));
-		viewpoint.fov = fov;
+		viewpoint.fov = glm::radians(fov);
 
 		viewpoint.CacheMatrices();
 
