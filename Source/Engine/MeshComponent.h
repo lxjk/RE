@@ -24,6 +24,7 @@ public:
 	glm::vec3 rotation;
 	glm::vec3 scale;
 
+	glm::mat4 prevModelMat;
 	glm::mat4 modelMat;
 	glm::mat3 normalMat;
 
@@ -47,6 +48,7 @@ public:
 		, rotation(inRotation)
 		, scale(inScale)
 		, bRenderTransformDirty(true)
+		, bHasCachedRenderTransform(false)
 	{
 		SetMeshList(inMeshList);
 	}
@@ -82,6 +84,7 @@ protected:
 
 	std::vector<Mesh*> meshList;
 	bool bRenderTransformDirty;
+	bool bHasCachedRenderTransform;
 
 	void CacheRenderMatrices();
 };

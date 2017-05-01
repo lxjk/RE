@@ -1,8 +1,9 @@
-#version 330 core
+#version 430 core
 
 #include "Include/CommonUBO.incl"
 #include "Include/DeferredLighting.incl"
 #include "Include/DeferredPassTex.incl"
+#include "Include/Shadow.incl"
 
 in VS_OUT
 {
@@ -12,6 +13,8 @@ in VS_OUT
 out vec4 color;
 
 uniform Light light;
+uniform mat4 shadowMat;
+uniform sampler2D shadowMap;
 
 void main() 
 {	
@@ -25,6 +28,14 @@ void main()
 	float metallic = material.r;
 	float roughness = material.g;
 	
-	vec3 result = CalcLight(light, normal, position, view, albedo, metallic, roughness);
+	float shadowFactor = 1;
+	if(light.shadowDataCount > 0)
+	{
+		vec3 lightDir = normalize(light.positionInvR.xyz - position);
+		shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, shadowMap, 0.00015);
+	}
+	
+	vec3 result = CalcLight(light, normal, position, view, albedo, metallic, roughness) * shadowFactor;
 	color = vec4(result, 1.0f);
+	//color = vec4(vec3(shadowFactor), 1.f);
 }

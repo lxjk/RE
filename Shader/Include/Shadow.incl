@@ -1,0 +1,114 @@
+#ifndef SHADOW_INCL
+#define SHADOW_INCL
+
+#include "Common.incl"
+
+const float ShadowWeights5[5][5] =
+{
+    { 0.0,0.5,1.0,0.5,0.0 },
+    { 0.5,1.0,1.0,1.0,0.5 },
+    { 1.0,1.0,1.0,1.0,1.0 },
+    { 0.5,1.0,1.0,1.0,0.5 },
+    { 0.0,0.5,1.0,0.5,0.0 }
+};
+
+float GetBias(vec3 normal, vec3 light, float biasFactor)
+{
+	float cosAlpha = dot(normal, light);
+	float sinAlpha = sqrt(1.0 - cosAlpha * cosAlpha);
+	//return (0.0025 /*+ 0.0015 * cascade*/) * sinAlpha / cosAlpha;
+	return biasFactor * sinAlpha / cosAlpha;
+	//float bias = 0.004 * (1.0 - abs(dot(normal, -lights[i].directionRAB.xyz)));  
+	//float bias = 0.008;
+}
+
+float CalcShadowBasic(vec3 viewPos, mat4 shadowMat, sampler2D shadowMap, float bias)
+{
+	// convert to light clip space
+	vec4 posLCS = shadowMat * vec4(viewPos, 1.f);
+	posLCS.z -= posLCS.w * bias;
+	posLCS /= posLCS.w;
+	return posLCS.z <= texture(shadowMap, posLCS.xy).r ? 1 : 0;
+} 
+
+float CalcShadowLerp(vec3 viewPos, mat4 shadowMat, sampler2DShadow shadowMap, float bias)
+{
+	// convert to light clip space
+	vec4 posLCS = shadowMat * vec4(viewPos, 1.f);
+	posLCS.z -= posLCS.w * bias;
+	return textureProj(shadowMap, posLCS);
+} 
+
+float CalcShadowTap5(vec3 viewPos, mat4 shadowMat, sampler2D shadowMap, float bias)
+{
+	// convert to light clip space
+	vec4 posLCS = shadowMat * vec4(viewPos, 1.f);
+	posLCS.z -= posLCS.w * bias;
+	posLCS /= posLCS.w;
+	vec2 mapSize = textureSize(shadowMap, 0);
+	//vec2 sampleScale = 1.f * posLCS.w / mapSize;
+	vec2 sampleScale = 1.f / mapSize;
+	const int steps = 2;
+	const float depthRange = bias;
+	float sumWeights = 0;
+	float depthDiff = 0;
+	for(int xIdx = -steps; xIdx <= steps; ++xIdx)
+	{
+		for(int yIdx = -steps; yIdx <= steps; ++yIdx)
+		{
+			float weight = ShadowWeights5[xIdx + steps][yIdx + steps];
+			vec2 uv = posLCS.xy + vec2(xIdx, yIdx) * sampleScale;
+			//if(uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1)
+			//	continue;				
+			//depthDiff += (texture(shadowMap, uv).r - posLCS.z) * weight;
+			depthDiff += clamp(texture(shadowMap, uv).r - posLCS.z, -depthRange, depthRange) * weight;
+			//shadowFactor += posLCS.z <= texture(shadowMap, uv).r ? weight : 0;
+			sumWeights += weight;
+		}
+	}
+	depthDiff /= sumWeights;
+	//return depthDiff >= 0 ? 1 : 0;
+	return smoothstep(-depthRange * 0.5f, depthRange * 0.5f, depthDiff);
+} 
+
+float CalcShadowPoisson(vec3 viewPos, mat4 shadowMat, sampler2D shadowMap, float bias)
+{
+	// convert to light clip space
+	vec4 posLCS = shadowMat * vec4(viewPos, 1.f);
+	posLCS.z -= posLCS.w * bias;
+	posLCS /= posLCS.w;
+	vec2 mapSize = textureSize(shadowMap, 0);
+	vec2 sampleScale = 1.5 / mapSize;
+	const int sampleCount = 9;
+	const float depthRange = bias;
+	float depthDiff = 0;
+	float randV = GetRandom(vec4(viewPos * 100, time));
+	float randCos = abs(randV * 2 - 1) * 2 - 1; // [0,1] -> [-1, 0 ,1] -> [1, -1, 1]
+	float randSin = sqrt(1 - randCos*randCos) * (randV > 0.5 ? -1 : 1);
+	for(int sampleIdx = 0; sampleIdx < sampleCount; ++sampleIdx)
+	{
+		vec2 offset = PoissonDisk9[sampleIdx];
+		// rotate
+		offset = vec2(
+			offset.x * randCos - offset.y * randSin,
+			offset.x * randSin + offset.y * randCos
+		);
+		vec2 uv = posLCS.xy + offset * sampleScale;
+		//depthDiff += (texture(shadowMap, uv).r - posLCS.z);
+		depthDiff += clamp(texture(shadowMap, uv).r - posLCS.z, -depthRange, depthRange);
+	}
+	depthDiff /= float(sampleCount);
+	//return depthDiff >= 0 ? 1 : 0;
+	return smoothstep(-depthRange * 0.5f, depthRange * 0.5f, depthDiff);
+} 
+
+float CalcShadow(vec3 viewPos, vec3 normal, vec3 light, mat4 shadowMat, sampler2D shadowMap, float biasFactor)
+{
+	float bias = GetBias(normal, light, biasFactor);
+	//return CalcShadowTap5(viewPos, shadowMat, shadowMap, bias);
+	return CalcShadowPoisson(viewPos, shadowMat, shadowMap, bias);
+	//return CalcShadowBasic(viewPos, shadowMat, shadowMap, bias);
+	//return CalcShadowLerp(viewPos, shadowMat, shadowMap, bias);
+}
+
+#endif

@@ -16,10 +16,17 @@ void MeshComponent::CacheRenderMatrices()
 	bRenderTransformDirty = false;
 
 	//modelMat = glm::orientate4(rotation);
+	prevModelMat = modelMat;
 	modelMat = glm::mat4_cast(glm::quat(glm::radians(rotation)));
 	modelMat = glm::scale(modelMat, scale);
 	modelMat[3] = glm::vec4(position, 1.f);
 	normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+
+	if (!bHasCachedRenderTransform)
+	{
+		bHasCachedRenderTransform = true;
+		prevModelMat = modelMat;
+	}
 }
 
 void MeshComponent::UpdateEndOfFrame(float deltaTime)
@@ -50,6 +57,7 @@ void MeshComponent::Draw(RenderContext& renderContext, Material* overrideMateria
 {
 	if (overrideMaterial)
 	{
+		overrideMaterial->SetParameter("prevModelMat", prevModelMat);
 		overrideMaterial->SetParameter("modelMat", modelMat);
 		overrideMaterial->SetParameter("normalMat", normalMat);
 	}
@@ -58,6 +66,7 @@ void MeshComponent::Draw(RenderContext& renderContext, Material* overrideMateria
 	{
 		if (!overrideMaterial)
 		{
+			meshListPtr[i]->material->SetParameter("prevModelMat", prevModelMat);
 			meshListPtr[i]->material->SetParameter("modelMat", modelMat);
 			meshListPtr[i]->material->SetParameter("normalMat", normalMat);
 		}

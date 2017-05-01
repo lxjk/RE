@@ -1,15 +1,20 @@
 #version 330 core
 
+#include "Include/Common.incl"
+
 in VS_OUT
 {
 	vec3 normal;
 	vec4 tangent;
 	vec2 texCoords;
+	vec4 posCS;
+	vec4 prevPosCS;
 } fs_in;
 
 out vec3 gNormal;
 out vec3 gAlbedo;
 out vec2 gMaterial;
+out vec2 gVelocity;
 
 uniform vec3 color;
 uniform sampler2D normalTex;
@@ -29,4 +34,7 @@ void main()
 	
 	gMaterial.r = metallic;
 	gMaterial.g = roughness;
+	
+	vec2 velocity = fs_in.posCS.xy / fs_in.posCS.w - fs_in.prevPosCS.xy / fs_in.prevPosCS.w;
+	gVelocity = EncodeVelocityToTexture(velocity);
 }

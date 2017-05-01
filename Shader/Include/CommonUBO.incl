@@ -7,9 +7,12 @@ layout(std140) uniform RenderInfo
 	mat4 projMat;
 	mat4 viewProjMat;
 	mat4 invViewMat;
+	mat4 prevViewMat;
+	mat4 prevProjMat;
 	mat4 prevViewProjMat;
 	vec2 resolution;
 	float time;
+	float exposure;
 };
 
 #endif

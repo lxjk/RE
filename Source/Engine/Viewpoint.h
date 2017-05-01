@@ -23,6 +23,8 @@ public:
 	float jitterX; // in pixel scale
 	float jitterY; // in pixel scale
 
+	float nearRadius;
+
 	glm::mat4 viewMat;
 	glm::mat4 invViewMat;
 	glm::mat4 projMat;
@@ -46,6 +48,9 @@ public:
 		projMat = Math::PerspectiveFov(fov, width, height, nearPlane, farPlane, jitterX, jitterY);
 
 		viewProjMat = projMat * viewMat;
+
+		float tanHalfFOV = glm::tan(fov * 0.5f);
+		nearRadius = nearPlane * sqrt(1 + tanHalfFOV * tanHalfFOV * (1 + height * height / width / width));
 	}
 
 	// we don't do bound check here, expect an array of at least 4 elements

@@ -56,7 +56,7 @@ SDL_GLContext gContext;
 std::unordered_map<std::string, ShaderInfo> gShaderFileCache;
 
 // time
-bool gIsFirstFrame;
+bool gHasResetFrame;
 double gInvPerformanceFreq;
 Uint64 gPerformanceCounter;
 double gTime;
@@ -79,9 +79,11 @@ Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gVelocityTex, gDepthStencilTex;
 
 GLuint gSceneBuffer = 0;
 const int gSceneColorTexCount = 3;
-Texture2D gSceneColorTex[gSceneColorTexCount], gSceneDepthStencilTex;
+const int gSceneDepthTexCount = 2;
+Texture2D gSceneColorTex[gSceneColorTexCount], gSceneDepthStencilTex[gSceneDepthTexCount];
 GLuint gSceneDepthStencilRBO;
 int gSceneColorReadIdx, gSceneColorWriteIdx, gSceneColorHistoryIdx, gSceneColorPrevHistoryIdx;
+int gSceneDepthCurrentIdx, gSceneDepthHistoryIdx;
 
 GLuint gDepthOnlyBuffer = 0;
 Texture2D gShadowTex;
@@ -179,7 +181,7 @@ bool Init()
 	}
 
 	// init sdl_image
-	if (IMG_Init(IMG_INIT_JPG) == 0)
+	if (IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG) == 0)
 	{
 		printf("SDL_Image could not initialize! SDL_IMAGE_Error: %s\n", IMG_GetError());
 		return false;
@@ -268,17 +270,7 @@ void MakeLights()
 		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
 		/*int=*/	1
 	);
-
-	// setup shadow maps
-	for (int i = 0; i < gDirectionalLights.size(); ++i)
-	{
-		for (int j = 0; j < MAX_CASCADE_COUNT; ++j)
-		{
-			Texture2D* shadowMap = Texture2D::Create();
-			shadowMap->AllocateForFrameBuffer(1024, 1024, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT, true);
-			gDirectionalLights[i].shadowData[j].shadowMap = shadowMap;
-		}
-	}
+	gDirectionalLights[dlIdx].bCastShadow = true;
 
 	assert(gDirectionalLights.size() <= MAX_DIRECTIONAL_LIGHT_COUNT);
 
@@ -344,14 +336,15 @@ void MakeLights()
 		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader))));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
-		/*pos=*/	glm::vec3(0, 2, 10),
+		/*pos=*/	glm::vec3(0, 3, 10),
 		/*dir=*/	glm::vec3(-2, -0.5f, -0.2f),
-		/*radius=*/	12.f,
-		/*hOuter=*/	30.f,
+		/*radius=*/	20.f,
+		/*hOuter=*/	45.f,
 		/*hInner=*/	20.f,
 		/*color=*/	glm::vec3(0.f, 0.f, 1.f),
-		/*int=*/	100
+		/*int=*/	1000
 	);
+	gSpotLights[slIdx].bCastShadow = true;
 }
 
 void MakeMeshComponents()
@@ -497,14 +490,16 @@ void SetupFrameBuffers()
 			gSceneColorTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
 		}
 		// depth stencil
-		//gSceneDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
-		//gSceneDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
+		for (int i = 0; i < gSceneDepthTexCount; ++i)
+		{
+			gSceneDepthStencilTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
+		}
 		// depth stencil rbo
-		glGenRenderbuffers(1, &gSceneDepthStencilRBO);
-		glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
-		glBindRenderbuffer(GL_RENDERBUFFER, 0);
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gSceneDepthStencilRBO);
+		//glGenRenderbuffers(1, &gSceneDepthStencilRBO);
+		//glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
+		//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
+		//glBindRenderbuffer(GL_RENDERBUFFER, 0);
+		//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gSceneDepthStencilRBO);
 
 		//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		//	printf("Error: Scene Buffer not complete!\n");
@@ -517,11 +512,14 @@ void SetupFrameBuffers()
 			gSceneColorTex[i].Reallocate(gWindowWidth, gWindowHeight);
 		}
 		// depth stencil
-		//gSceneDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
+		for (int i = 0; i < gSceneDepthTexCount; ++i)
+		{
+			gSceneDepthStencilTex[i].Reallocate(gWindowWidth, gWindowHeight);
+		}
 		// depth stencil rbo
-		glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
-		glBindRenderbuffer(GL_RENDERBUFFER, 0);
+		//glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
+		//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
+		//glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
 
 	// Shadow Buffer
@@ -582,7 +580,7 @@ void InitializeHalton_2_3()
 
 bool InitEngine()
 {
-	gIsFirstFrame = true;
+	gHasResetFrame = true;
 
 #if JITTER_HALTON
 	InitializeHalton_2_3();
@@ -602,6 +600,8 @@ bool InitEngine()
 	gSceneColorReadIdx = 1;
 	gSceneColorHistoryIdx = 2;
 	gSceneColorPrevHistoryIdx = -1;
+	gSceneDepthCurrentIdx = 0;
+	gSceneDepthHistoryIdx = 1;
 
 	// ubo
 	glGenBuffers(1, &gUBO_Matrices);
@@ -674,6 +674,7 @@ void OnWindowResize(int newWidth, int newHeight)
 	gWindowHeight = newHeight;
 
 	SetupFrameBuffers();
+	gHasResetFrame = true;
 }
 
 void Close()
@@ -757,32 +758,35 @@ void updateKeyboardInput(float deltaTime)
 	glm::vec3 up = glm::vec3(0, 1, 0);
 
 	const static float moveSpeed = 12.f;
+	float moveSpeedFactor = 1.f;
+	if (gKeyStates[SDL_SCANCODE_LSHIFT])
+		moveSpeedFactor = 0.01f;
 
 	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT))
 	{
 		if (gKeyStates[SDL_SCANCODE_W])
 		{
-			gCamera.position += cameraForward * moveSpeed * deltaTime;
+			gCamera.position += cameraForward * moveSpeed * moveSpeedFactor * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_S])
 		{
-			gCamera.position -= cameraForward * moveSpeed * deltaTime;
+			gCamera.position -= cameraForward * moveSpeed * moveSpeedFactor * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_D])
 		{
-			gCamera.position += cameraRight * moveSpeed * deltaTime;
+			gCamera.position += cameraRight * moveSpeed * moveSpeedFactor * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_A])
 		{
-			gCamera.position -= cameraRight * moveSpeed * deltaTime;
+			gCamera.position -= cameraRight * moveSpeed * moveSpeedFactor * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_E])
 		{
-			gCamera.position += up * moveSpeed * deltaTime;
+			gCamera.position += up * moveSpeed * moveSpeedFactor * deltaTime;
 		}
 		if (gKeyStates[SDL_SCANCODE_Q])
 		{
-			gCamera.position -= up * moveSpeed * deltaTime;
+			gCamera.position -= up * moveSpeed * moveSpeedFactor * deltaTime;
 		}
 	}
 
@@ -799,6 +803,7 @@ void Update(float deltaTime)
 
 	// update spot light
 	if (gSpotLights.size() > 0)
+	//if(false)
 	{
 		static const float totalTime = 4.f;
 		static float spotLightLocalTime = 0.f;
@@ -866,6 +871,9 @@ void DirectionalLightPass(RenderContext& renderContext)
 		s.bDepthWrite = true;
 	});
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+
 	glClearDepth(1);
 	glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -884,7 +892,7 @@ void DirectionalLightPass(RenderContext& renderContext)
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity);
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams);
 		// shadow
-		if (gRenderSettings.bDrawShadow)
+		if (gRenderSettings.bDrawShadow && light.bCastShadow)
 		{
 			int shadowCount = MAX_CASCADE_COUNT;
 			gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
@@ -905,6 +913,8 @@ void DirectionalLightPass(RenderContext& renderContext)
 
 	// draw quad
 	gDirectionalLightMesh->Draw(renderContext);
+
+	glDisable(GL_BLEND);
 }
 
 void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights, const Mesh* lightVolumeMesh)
@@ -958,8 +968,10 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 	std::vector<int> cameraInsideLight;
 	cameraInsideLight.reserve(4);
 
+	int stencilBits = 8;
+
 	const Light* lightsPtr = lights.data();
-	for (int i = 0, ni = (int)lights.size(); i < ni; i += 8)
+	for (int i = 0, ni = (int)lights.size(); i < ni; i += stencilBits)
 	{
 		// clear stencil
 		glClearStencil(0);
@@ -970,7 +982,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 		// prepass
 		prepassRenderState.Apply();
 
-		for (int j = 0; j < 8 && i + j < ni; ++j)
+		for (int j = 0; j < stencilBits && i + j < ni; ++j)
 		{
 			int lightIdx = i + j;
 			char mask = 1 << j;
@@ -980,10 +992,21 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 
 			// camera in light volume?
 			glm::vec3 lightToCamera = renderContext.viewPoint.position - light.position;
-			bool isInLightVolume = (Math::SizeSquared(lightToCamera) <	light.radius * light.radius * 1.01f * 1.01f);
+			float radiusFactor = 1.01f;
 			if (bSpot)
+				radiusFactor /= light.outerCosHalfAngle;
+			float adjustedRadius = light.radius * radiusFactor + renderContext.viewPoint.nearRadius;
+			bool isInLightVolume = (Math::SizeSquared(lightToCamera) <	adjustedRadius * adjustedRadius);
+			if (bSpot && isInLightVolume)
 			{
-				isInLightVolume &= (glm::dot(glm::normalize(lightToCamera), light.direction) > light.outerCosHalfAngle - KINDA_SMALL_NUMBER);
+				// cone check
+				isInLightVolume = (glm::dot(glm::normalize(lightToCamera), light.direction) > light.outerCosHalfAngle - KINDA_SMALL_NUMBER);
+				if (!isInLightVolume)
+				{
+					// test near plane clip
+					float dp = glm::dot(lightToCamera, light.direction);
+					isInLightVolume |= (sqrt(Math::SizeSquared(lightToCamera) - dp * dp) - dp * light.outerTanHalfAngle) * light.outerCosHalfAngle <= renderContext.viewPoint.nearRadius;
+				}
 			}
 
 			if (isInLightVolume)
@@ -995,6 +1018,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 
 			// set mask
 			glStencilFunc(prepassRenderState.stencilTestFunc, mask, mask);
+			glStencilMask(mask);
 
 			gPrepassMaterial->SetParameter("modelMat", light.modelMat);
 			light.LightMesh->Draw(renderContext, gPrepassMaterial);
@@ -1003,7 +1027,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 		// draw light
 		lightingRenderState.Apply();
 
-		for (int j = 0; j < 8 && i + j < ni; ++j)
+		for (int j = 0; j < stencilBits && i + j < ni; ++j)
 		{
 			int lightIdx = i + j;
 			char mask = 1 << j;
@@ -1014,12 +1038,22 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 				continue;
 
 			// set mask
-			glStencilFunc(prepassRenderState.stencilTestFunc, mask, mask);
+			glStencilFunc(lightingRenderState.stencilTestFunc, mask, mask);
 
 			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
 			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
-			//light.LightMesh->material->SetParameter("", glm::vec4(0));
 			light.LightMesh->material->SetParameter("modelMat", light.modelMat);
+			// shadow
+			if (gRenderSettings.bDrawShadow && light.bCastShadow)
+			{
+				light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
+				light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMat").c_str(), light.shadowData[0].shadowMat);
+				light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMap").c_str(), light.shadowData[0].shadowMap);				
+			}
+			else
+			{
+				light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 0);
+			}
 
 			light.LightMesh->Draw(renderContext);
 		}
@@ -1033,8 +1067,18 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 
 		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
 		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
-		//light.LightMesh->material->SetParameter("", glm::vec4(0));
 		light.LightMesh->material->SetParameter("modelMat", light.modelMat);
+		// shadow
+		if (gRenderSettings.bDrawShadow && light.bCastShadow)
+		{
+			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
+			light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMat").c_str(), light.shadowData[0].shadowMat);
+			light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMap").c_str(), light.shadowData[0].shadowMap);
+		}
+		else
+		{
+			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 0);
+		}
 
 		light.LightMesh->Draw(renderContext);
 	}
@@ -1071,6 +1115,31 @@ void LightPass(RenderContext& renderContext)
 
 }
 
+void DrawShadowScene(RenderContext& renderContext, Texture2D* shadowMap, const RenderInfo& renderInfo, std::vector<MeshComponent*>& involvedMeshComps)
+{
+	// attach to frame buffers
+	shadowMap->AttachToFrameBuffer(GL_DEPTH_ATTACHMENT);
+
+	// set viewport
+	glViewport(0, 0, shadowMap->width, shadowMap->height);
+
+	// update ubo
+	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &renderInfo, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	// clear depth
+	glClearDepth(1);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	// draw models
+	MeshComponent** involvedMeshCompListPtr = involvedMeshComps.data();
+	for (int i = 0, ni = (int)involvedMeshComps.size(); i < ni; ++i)
+	{
+		involvedMeshCompListPtr[i]->Draw(renderContext, gPrepassMaterial);
+	}
+}
+
 void ShadowPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("shadow");
@@ -1090,147 +1159,176 @@ void ShadowPass(RenderContext& renderContext)
 		glm::vec4(0.5f, 0.5f, 0.5f, 1.f)
 		);
 
-	const static float cascadeRatio[MAX_CASCADE_COUNT] = {
-		0.12f, 0.36f, 1.f
-	};
-
-	glm::vec3 clipPoints[4];
-
 	Viewpoint& viewPoint = renderContext.viewPoint;
-	
-	float aspectRatio = viewPoint.height / viewPoint.width;
-	float tanHF = glm::tan(viewPoint.fov * 0.5f) * sqrt(1 + aspectRatio * aspectRatio);
-	float tanHF2 = tanHF * tanHF;
 
-	bool bFixedSize = false;
+	RenderInfo shadowRenderInfo = gRenderInfo;
 
-	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
-
-	Light* lightPtr = gDirectionalLights.data();
-	for (int lightIdx = 0, nlightIdx = (int)gDirectionalLights.size(); lightIdx < nlightIdx; ++lightIdx)
+	// directional lights
 	{
-		Light& light = lightPtr[lightIdx];
+		const static float cascadeRatio[MAX_CASCADE_COUNT] = {
+			0.12f, 0.36f, 1.f
+		};
 
-		// calculate light space bounds
-		for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+		glm::vec3 clipPoints[4];
+
+		float aspectRatio = viewPoint.height / viewPoint.width;
+		float tanHF = glm::tan(viewPoint.fov * 0.5f) * sqrt(1 + aspectRatio * aspectRatio);
+		float tanHF2 = tanHF * tanHF;
+
+		bool bFixedSize = false;
+
+		MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
+
+		Light* lightPtr = gDirectionalLights.data();
+		for (int lightIdx = 0, nlightIdx = (int)gDirectionalLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
-			const glm::mat4& adjustMat = light.lightViewMat * meshCompListPtr[i]->modelMat;
-			// tranform bounds into light space
-			meshCompListPtr[i]->bounds.TransformBounds(adjustMat, meshCompListPtr[i]->boundsLS);
-		}
-
-		glm::mat4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
-		
-		for (int cascadeIdx = 0; cascadeIdx < MAX_CASCADE_COUNT; ++cascadeIdx)
-		{
-			Texture2D* shadowMap = light.shadowData[cascadeIdx].shadowMap;
-
-			// near and far plane for this cascade
-			float n = (cascadeIdx == 0) ? viewPoint.nearPlane : viewPoint.farPlane * cascadeRatio[cascadeIdx-1];
-			float f = viewPoint.farPlane * cascadeRatio[cascadeIdx];
-
-			// minimal bounding sphere diameter
-			float diameter = ((f + n) * tanHF2 >= (f - n)) ?
-				2 * f * tanHF :
-				sqrt((f - n)*(f - n) + 2 * (f*f + n*n) * tanHF2 + (f + n)*(f + n)*tanHF2*tanHF2);
-
-			float pixelRate = diameter / shadowMap->width;
-
-			// process frustum bounds
-			BoxBounds frustumBounds;
-			viewPoint.GetClipPoints(-n, clipPoints);
-			for (int i = 0; i < 4; ++i)
-				frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
-			viewPoint.GetClipPoints(-f, clipPoints);
-			for (int i = 0; i < 4; ++i)
-				frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
-
-			// extent test bound max(near plane) a little bit to include geometry behind us
-			// this value need to be increased if we are missing shadow
-			const float stepBack = 30.f;
-			frustumBounds.max.z += stepBack;
-			
-			std::vector<MeshComponent*> involvedMeshComps;
-			involvedMeshComps.reserve(MeshComponent::gMeshComponentContainer.size());
-
-			// process scene bounds and do frustum culling
-			BoxBounds sceneBounds;
-			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
-			{
-				// overlap test
-				if (frustumBounds.IsOverlap(meshCompListPtr[i]->boundsLS))
-				{
-					sceneBounds += meshCompListPtr[i]->boundsLS;
-					involvedMeshComps.push_back(meshCompListPtr[i]);
-				}
-			}
-			
-			// skip if we have no mesh to render
-			if (involvedMeshComps.size() == 0)
+			Light& light = lightPtr[lightIdx];
+			if (!light.bCastShadow)
 				continue;
 
-			// only change far plane if scene bounds are closer, don't extend it
-			frustumBounds.min.z = glm::max(sceneBounds.min.z, frustumBounds.min.z);
-			// for near plane simply use what scene bounds has,
-			// since we need to include any mesh behind us (in light space) that will cast shadow
-			frustumBounds.max.z = sceneBounds.max.z;
-
-			if (bFixedSize || cascadeIdx == 0)
+			// calculate light space bounds
+			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 			{
-				// adjust based on diameter
-				frustumBounds.min.x = floorf(frustumBounds.min.x / pixelRate) * pixelRate;
-				frustumBounds.min.y = floorf(frustumBounds.min.y / pixelRate) * pixelRate;
-				frustumBounds.max.x = frustumBounds.min.x + diameter;
-				frustumBounds.max.y = frustumBounds.min.y + diameter;
-			}
-			else
-			{
-				frustumBounds.min.x = glm::max(frustumBounds.min.x, sceneBounds.min.x);
-				frustumBounds.min.y = glm::max(frustumBounds.min.y, sceneBounds.min.y);
-				frustumBounds.max.x = glm::min(frustumBounds.max.x, sceneBounds.max.x);
-				frustumBounds.max.y = glm::min(frustumBounds.max.y, sceneBounds.max.y);
+				const glm::mat4& adjustMat = light.lightViewMat * meshCompListPtr[i]->modelMat;
+				// tranform bounds into light space
+				meshCompListPtr[i]->bounds.TransformBounds(adjustMat, meshCompListPtr[i]->boundsLS);
 			}
 
-			// the bounds are mapped as (+x, -x, +y, -y, +z, -z) -> (r, l, t, b, -n, -f)
-			// ref: http://www.songho.ca/opengl/gl_projectionmatrix.html
-			glm::mat4 lightProjMat = Math::Ortho(
-				frustumBounds.min.x, frustumBounds.max.x,
-				frustumBounds.min.y, frustumBounds.max.y,
-				-frustumBounds.max.z, -frustumBounds.min.z,
-				shadowMap->width, shadowMap->height,
-				viewPoint.jitterX, viewPoint.jitterY);
+			glm::mat4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
 
-			light.shadowData[cascadeIdx].bounds = glm::vec3(
-				frustumBounds.max.x - frustumBounds.min.x,
-				frustumBounds.max.y - frustumBounds.min.y,
-				f);
-			light.shadowData[cascadeIdx].shadowMat = remapMat * lightProjMat * viewToLight;
+			for (int cascadeIdx = 0; cascadeIdx < MAX_CASCADE_COUNT; ++cascadeIdx)
+			{
+				Texture2D* shadowMap = light.shadowData[cascadeIdx].shadowMap;
+				if (!shadowMap)
+				{
+					shadowMap = Texture2D::Create();
+					shadowMap->AllocateForFrameBuffer(1024, 1024, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
+					light.shadowData[cascadeIdx].shadowMap = shadowMap;
+				}
 
-			// attach to frame buffers
-			shadowMap->AttachToFrameBuffer(GL_DEPTH_ATTACHMENT);
+				// near and far plane for this cascade
+				float n = (cascadeIdx == 0) ? viewPoint.nearPlane : viewPoint.farPlane * cascadeRatio[cascadeIdx - 1];
+				float f = viewPoint.farPlane * cascadeRatio[cascadeIdx];
 
-			// set viewport
-			glViewport(0, 0, shadowMap->width, shadowMap->height);
+				// minimal bounding sphere diameter
+				float diameter = ((f + n) * tanHF2 >= (f - n)) ?
+					2 * f * tanHF :
+					sqrt((f - n)*(f - n) + 2 * (f*f + n*n) * tanHF2 + (f + n)*(f + n)*tanHF2*tanHF2);
 
-			// update ubo
-			RenderInfo shadowRenderInfo = gRenderInfo;
+				float pixelRate = diameter / shadowMap->width;
+
+				// process frustum bounds
+				BoxBounds frustumBounds;
+				viewPoint.GetClipPoints(-n, clipPoints);
+				for (int i = 0; i < 4; ++i)
+					frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
+				viewPoint.GetClipPoints(-f, clipPoints);
+				for (int i = 0; i < 4; ++i)
+					frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
+
+				// extent test bound max(near plane) a little bit to include geometry behind us
+				// this value need to be increased if we are missing shadow
+				const float stepBack = 30.f;
+				frustumBounds.max.z += stepBack;
+
+				std::vector<MeshComponent*> involvedMeshComps;
+				involvedMeshComps.reserve(MeshComponent::gMeshComponentContainer.size());
+
+				// process scene bounds and do frustum culling
+				BoxBounds sceneBounds;
+				for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+				{
+					// overlap test
+					if (frustumBounds.IsOverlap(meshCompListPtr[i]->boundsLS))
+					{
+						sceneBounds += meshCompListPtr[i]->boundsLS;
+						involvedMeshComps.push_back(meshCompListPtr[i]);
+					}
+				}
+
+				// skip if we have no mesh to render
+				if (involvedMeshComps.size() == 0)
+					continue;
+
+				// only change far plane if scene bounds are closer, don't extend it
+				frustumBounds.min.z = glm::max(sceneBounds.min.z, frustumBounds.min.z);
+				// for near plane simply use what scene bounds has,
+				// since we need to include any mesh behind us (in light space) that will cast shadow
+				frustumBounds.max.z = sceneBounds.max.z;
+
+				if (bFixedSize || cascadeIdx == 0)
+				{
+					// adjust based on diameter
+					frustumBounds.min.x = floorf(frustumBounds.min.x / pixelRate) * pixelRate;
+					frustumBounds.min.y = floorf(frustumBounds.min.y / pixelRate) * pixelRate;
+					frustumBounds.max.x = frustumBounds.min.x + diameter;
+					frustumBounds.max.y = frustumBounds.min.y + diameter;
+				}
+				else
+				{
+					frustumBounds.min.x = glm::max(frustumBounds.min.x, sceneBounds.min.x);
+					frustumBounds.min.y = glm::max(frustumBounds.min.y, sceneBounds.min.y);
+					frustumBounds.max.x = glm::min(frustumBounds.max.x, sceneBounds.max.x);
+					frustumBounds.max.y = glm::min(frustumBounds.max.y, sceneBounds.max.y);
+				}
+
+				// the bounds are mapped as (+x, -x, +y, -y, +z, -z) -> (r, l, t, b, -n, -f)
+				// ref: http://www.songho.ca/opengl/gl_projectionmatrix.html
+				glm::mat4 lightProjMat = Math::Ortho(
+					frustumBounds.min.x, frustumBounds.max.x,
+					frustumBounds.min.y, frustumBounds.max.y,
+					-frustumBounds.max.z, -frustumBounds.min.z,
+					(float)shadowMap->width, (float)shadowMap->height,
+					viewPoint.jitterX, viewPoint.jitterY);
+
+				light.shadowData[cascadeIdx].bounds = glm::vec3(
+					frustumBounds.max.x - frustumBounds.min.x,
+					frustumBounds.max.y - frustumBounds.min.y,
+					f);
+				light.shadowData[cascadeIdx].shadowMat = remapMat * lightProjMat * viewToLight;
+
+				// update render info
+				shadowRenderInfo.View = light.lightViewMat;
+				shadowRenderInfo.Proj = lightProjMat;
+				shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
+
+				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, involvedMeshComps);
+			}
+		}
+	}
+
+	// spot lights
+	{
+		Light* lightPtr = gSpotLights.data();
+		for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
+		{
+			Light& light = lightPtr[lightIdx];
+			if (!light.bCastShadow)
+				continue;
+
+			Texture2D* shadowMap = light.shadowData[0].shadowMap;
+			if (!shadowMap)
+			{
+				shadowMap = Texture2D::Create();
+				shadowMap->AllocateForFrameBuffer(512, 512, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
+				light.shadowData[0].shadowMap = shadowMap;
+			}
+			
+			glm::mat4 lightProjMat = Math::PerspectiveFov(
+				glm::radians(light.outerHalfAngle) * 2,
+				(float)shadowMap->width, (float)shadowMap->height, 
+				0.1f, light.radius,
+				viewPoint.jitterX, viewPoint.jitterY
+				);
+
+			light.shadowData[0].shadowMat = remapMat * lightProjMat * light.lightViewMat * viewPoint.invViewMat;
+
+			// update render info
 			shadowRenderInfo.View = light.lightViewMat;
 			shadowRenderInfo.Proj = lightProjMat;
 			shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
-			glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
-			glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &shadowRenderInfo, GL_DYNAMIC_DRAW);
-			glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-			// clear depth
-			glClearDepth(1);
-			glClear(GL_DEPTH_BUFFER_BIT);
-
-			// draw models
-			MeshComponent** involvedMeshCompListPtr = involvedMeshComps.data();
-			for (int i = 0, ni = (int)involvedMeshComps.size(); i < ni; ++i)
-			{
-				involvedMeshCompListPtr[i]->Draw(renderContext, gPrepassMaterial);
-			}
+			DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, MeshComponent::gMeshComponentContainer);
 		}
 	}
 }
@@ -1336,6 +1434,13 @@ void DebugForwardPass(RenderContext& renderContext)
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
+void SwapSceneDepthHistory()
+{
+	int tmp = gSceneDepthCurrentIdx;
+	gSceneDepthCurrentIdx = gSceneDepthHistoryIdx;
+	gSceneDepthHistoryIdx = tmp;
+}
+
 void SwapSceneColorReadWrite()
 {
 	int tmp = gSceneColorReadIdx;
@@ -1372,23 +1477,61 @@ void PostProcessPass(RenderContext& renderContext)
 	renderState.Apply();
 	
 	// find post process pass textures
-	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
+	gSceneDepthStencilTex[gSceneDepthCurrentIdx].Bind(Shader::gDepthStencilTexUnit);
 
 	// TAA
 	if(gRenderSettings.bUseTAA)
 	{
 		PreparePostProcessPass();
 		// for the first frame, just use the same frame for history
-		if (gIsFirstFrame)
-			gTAAMaterial->SetParameter("historyTex", &gSceneColorTex[gSceneColorReadIdx]);
+		if (gHasResetFrame)
+		{
+			gTAAMaterial->SetParameter("historyColorTex", &gSceneColorTex[gSceneColorReadIdx]);
+			gTAAMaterial->SetParameter("historyDepthStencilTex", &gSceneDepthStencilTex[gSceneDepthCurrentIdx]);
+		}
 		else
-			gTAAMaterial->SetParameter("historyTex", &gSceneColorTex[gSceneColorHistoryIdx]);
+		{
+			gTAAMaterial->SetParameter("historyColorTex", &gSceneColorTex[gSceneColorHistoryIdx]);
+			gTAAMaterial->SetParameter("historyDepthStencilTex", &gSceneDepthStencilTex[gSceneDepthHistoryIdx]);
+		}
+		gTAAMaterial->SetParameter("velocityTex", &gVelocityTex);
+#if 0
+		// calculate weights
+		{
+			static const float SampleOffsets[5][2] =
+			{
+				{ 0.0f,  0.0f },
+				{ -1.0f,  0.0f },
+				{ 1.0f,  0.0f },
+				{ 0.0f, -1.0f },
+				{ 0.0f,  1.0f },
+			};
+			float plusWeights[5];
+
+			float totalWeight  = 0;
+			for (int i = 0; i < 5; ++i)
+			{
+				float PixelOffsetX = SampleOffsets[i][0] - renderContext.viewPoint.jitterX;
+				float PixelOffsetY = SampleOffsets[i][1] - renderContext.viewPoint.jitterY;
+				// Normal distribution, Sigma = 0.47
+				plusWeights[i] = exp(-2.29f * (PixelOffsetX * PixelOffsetX + PixelOffsetY * PixelOffsetY));
+				totalWeight += plusWeights[i];
+			}
+
+			for (int i = 0; i < 5; ++i)
+			{
+				gTAAMaterial->SetParameter(ShaderNameBuilder("plusWeights")[i].c_str(), plusWeights[i] / totalWeight);
+			}
+		}
+#endif
 
 		// draw quad
 		gFSQuadMesh->Draw(renderContext, gTAAMaterial);
 
 		gSceneColorPrevHistoryIdx = gSceneColorHistoryIdx;
 		gSceneColorHistoryIdx = gSceneColorWriteIdx;
+
+		SwapSceneDepthHistory();
 	}
 	
 	// tone mapping
@@ -1497,16 +1640,23 @@ void Render()
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 	// update ubo
+	gRenderInfo.PrevView = gRenderInfo.View;
+	gRenderInfo.PrevProj = gRenderInfo.Proj;
+	gRenderInfo.PrevViewProj = gRenderInfo.ViewProj;
 	gRenderInfo.View = renderContext.viewPoint.viewMat;
 	gRenderInfo.InvView = renderContext.viewPoint.invViewMat;
 	gRenderInfo.Proj = renderContext.viewPoint.projMat;
-	gRenderInfo.PrevViewProj = gRenderInfo.ViewProj;
 	gRenderInfo.ViewProj = renderContext.viewPoint.viewProjMat;
-	if (gIsFirstFrame)
+	if (gHasResetFrame)
+	{
+		gRenderInfo.PrevView = gRenderInfo.View;
+		gRenderInfo.PrevProj = gRenderInfo.Proj;
 		gRenderInfo.PrevViewProj = gRenderInfo.ViewProj;
+	}
 	gRenderInfo.Resolution.x = renderContext.viewPoint.width;
 	gRenderInfo.Resolution.y = renderContext.viewPoint.height;
 	gRenderInfo.Time = (float)gTime;
+	gRenderInfo.Exposure = 1.0f;
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 	// maybe use glBufferSubData later?
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &gRenderInfo, GL_DYNAMIC_DRAW);
@@ -1521,6 +1671,7 @@ void Render()
 	glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
 	// attach write texture
 	gSceneColorTex[gSceneColorWriteIdx].AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+	gSceneDepthStencilTex[gSceneDepthCurrentIdx].AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
 	
 	// bind deferred pass textures
 	gNormalTex.Bind(Shader::gNormalTexUnit);
@@ -1531,6 +1682,9 @@ void Render()
 	LightPass(renderContext);
 
 	DebugForwardPass(renderContext);
+
+	// detach depth texture
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 
 	PostProcessPass(renderContext);
 
@@ -1623,7 +1777,7 @@ int main(int argc, char **argv)
 			}
 #endif
 
-			gIsFirstFrame = false;
+			gHasResetFrame = false;
 		}
 	}
 

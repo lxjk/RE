@@ -9,9 +9,10 @@
 
 struct ShadowData
 {
-	Texture2D* shadowMap;
+	Texture2D* shadowMap = 0;
 	glm::vec3 bounds; // x cascade width, y cascade height, z far plane
 
+	// set in shadow pass
 	// this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
 	glm::mat4 shadowMat;
 };
@@ -28,10 +29,14 @@ public:
 	float outerHalfAngle;
 	float innerHalfAngle;
 
+	bool bCastShadow;
+	bool bDynamic;
+
 	glm::vec3 colorIntensity;
 	float invRadius;
 	float radialAttenuationBlend;
 	float outerCosHalfAngle;
+	float outerTanHalfAngle;
 	float invDiffCosHalfAngle;
 	float endRadius;
 
@@ -57,6 +62,9 @@ public:
 		outerCosHalfAngle = 0;
 		invDiffCosHalfAngle = 1;
 		attenParams = glm::vec4(0, 0, 0, 1);
+
+		bCastShadow = false;
+		bDynamic = false;
 	}
 
 	void SetRadius(float inRadius)
@@ -152,6 +160,7 @@ public:
 		float outerRad = glm::radians(outerHalfAngle);
 		float innerRad = glm::radians(innerHalfAngle);
 		outerCosHalfAngle = glm::cos(outerRad);
+		outerTanHalfAngle = glm::tan(outerRad);
 		invDiffCosHalfAngle = 1.f / (glm::cos(innerRad) - outerCosHalfAngle);
 		endRadius = radius * glm::tan(outerRad);
 

@@ -1,0 +1,82 @@
+#ifndef COMMON_INCL
+#define COMMON_INCL
+
+const float PI = 3.14159265359;
+
+const vec2 PoissonDisk4[4] = vec2[](
+  vec2( -0.94201624, -0.39906216 ),
+  vec2( 0.94558609, -0.76890725 ),
+  vec2( -0.094184101, -0.92938870 ),
+  vec2( 0.34495938, 0.29387760 )
+ );
+ 
+ const vec2 PoissonDisk9[9] = vec2[](
+	vec2(0.6701438f, 0.0797466f),
+	vec2(-0.3487887f, 0.1811505f),
+	vec2(-0.1736667f, -0.394125f),
+	vec2(0.7539324f, -0.6149955f),
+	vec2(-0.02059382f, -0.9826667f),
+	vec2(-0.9730584f, 0.001460005f),
+	vec2(-0.1840728f, 0.8050078f),
+	vec2(0.4536706f, 0.7639304f),
+	vec2(-0.7440495f, -0.5962256f)
+ );
+
+float GetRandom(vec4 seed4)
+{
+	float dot_product = dot(seed4, vec4(12.9898,78.233,45.164,94.673));
+    return fract(sin(dot_product) * 43758.5453);
+}
+
+// for velocity rendering, motionblur and temporal AA
+// velocity needs to support -2..2 screen space range for x and y
+// texture is 16bit 0..1 range per channel
+vec2 EncodeVelocityToTexture(vec2 In)
+{
+	// [-2, 2] -> [1 / 65535, 1], leave 0 and 1 as special value
+	// ((In * 0.25 + 0.5) * 65534 + 1) / 65535;
+	// ((In * 0.25 + 0.5) * 65533 + 1) / 65535;
+	return (In * 16383.25 + 32766.5) / 65535.0;
+}
+// see EncodeVelocityToTexture()
+vec2 DecodeVelocityFromTexture(vec2 In)
+{
+	return (In * 65535.0 - 32766.5) / 16383.25;
+}
+
+// HDR color conversion from UE4
+vec3 RGBToYCoCg(vec3 RGB)
+{
+	float Y  = dot( RGB, vec3(  1, 2,  1 ) );
+	float Co = dot( RGB, vec3(  2, 0, -2 ) );
+	float Cg = dot( RGB, vec3( -1, 2, -1 ) );
+	
+	return vec3( Y, Co, Cg );
+}
+
+vec4 RGBToYCoCg(vec4 c)
+{
+	//return c;
+	return vec4(RGBToYCoCg(c.xyz), c.w);
+}
+
+vec3 YCoCgToRGB(vec3 YCoCg)
+{
+	float Y  = YCoCg.x * 0.25;
+	float Co = YCoCg.y * 0.25;
+	float Cg = YCoCg.z * 0.25;
+
+	float R = Y + Co - Cg;
+	float G = Y + Cg;
+	float B = Y - Co - Cg;
+
+	return vec3( R, G, B );
+}
+
+vec4 YCoCgToRGB(vec4 c)
+{
+	//return c;
+	return vec4(YCoCgToRGB(c.xyz), c.w);
+}
+
+#endif

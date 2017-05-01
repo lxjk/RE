@@ -45,8 +45,9 @@ namespace Math
 		Result[1][1] = h;
 		Result[2][3] = -1;
 
-		Result[2][0] = jitterX * 2.f / width;
-		Result[2][1] = jitterY * 2.f / height;
+		// negative since this is going to  * z / -z
+		Result[2][0] = -jitterX * 2.f / width;
+		Result[2][1] = -jitterY * 2.f / height;
 
 		#if GLM_DEPTH_CLIP_SPACE == GLM_DEPTH_ZERO_TO_ONE
 			Result[2][2] = zFar / (zNear - zFar);

@@ -1,6 +1,7 @@
 #version 330 core
 
 #include "Include/PostProcessPassTex.incl"
+#include "Include/CommonUBO.incl"
 
 in VS_OUT
 {
@@ -13,7 +14,6 @@ out vec4 color;
 void main() 
 {
 	const float invGamma = 1.0 / 2.2;
-	const float exposure = 1.0;
 	
 	vec3 hdrColor = texture(gSceneColorTex, fs_in.texCoords).rgb;
 	//vec3 mapped = hdrColor;

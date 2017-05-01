@@ -31,9 +31,12 @@ struct RenderInfo
 	glm::mat4 Proj;			// 16 * 4
 	glm::mat4 ViewProj;		// 16 * 4
 	glm::mat4 InvView;		// 16 * 4
+	glm::mat4 PrevView;		// 16 * 4
+	glm::mat4 PrevProj;		// 16 * 4
 	glm::mat4 PrevViewProj;	// 16 * 4
 	glm::vec2 Resolution;	// 8
 	float Time;				// 4
+	float Exposure;			// 4
 };
 
 struct RenderState
@@ -51,6 +54,7 @@ struct RenderState
 	GLenum stencilWriteSFail = GL_KEEP;
 	GLenum stencilWriteDFail = GL_KEEP;
 	GLenum stencilWriteDPass = GL_KEEP;
+	GLuint stencilWriteMask = 0xFF;
 
 	bool bCullFace = true;
 	GLenum cullFaceMode = GL_BACK;
@@ -85,6 +89,7 @@ struct RenderState
 			glEnable(GL_STENCIL_TEST);
 			glStencilFunc(stencilTestFunc, stencilTestRef, stencilTestMask);
 			glStencilOp(stencilWriteSFail, stencilWriteDFail, stencilWriteDPass);
+			glStencilMask(stencilWriteMask);
 		}
 		else
 			glDisable(GL_STENCIL_TEST);
