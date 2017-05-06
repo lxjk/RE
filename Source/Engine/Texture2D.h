@@ -1,12 +1,10 @@
 #pragma once
 
-// opengl
-#include "SDL_opengl.h"
+#include "Texture.h"
 
 #include <vector>
-#include <string>
 
-class Texture2D
+class Texture2D : public Texture
 {
 public:
 
@@ -33,34 +31,16 @@ public:
 		return tex;
 	}
 
-	Texture2D()
+	Texture2D() : Texture()
 	{
-		textureID = 0;
-		width = 0;
-		height = 0;
-		internalFormat = 0;
-		format = 0;
-		type = 0;
-		path[0] = 0;
+		textureType = GL_TEXTURE_2D;
 	}
 
 	void Load(const char* name, bool bSRGB,
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE,
 		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_LINEAR);
 
-	void AllocateForFrameBuffer(int width, int height, GLint internalFormat, GLenum format, GLenum type, bool bShadowMap = false);
+	void AllocateForFrameBuffer(int width, int height, GLint internalFormat, GLenum format, GLenum type, bool bLinearFilter = false);
 
 	void Reallocate(int width, int height);
-
-	void AttachToFrameBuffer(GLenum attachment);
-
-	void Bind(GLuint textureUnitOffset);
-
-	GLuint textureID;
-	int width;
-	int height;
-	GLint internalFormat;
-	GLenum format;
-	GLenum type;
-	char path[512];
 };

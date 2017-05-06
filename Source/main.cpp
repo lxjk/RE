@@ -29,6 +29,7 @@
 #include "Engine/MeshComponent.h"
 #include "Engine/MeshLoader.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureCube.h"
 #include "Engine/Light.h"
 #include "Engine/Viewpoint.h"
 #include "Engine/Camera.h"
@@ -88,6 +89,9 @@ int gSceneDepthCurrentIdx, gSceneDepthHistoryIdx;
 GLuint gDepthOnlyBuffer = 0;
 Texture2D gShadowTex;
 
+// light const
+static glm::mat4 gLightOmniViewMat[6];
+
 // jitter
 #define JITTER_HALTON 1
 #if JITTER_HALTON
@@ -109,9 +113,11 @@ int gJitterIdx = 0;
 Shader gGBufferShader;
 Shader gGBufferColorShader;
 Shader gPrepassShader;
+Shader gPrepassCubeShader;
 Shader gDirectionalLightShader;
 Shader gLightVolumeShader;
 Shader gLightDebugShader;
+Shader gSkyboxShader;
 Shader gFSQuadShader;
 Shader gToneMapShader;
 Shader gTAAShader;
@@ -120,10 +126,11 @@ Shader gTAAShader;
 Material* gGBufferMaterial;
 Material* gGBufferColorMaterial;
 Material* gPrepassMaterial;
+Material* gPrepassCubeMaterial;
 Material* gDirectionalLightMaterial;
 Material* gLightVolumeMaterial;
 Material* gLightDebugMaterial;
-Material* gFSQuadMaterial;
+Material* gSkyboxMaterial;
 Material* gToneMapMaterial;
 Material* gTAAMaterial;
 
@@ -150,6 +157,8 @@ Mesh* gSpotLightDebugMesh;
 // texture
 Texture2D* gDiffuseMap;
 Texture2D* gNormalMap;
+
+TextureCube* gSkyboxMap;
 
 // light
 std::vector<Light> gDirectionalLights;
@@ -295,16 +304,18 @@ void MakeLights()
 		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
 		/*int=*/	20
 	);
+	gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	glm::vec3(10, 2, 0),
+		/*pos=*/	glm::vec3(10, 2, 2),
 		/*radius=*/	10.f,
 		/*color=*/	glm::vec3(0.f, 1.f, 0.f),
 		/*int=*/	20
 	);
+	gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
@@ -315,6 +326,7 @@ void MakeLights()
 		/*color=*/	glm::vec3(1.f, 0.f, 0.f),
 		/*int=*/	20
 	);
+	gPointLights[plIdx].bCastShadow = true;
 
 	//for (int i = 0; i < 100; ++i)
 	//{
@@ -460,6 +472,7 @@ void SetupFrameBuffers()
 
 		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
 		glDrawBuffers(_countof(attachments), attachments);
+		glReadBuffer(GL_NONE);
 
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 			printf("Error: G Buffer not complete!\n");
@@ -487,7 +500,7 @@ void SetupFrameBuffers()
 		// HDR scene color
 		for (int i = 0; i < gSceneColorTexCount; ++i)
 		{
-			gSceneColorTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+			gSceneColorTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT, true);
 		}
 		// depth stencil
 		for (int i = 0; i < gSceneDepthTexCount; ++i)
@@ -527,10 +540,9 @@ void SetupFrameBuffers()
 	{
 		glGenFramebuffers(1, &gDepthOnlyBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gDepthOnlyBuffer);
-
-
-
+		
 		glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
 
 		//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		//	printf("Error: Shadow buffer not complete!\n");
@@ -548,9 +560,11 @@ void LoadShaders(bool bReload)
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
 	gGBufferColorShader.Load("Shader/gbuffer.vert", "Shader/gbufferColor.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
+	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepass.geom", "Shader/prepass.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
 	gLightVolumeShader.Load("Shader/lightVolume.vert", "Shader/lightVolume.frag", !bReload);
 	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
+	gSkyboxShader.Load("Shader/skybox.vert", "Shader/skybox.frag", !bReload);
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 	gTAAShader.Load("Shader/fsQuad.vert", "Shader/fsQuadTAA.frag", !bReload);
 }
@@ -578,6 +592,23 @@ void InitializeHalton_2_3()
 	}
 }
 
+void InitializeLightOmniViewMat()
+{
+	const static glm::vec3 omniDirs[6][2] =
+	{
+		{ glm::vec3(1, 0, 0),	glm::vec3(0, -1, 0) },
+		{ glm::vec3(-1, 0, 0),	glm::vec3(0, -1, 0) },
+		{ glm::vec3(0, 1, 0),	glm::vec3(0, 0, 1) },
+		{ glm::vec3(0, -1, 0),	glm::vec3(0, 0, -1) },
+		{ glm::vec3(0, 0, 1),	glm::vec3(0, -1, 0) },
+		{ glm::vec3(0, 0, -1),	glm::vec3(0, -1, 0) }
+	};
+	for (int i = 0; i < 6; ++i)
+	{
+		gLightOmniViewMat[i] = glm::transpose(Math::MakeMatFromForward(omniDirs[i][0], omniDirs[i][1]));
+	}
+}
+
 bool InitEngine()
 {
 	gHasResetFrame = true;
@@ -585,13 +616,7 @@ bool InitEngine()
 #if JITTER_HALTON
 	InitializeHalton_2_3();
 #endif
-
-	// settings
-	gRenderSettings.bDrawShadow = true;
-	gRenderSettings.bDrawBounds = false;
-	gRenderSettings.bDrawLightVolume = false;
-	gRenderSettings.bUseTAA = true;
-	gRenderSettings.bUseJitter = true;
+	InitializeLightOmniViewMat();
 
 	// frame buffers
 	SetupFrameBuffers();
@@ -618,9 +643,11 @@ bool InitEngine()
 	gGBufferMaterial = Material::Create(&gGBufferShader);
 	gGBufferColorMaterial = Material::Create(&gGBufferColorShader);
 	gPrepassMaterial = Material::Create(&gPrepassShader);
+	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
 	gLightVolumeMaterial = Material::Create(&gLightVolumeShader);
 	gLightDebugMaterial = Material::Create(&gLightDebugShader);
+	gSkyboxMaterial = Material::Create(&gSkyboxShader);
 	gToneMapMaterial = Material::Create(&gToneMapShader);
 	gTAAMaterial = Material::Create(&gTAAShader);
 
@@ -649,6 +676,16 @@ bool InitEngine()
 	// texture
 	gDiffuseMap = Texture2D::FindOrCreate("Content/Texture/154.jpg", true);
 	gNormalMap = Texture2D::FindOrCreate("Content/Texture/154_norm.jpg", false);
+
+	gSkyboxMap = TextureCube::Create();
+	std::vector<const char*> skyboxMapNames;
+	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_rt.tga");
+	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_lf.tga");
+	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_up.tga");
+	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_dn.tga");
+	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_bk.tga");
+	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_ft.tga");
+	gSkyboxMap->Load(skyboxMapNames, true);
 
 	// set textures
 	gGBufferMaterial->SetParameter("diffuseTex", gDiffuseMap);
@@ -728,7 +765,7 @@ void updateMouseInput(float deltaTime)
 		bShouldCaptureMouse = true;
 	}
 	// mouse wheel?
-	if (gMouseWheel != 0)
+	if (gMouseWheel != 0 && !(mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT)))
 	{
 		gCamera.position += cameraForward * gMouseWheel * scrollSpeed * deltaTime;
 		gMouseWheel = 0;
@@ -757,13 +794,22 @@ void updateKeyboardInput(float deltaTime)
 
 	glm::vec3 up = glm::vec3(0, 1, 0);
 
-	const static float moveSpeed = 12.f;
+	const static float maxMoveSpeed = 30.f;
+	const static float minMoveSpeed = 0.1f;
+	static float moveSpeed = 12.f;
+
 	float moveSpeedFactor = 1.f;
 	if (gKeyStates[SDL_SCANCODE_LSHIFT])
 		moveSpeedFactor = 0.01f;
 
 	if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT))
 	{
+		if (gMouseWheel != 0)
+		{
+			moveSpeed *= (gMouseWheel > 0) ? 1.1f : 0.9f;
+			moveSpeed = glm::clamp(moveSpeed, minMoveSpeed, maxMoveSpeed);
+			gMouseWheel = 0;
+		}
 		if (gKeyStates[SDL_SCANCODE_W])
 		{
 			gCamera.position += cameraForward * moveSpeed * moveSpeedFactor * deltaTime;
@@ -892,7 +938,7 @@ void DirectionalLightPass(RenderContext& renderContext)
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity);
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams);
 		// shadow
-		if (gRenderSettings.bDrawShadow && light.bCastShadow)
+		if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
 		{
 			int shadowCount = MAX_CASCADE_COUNT;
 			gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
@@ -1033,6 +1079,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 			char mask = 1 << j;
 
 			const Light& light = lightsPtr[lightIdx];
+			bool bSpot = (light.attenParams.y > 0);
 
 			if (cameraInsideFlag & mask)
 				continue;
@@ -1043,12 +1090,26 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
 			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
 			light.LightMesh->material->SetParameter("modelMat", light.modelMat);
+
+			bool bDrawShadow = gRenderSettings.bDrawShadow && light.bCastShadow;
+			if (bSpot)
+				bDrawShadow &= gRenderSettings.bDrawShadowSpot;
+			else
+				bDrawShadow &= gRenderSettings.bDrawShadowPoint;
 			// shadow
-			if (gRenderSettings.bDrawShadow && light.bCastShadow)
+			if (bDrawShadow)
 			{
 				light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
-				light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMat").c_str(), light.shadowData[0].shadowMat);
-				light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMap").c_str(), light.shadowData[0].shadowMap);				
+				light.LightMesh->material->SetParameter("shadowMat", light.shadowData[0].shadowMat);
+				if (bSpot)
+				{
+					light.LightMesh->material->SetParameter("shadowMap", light.shadowData[0].shadowMap);
+				}
+				else
+				{
+					light.LightMesh->material->SetParameter("shadowMapCube", light.shadowData[0].shadowMap);
+					light.LightMesh->material->SetParameter("lightProjRemapMat", light.shadowData[0].lightProjRemapMat);
+				}
 			}
 			else
 			{
@@ -1064,16 +1125,31 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 	for (int i = 0, ni = (int)cameraInsideLight.size(); i < ni; ++i)
 	{
 		const Light& light = lightsPtr[cameraInsideLight.data()[i]];
+		bool bSpot = (light.attenParams.y > 0);
 
 		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
 		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
 		light.LightMesh->material->SetParameter("modelMat", light.modelMat);
+
+		bool bDrawShadow = gRenderSettings.bDrawShadow && light.bCastShadow;
+		if (bSpot)
+			bDrawShadow &= gRenderSettings.bDrawShadowSpot;
+		else
+			bDrawShadow &= gRenderSettings.bDrawShadowPoint;
 		// shadow
-		if (gRenderSettings.bDrawShadow && light.bCastShadow)
+		if (bDrawShadow)
 		{
 			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
-			light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMat").c_str(), light.shadowData[0].shadowMat);
-			light.LightMesh->material->SetParameter(ShaderNameBuilder("shadowMap").c_str(), light.shadowData[0].shadowMap);
+			light.LightMesh->material->SetParameter("shadowMat", light.shadowData[0].shadowMat);
+			if (bSpot)
+			{
+				light.LightMesh->material->SetParameter("shadowMap", light.shadowData[0].shadowMap);
+			}
+			else
+			{
+				light.LightMesh->material->SetParameter("shadowMapCube", light.shadowData[0].shadowMap);
+				light.LightMesh->material->SetParameter("lightProjRemapMat", light.shadowData[0].lightProjRemapMat);
+			}
 		}
 		else
 		{
@@ -1115,7 +1191,8 @@ void LightPass(RenderContext& renderContext)
 
 }
 
-void DrawShadowScene(RenderContext& renderContext, Texture2D* shadowMap, const RenderInfo& renderInfo, std::vector<MeshComponent*>& involvedMeshComps)
+void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const RenderInfo& renderInfo, Material* material,
+	std::vector<MeshComponent*>& involvedMeshComps)
 {
 	// attach to frame buffers
 	shadowMap->AttachToFrameBuffer(GL_DEPTH_ATTACHMENT);
@@ -1136,7 +1213,7 @@ void DrawShadowScene(RenderContext& renderContext, Texture2D* shadowMap, const R
 	MeshComponent** involvedMeshCompListPtr = involvedMeshComps.data();
 	for (int i = 0, ni = (int)involvedMeshComps.size(); i < ni; ++i)
 	{
-		involvedMeshCompListPtr[i]->Draw(renderContext, gPrepassMaterial);
+		involvedMeshCompListPtr[i]->Draw(renderContext, material);
 	}
 }
 
@@ -1164,6 +1241,7 @@ void ShadowPass(RenderContext& renderContext)
 	RenderInfo shadowRenderInfo = gRenderInfo;
 
 	// directional lights
+	if(gRenderSettings.bDrawShadowCSM)
 	{
 		const static float cascadeRatio[MAX_CASCADE_COUNT] = {
 			0.12f, 0.36f, 1.f
@@ -1198,7 +1276,7 @@ void ShadowPass(RenderContext& renderContext)
 
 			for (int cascadeIdx = 0; cascadeIdx < MAX_CASCADE_COUNT; ++cascadeIdx)
 			{
-				Texture2D* shadowMap = light.shadowData[cascadeIdx].shadowMap;
+				Texture2D* shadowMap = (Texture2D*)light.shadowData[cascadeIdx].shadowMap;
 				if (!shadowMap)
 				{
 					shadowMap = Texture2D::Create();
@@ -1292,12 +1370,13 @@ void ShadowPass(RenderContext& renderContext)
 				shadowRenderInfo.Proj = lightProjMat;
 				shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
 
-				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, involvedMeshComps);
+				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, involvedMeshComps);
 			}
 		}
 	}
 
 	// spot lights
+	if (gRenderSettings.bDrawShadowSpot)
 	{
 		Light* lightPtr = gSpotLights.data();
 		for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
@@ -1306,7 +1385,7 @@ void ShadowPass(RenderContext& renderContext)
 			if (!light.bCastShadow)
 				continue;
 
-			Texture2D* shadowMap = light.shadowData[0].shadowMap;
+			Texture2D* shadowMap = (Texture2D*)light.shadowData[0].shadowMap;
 			if (!shadowMap)
 			{
 				shadowMap = Texture2D::Create();
@@ -1318,8 +1397,7 @@ void ShadowPass(RenderContext& renderContext)
 				glm::radians(light.outerHalfAngle) * 2,
 				(float)shadowMap->width, (float)shadowMap->height, 
 				0.1f, light.radius,
-				viewPoint.jitterX, viewPoint.jitterY
-				);
+				viewPoint.jitterX, viewPoint.jitterY);
 
 			light.shadowData[0].shadowMat = remapMat * lightProjMat * light.lightViewMat * viewPoint.invViewMat;
 
@@ -1328,7 +1406,48 @@ void ShadowPass(RenderContext& renderContext)
 			shadowRenderInfo.Proj = lightProjMat;
 			shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
 
-			DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, MeshComponent::gMeshComponentContainer);
+			DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
+		}
+	}
+	
+	// point lights
+	if (gRenderSettings.bDrawShadowPoint)
+	{
+		Light* lightPtr = gPointLights.data();
+		for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
+		{
+			Light& light = lightPtr[lightIdx];
+			if (!light.bCastShadow)
+				continue;
+
+			TextureCube* shadowMap = (TextureCube*)light.shadowData[0].shadowMap;
+			if (!shadowMap)
+			{
+				shadowMap = TextureCube::Create();
+				shadowMap->AllocateForFrameBuffer(512, 512, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
+				light.shadowData[0].shadowMap = shadowMap;
+			}
+
+			glm::mat4 lightProjMat = Math::PerspectiveFov(
+				glm::radians(90.f), 
+				(float)shadowMap->width, (float)shadowMap->height,
+				0.1f, light.radius,
+				viewPoint.jitterX, viewPoint.jitterY);
+
+			light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
+			light.shadowData[0].lightProjRemapMat = remapMat * lightProjMat;
+
+			// update render info, only do view, since we proj in geometry shader
+			shadowRenderInfo.View = light.lightViewMat;
+			shadowRenderInfo.Proj = glm::mat4(1);
+			shadowRenderInfo.ViewProj = light.lightViewMat;
+			
+			for (int i = 0; i < 6; ++i)
+			{
+				gPrepassCubeMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightProjMat * gLightOmniViewMat[i]);
+			}
+
+			DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassCubeMaterial, MeshComponent::gMeshComponentContainer);
 		}
 	}
 }
@@ -1432,6 +1551,27 @@ void DebugForwardPass(RenderContext& renderContext)
 	}
 
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+
+
+void SkyboxPass(RenderContext& renderContext)
+{
+	const static RenderState renderState([](RenderState& s) {
+		// depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_LEQUAL;
+		s.bDepthWrite = false;
+		// draw back face
+		s.bCullFace = true;
+		s.cullFaceMode = GL_FRONT;
+	});
+
+	renderState.Apply();
+
+	//gSkyboxMaterial->SetParameter("cubeMap", gPointLights[1].shadowData[0].shadowMap);
+	gSkyboxMaterial->SetParameter("cubeMap", gSkyboxMap);
+
+	gCubeMesh->Draw(renderContext, gSkyboxMaterial);
 }
 
 void SwapSceneDepthHistory()
@@ -1593,11 +1733,15 @@ void UIPass()
 		static bool open = true;
 		ImGui::Begin("settings", &open);
 
-		ImGui::Checkbox("shadow", &gRenderSettings.bDrawShadow);
-		ImGui::Checkbox("bounds", &gRenderSettings.bDrawBounds);
-		ImGui::Checkbox("light volume", &gRenderSettings.bDrawLightVolume);
+		ImGui::Checkbox("Shadow", &gRenderSettings.bDrawShadow);
+		ImGui::Checkbox("- CSM", &gRenderSettings.bDrawShadowCSM);
+		ImGui::Checkbox("- Spot", &gRenderSettings.bDrawShadowSpot);
+		ImGui::Checkbox("- Point", &gRenderSettings.bDrawShadowPoint);
+		ImGui::Checkbox("Bounds", &gRenderSettings.bDrawBounds);
+		ImGui::Checkbox("Light Volume", &gRenderSettings.bDrawLightVolume);
 		ImGui::Checkbox("TAA", &gRenderSettings.bUseTAA);
 		ImGui::Checkbox("Jitter", &gRenderSettings.bUseJitter);
+		ImGui::Checkbox("Skybox", &gRenderSettings.bSkybox);
 
 		ImGui::End();
 	}
@@ -1682,6 +1826,9 @@ void Render()
 	LightPass(renderContext);
 
 	DebugForwardPass(renderContext);
+
+	if(gRenderSettings.bSkybox)
+		SkyboxPass(renderContext);
 
 	// detach depth texture
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);

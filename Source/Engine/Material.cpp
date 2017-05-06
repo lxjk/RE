@@ -20,15 +20,21 @@ void Material::Use(RenderContext& renderContext)
 		return;
 
 	// use shader
-	if(!renderContext.currentMaterial || renderContext.currentMaterial->shader != shader)
+	if (!renderContext.currentMaterial || renderContext.currentMaterial->shader != shader)
 		shader->Use();
+
+	bool bNewMat = (renderContext.currentMaterial != this);
 
 	// set parameters
 	char* paramDataPtr = parameterData.data();
 	MaterialParameter* paramListPtr = parameterList.data();
 	for (int i = 0, ni = (int)parameterList.size(); i < ni; ++i)
 	{
-		paramListPtr[i].SendValue(shader, paramDataPtr);
+		if (bNewMat || paramListPtr[i].bDirty)
+		{
+			paramListPtr[i].bDirty = false;
+			paramListPtr[i].SendValue(shader, paramDataPtr);
+		}
 	}
 
 	// set render context
@@ -56,6 +62,7 @@ void Material::SetParameter(const char* name, char* data, int bytes, EMaterialPa
 		params->offset = (int)parameterData.size();
 		params->count = bytes;
 		params->type = type;
+		params->bDirty = true;
 
 		// add data
 		parameterData.resize(params->offset + bytes);
@@ -65,6 +72,7 @@ void Material::SetParameter(const char* name, char* data, int bytes, EMaterialPa
 	{
 		assert(params->count == bytes);
 		assert(params->type == type);
+		params->bDirty = true;
 		memcpy_s(parameterData.data() + params->offset, params->count, data, bytes);
 	}
 }

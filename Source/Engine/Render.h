@@ -106,9 +106,15 @@ struct RenderState
 
 struct RenderSettings
 {
-	bool bDrawShadow;
-	bool bDrawBounds;
-	bool bDrawLightVolume;
-	bool bUseTAA;
-	bool bUseJitter;
+	bool bDrawShadow			= true;
+	bool bDrawShadowCSM			= true;
+	bool bDrawShadowSpot		= true;
+	bool bDrawShadowPoint		= true;
+	bool bDrawBounds			= false;
+	bool bDrawLightVolume		= false;
+	bool bUseTAA				= true;
+	bool bUseJitter				= true;
+	bool bSkybox				= true;
+
+	//RenderSettings() {};
 };

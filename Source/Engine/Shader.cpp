@@ -5,87 +5,105 @@
 
 #include "Shader.h"
 
-void Shader::Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAssert)
+bool LoadSingleShader(GLenum type, const GLchar* path, GLuint programID, ShaderInfo& outShaderInfo, GLuint& outShaderID, bool bAssert)
 {
-	ShaderInfo vShaderInfo;
-	ShaderInfo fShaderInfo;
-
-	if (!LoadShader(vShaderInfo, vertexPath))
+	if (!LoadShader(outShaderInfo, path))
 	{
-		printf("Error: fail to read shader vertex: %s", vertexPath);
+		printf("Error: fail to read shader vertex: %s", path);
 		if (bAssert)
 			assert(0);
 		else
-			return;
+			return false;
 	}
-	if (!LoadShader(fShaderInfo, fragmentPath))
-	{
-		printf("Error: fail to read shader fragmenet: %s", fragmentPath);
-		if (bAssert)
-			assert(0);
-		else
-			return;
-	}
-
-	strcpy_s(vertexFilePath, vertexPath);
-	strcpy_s(fragmentFilePath, fragmentPath);
-
-	const GLchar* vShaderCode = vShaderInfo.shaderCode.c_str();
-	const GLchar* fShaderCode = fShaderInfo.shaderCode.c_str();
+	
+	const GLchar* shaderCode = outShaderInfo.shaderCode.c_str();
 
 	// compile shader
-	GLuint vertexID, fragmentID;
 	GLint success;
 	GLchar infoLog[512];
 
-	// vertex shader
-	vertexID = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexID, 1, &vShaderCode, NULL);
-	glCompileShader(vertexID);
-	glGetShaderiv(vertexID, GL_COMPILE_STATUS, &success);
+	outShaderID = glCreateShader(type);
+	glShaderSource(outShaderID, 1, &shaderCode, NULL);
+	glCompileShader(outShaderID);
+	glGetShaderiv(outShaderID, GL_COMPILE_STATUS, &success);
 	if (!success)
 	{
-		glGetShaderInfoLog(vertexID, 512, NULL, infoLog);
-		printf("Error: vertex shader %s compile fail: %s", vertexPath, infoLog);
+		glGetShaderInfoLog(outShaderID, 512, NULL, infoLog);
+		printf("Error: vertex shader %s compile fail: %s", path, infoLog);
 		// clean up
-		glDeleteShader(vertexID);
+		glDeleteShader(outShaderID);
 		if (bAssert)
 			assert(success);
 		else
-			return;
+			return false;
 	}
 
-	// fragment shader
-	fragmentID = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentID, 1, &fShaderCode, NULL);
-	glCompileShader(fragmentID);
-	glGetShaderiv(fragmentID, GL_COMPILE_STATUS, &success);
-	if (!success)
-	{
-		glGetShaderInfoLog(fragmentID, 512, NULL, infoLog);
-		printf("Error: fragment shader %s compile fail: %s", fragmentPath, infoLog);
-		// clean up
-		glDeleteShader(vertexID);
-		glDeleteShader(fragmentID);
-		if (bAssert)
-			assert(success);
-		else
-			return;
-	}
+	// attach
+	glAttachShader(programID, outShaderID);
 
-	// attach and link
+	// delete shader
+	glDeleteShader(outShaderID);
+	return true;
+}
+
+void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, bool bAssert)
+{
 	GLuint newProgramID = glCreateProgram();
-	glAttachShader(newProgramID, vertexID);
-	glAttachShader(newProgramID, fragmentID);
+
+	std::vector<ShaderInfo> shaderInfoList;
+	std::vector<GLuint> shaderIDList;
+	int idx = 0;
+
+	if (vertexPath && vertexPath[0])
+	{
+		strcpy_s(vertexFilePath, vertexPath);
+		shaderInfoList.emplace_back();
+		shaderIDList.emplace_back();
+		if (!LoadSingleShader(GL_VERTEX_SHADER, vertexPath, newProgramID, shaderInfoList[idx], shaderIDList[idx], bAssert))
+		{
+			glDeleteProgram(newProgramID);
+			return;
+		}
+		++idx;
+	}
+	if (fragmentPath && fragmentPath[0])
+	{
+		strcpy_s(fragmentFilePath, fragmentPath);
+		shaderInfoList.emplace_back();
+		shaderIDList.emplace_back();
+		if (!LoadSingleShader(GL_FRAGMENT_SHADER, fragmentPath, newProgramID, shaderInfoList[idx], shaderIDList[idx], bAssert))
+		{
+			glDeleteProgram(newProgramID);
+			return;
+		}
+		++idx;
+	}
+	if (geometryPath && geometryPath[0])
+	{
+		strcpy_s(geometryFilePath, geometryPath);
+		shaderInfoList.emplace_back();
+		shaderIDList.emplace_back();
+		if (!LoadSingleShader(GL_GEOMETRY_SHADER, geometryPath, newProgramID, shaderInfoList[idx], shaderIDList[idx], bAssert))
+		{
+			glDeleteProgram(newProgramID);
+			return;
+		}
+		++idx;
+	}
+		
+	// attach and link
+	GLint success;
+	GLchar infoLog[512];
 	glLinkProgram(newProgramID);
 	glGetProgramiv(newProgramID, GL_LINK_STATUS, &success);
+	// detach everything
+	for (int i = 0; i < shaderIDList.size(); ++i)
+		glDetachShader(newProgramID, shaderIDList[i]);
 	if (!success)
 	{
 		glGetProgramInfoLog(newProgramID, 512, NULL, infoLog);
 		printf("Error: shader programe link fail: %s", infoLog);
 		// clean up
-		glDeleteShader(vertexID);
-		glDeleteShader(fragmentID);
 		glDeleteProgram(newProgramID);
 		if (bAssert)
 			assert(success);
@@ -97,33 +115,28 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAs
 	bool bUsePostProcessPassTex = false;
 	vertexType = EVertexType::None;
 	// process hint
-	ShaderInfo* shaderInfoList[2] = { &vShaderInfo, &fShaderInfo };
-	for (int shaderInfoIdx = 0; shaderInfoIdx < 2; ++shaderInfoIdx)
+	int shaderInfoCount = (int)shaderInfoList.size();
+	ShaderInfo* shaderInfoListPtr = shaderInfoList.data();
+	for (int shaderInfoIdx = 0; shaderInfoIdx < shaderInfoCount; ++shaderInfoIdx)
 	{
-		ShaderInfo* shaderInfo = shaderInfoList[shaderInfoIdx];
+		ShaderInfo& shaderInfo = shaderInfoListPtr[shaderInfoIdx];
 
-		bUseDeferredPassTex |= shaderInfo->bUseDeferredPassTex;
-		bUsePostProcessPassTex |= shaderInfo->bUsePostProcessPassTex;
-		if (shaderInfo->vertexType != EVertexType::None)
+		bUseDeferredPassTex |= shaderInfo.bUseDeferredPassTex;
+		bUsePostProcessPassTex |= shaderInfo.bUsePostProcessPassTex;
+		if (shaderInfo.vertexType != EVertexType::None)
 		{
 			assert(vertexType == EVertexType::None);
-			vertexType = shaderInfo->vertexType;
+			vertexType = shaderInfo.vertexType;
 		}
 	}
 	if (bUseDeferredPassTex && bUsePostProcessPassTex)
 	{
-		glDeleteShader(vertexID);
-		glDeleteShader(fragmentID);
 		glDeleteProgram(newProgramID);
 		if (bAssert)
 			assert(false);
 		else
 			return;
 	}
-
-	// delete shader
-	glDeleteShader(vertexID);
-	glDeleteShader(fragmentID);
 
 	// delete old program
 	if (programID)
@@ -142,15 +155,16 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAs
 
 	TexUnitList.clear();
 	UniformLocationList.clear();
-	for (int shaderInfoIdx = 0; shaderInfoIdx < 2; ++shaderInfoIdx)
+	for (int shaderInfoIdx = 0; shaderInfoIdx < shaderInfoCount; ++shaderInfoIdx)
 	{
-		ShaderInfo* shaderInfo = shaderInfoList[shaderInfoIdx];
-		for (auto it = shaderInfo->shaderUniforms.typeMap.begin(); it != shaderInfo->shaderUniforms.typeMap.end(); ++it)
+		ShaderInfo& shaderInfo = shaderInfoListPtr[shaderInfoIdx];
+		for (auto it = shaderInfo.shaderUniforms.typeMap.begin(); it != shaderInfo.shaderUniforms.typeMap.end(); ++it)
 		{
 			for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
 			{
 				UniformLocationList.push_back(ValuePair(it->second[nameIdx].c_str(), -1));
 				if (it->first.compare("sampler2D") == 0 || 
+					it->first.compare("samplerCube") == 0 ||
 					it->first.compare("sampler2DShadow") == 0)
 				{
 					// custom texture unit, init to be -1, don't bind it unless used

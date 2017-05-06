@@ -16,7 +16,7 @@ enum class EMaterialParameterType
 	VEC4,
 	MAT3,
 	MAT4,
-	TEX2D,
+	TEX,
 };
 
 class MaterialParameter
@@ -27,6 +27,7 @@ public:
 	int count = 0;
 	int location = -1; // uniform location for parameters, tex unit for textures
 	EMaterialParameterType type;
+	bool bDirty = false;
 
 	inline void SetLocation(Shader* shader)
 	{
@@ -41,7 +42,7 @@ public:
 		case EMaterialParameterType::MAT4:
 			location = shader->GetUniformLocation(name);
 			break;
-		case EMaterialParameterType::TEX2D:
+		case EMaterialParameterType::TEX:
 			location = shader->GetTextureUnit(name);
 			break;
 		}
@@ -81,8 +82,8 @@ public:
 		case EMaterialParameterType::MAT4:
 			glUniformMatrix4fv(location, 1, GL_FALSE, (GLfloat*)(parameterValues + offset));
 			break;
-		case EMaterialParameterType::TEX2D:
-			((Texture2D*)(parameterValues + offset))->Bind(location);
+		case EMaterialParameterType::TEX:
+			((Texture*)(parameterValues + offset))->Bind(location);
 			break;
 		}
 	}
@@ -128,9 +129,9 @@ public:
 
 	void SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type);
 
-	inline void SetParameter(const char* name, Texture2D* tex)
+	inline void SetParameter(const char* name, Texture* tex)
 	{
-		SetParameter(name, (char*)tex, sizeof(Texture2D*), EMaterialParameterType::TEX2D);
+		SetParameter(name, (char*)tex, sizeof(Texture*), EMaterialParameterType::TEX);
 	}
 	
 	inline void SetParameter(const char* name, const glm::vec4& value)

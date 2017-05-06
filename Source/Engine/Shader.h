@@ -84,8 +84,9 @@ public:
 
 	GLuint nextTexUnit;
 
-	GLchar vertexFilePath[512];
-	GLchar fragmentFilePath[512];
+	GLchar vertexFilePath[256];
+	GLchar fragmentFilePath[256];
+	GLchar geometryFilePath[256];
 
 	std::vector<ValuePair> TexUnitList;
 	std::vector<ValuePair> UniformLocationList;
@@ -94,6 +95,7 @@ public:
 	{
 		memset(vertexFilePath, 0, _countof(vertexFilePath) * sizeof(GLchar));
 		memset(fragmentFilePath, 0, _countof(fragmentFilePath) * sizeof(GLchar));
+		memset(geometryFilePath, 0, _countof(geometryFilePath) * sizeof(GLchar));
 	}
 
 	Shader(const GLchar* vertexPath, const GLchar* fragmentPath) : Shader()
@@ -101,7 +103,16 @@ public:
 		Load(vertexPath, fragmentPath);
 	}
 
-	void Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAssert = true);
+	void Reload()
+	{
+		Load(vertexFilePath, geometryFilePath, fragmentFilePath, false);
+	}
+
+	void Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAssert = true)
+	{
+		Load(vertexPath, 0, fragmentPath, bAssert);
+	}
+	void Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, bool bAssert = true);
 	void Use();
 
 	GLint GetAttribuleLocation(const GLchar* name);

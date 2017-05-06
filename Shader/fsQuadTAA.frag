@@ -322,7 +322,8 @@ void main()
 		vec3 prevPosNS = prevPosCS.xyz / prevPosCS.w * 0.5 + 0.5;
 		
 		prevUV = prevPosNS.xy - prevProjMat[2].xy * 0.5;
-		velocity = curUV - prevUV;
+		velocity = curUV - prevUV; // calcualte velocity;
+		prevUV = curUV; // don't change uv
 	}
 	
 	float prevDepth = texture(historyDepthStencilTex, prevUV).r;

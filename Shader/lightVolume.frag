@@ -16,6 +16,9 @@ uniform Light light;
 uniform mat4 shadowMat;
 uniform sampler2D shadowMap;
 
+uniform mat4 lightProjRemapMat;
+uniform samplerCube shadowMapCube;
+
 void main() 
 {	
 	vec2 uv = gl_FragCoord.xy / resolution;
@@ -32,7 +35,10 @@ void main()
 	if(light.shadowDataCount > 0)
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
-		shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, shadowMap, 0.00015);
+		if(light.attenParams.y > 0.5f)
+			shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, shadowMap, 0.00015);
+		else
+			shadowFactor = CalcShadowCube(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMapCube, 0.0005);
 	}
 	
 	vec3 result = CalcLight(light, normal, position, view, albedo, metallic, roughness) * shadowFactor;

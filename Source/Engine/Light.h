@@ -5,16 +5,23 @@
 #include "Mesh.h"
 #include "Material.h"
 
+class Texture;
+
 #define MAX_CASCADE_COUNT 3
 
 struct ShadowData
 {
-	Texture2D* shadowMap = 0;
+	Texture* shadowMap = 0;
 	glm::vec3 bounds; // x cascade width, y cascade height, z far plane
 
 	// set in shadow pass
-	// this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
+	// for spot/directional light this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
+	// for point light this is lightView * invCameraView, which converts VS -> WS -> LS
 	glm::mat4 shadowMat;
+
+	// set in shadow pass
+	// only used for point light
+	glm::mat4 lightProjRemapMat;
 };
 
 class Light

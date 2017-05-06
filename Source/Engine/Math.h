@@ -20,10 +20,9 @@ namespace Math
 		return glm::dot(v, v);
 	}
 
-	inline glm::mat3 MakeMatFromForward(const glm::vec3& f)
+	inline glm::mat3 MakeMatFromForward(const glm::vec3& forward, const glm::vec3& up)
 	{
-		glm::vec3 z = -f;
-		glm::vec3 up = glm::vec3(0, 1, 0);
+		glm::vec3 z = -forward;
 		glm::vec3 x = glm::cross(up, z);
 		if (SizeSquared(x) <= KINDA_SMALL_NUMBER)
 			x = glm::vec3(1, 0, 0);
@@ -33,6 +32,11 @@ namespace Math
 
 		return glm::mat3(x, y, z);
 		//return glm::mat4(glm::vec4(x, 0), glm::vec4(y, 0), glm::vec4(z, 0), glm::vec4(0));
+	}
+
+	inline glm::mat3 MakeMatFromForward(const glm::vec3& forward)
+	{
+		return MakeMatFromForward(forward, glm::vec3(0, 1, 0));
 	}
 
 	inline glm::mat4 PerspectiveFov(float fov, float width, float height, float zNear, float zFar, float jitterX = 0, float jitterY = 0)
@@ -76,6 +80,27 @@ namespace Math
 			Result[2][2] = -2.f / (zFar - zNear);
 			Result[3][2] = -(zFar + zNear) / (zFar - zNear);
 		#endif
+
+		return Result;
+	}
+
+	inline glm::mat4 PerspectiveAddJitter(const glm::mat4& inMat, float width, float height, float jitterX, float jitterY)
+	{
+		glm::mat4 Result = inMat;
+
+		// negative since this is going to  * z / -z
+		Result[2][0] = -jitterX * 2.f / width;
+		Result[2][1] = -jitterY * 2.f / height;
+
+		return Result;
+	}
+
+	inline glm::mat4 OrthoAddJitter(const glm::mat4& inMat, float width, float height, float jitterX, float jitterY)
+	{
+		glm::mat4 Result = inMat;
+
+		Result[3][0] += 2 * jitterX / width;
+		Result[3][1] += 2 * jitterY / height;
 
 		return Result;
 	}
