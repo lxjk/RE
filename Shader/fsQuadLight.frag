@@ -46,13 +46,13 @@ void main()
 	vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
 	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
-	vec3 view = normalize(-position);	
-	vec3 albedo = texture(gAlbedoTex, uv).rgb;
+	vec3 view = normalize(-position);
+	vec4 albedo_ao = texture(gAlbedoTex, uv);
 	vec4 material = texture(gMaterialTex, uv);
 	float metallic = material.r;
 	float roughness = material.g;
 	
-	vec3 ambient = vec3(0.01f) * albedo;
+	vec3 ambient = albedo_ao.rgb * (0.035 * (1-albedo_ao.a));
 	vec3 result = ambient;
 	vec3 csmColorCode = vec3(0);
 	int shadowCount = 0;
@@ -71,12 +71,12 @@ void main()
 		}
 		shadowCount += lights[i].shadowDataCount;
 		//shadowFactor = 0;
-		result += CalcLight(lights[i], normal, position, view, albedo, metallic, roughness) * shadowFactor;
+		result += CalcLight(lights[i], normal, position, view, albedo_ao.rgb, metallic, roughness) * min(shadowFactor, 1-albedo_ao.a);
 		//result = vec3(shadowFactor);
 	}
 	//result = mix(result, csmColorCode, 0.05f);
 	color = vec4(result, 1.0f);
-	//color = vec4(albedo, 1.0f);
+	//color = vec4(vec3(1-albedo_ao.a), 1.0f);
 	//color = vec4(metallic, roughness, 0.0f, 1.0f);
 	gl_FragDepth = depth;
 

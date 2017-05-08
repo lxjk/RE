@@ -151,18 +151,6 @@ vec3 CalcLightBlinnPhong(vec3 light, vec3 normal, vec3 view, vec3 lightColor, ve
 	return diff + spec;
 }
 
-vec3 GetPositionVSFromDepth(float depth, mat4 projMat, vec3 fragPosVS)
-{
-	float ndcZ = depth * 2.f - 1.f;
-	float viewZ = projMat[3][2] / (projMat[2][3] * ndcZ - projMat[2][2]);
-	return fragPosVS / fragPosVS.z * viewZ;
-	
-	// ref:
-	// https://www.khronos.org/opengl/wiki/Compute_eye_space_from_window_space
-	// https://mynameismjp.wordpress.com/2010/09/05/position-from-depth-3/
-	// https://mynameismjp.wordpress.com/2010/03/22/attack-of-the-depth-buffer/
-}
-
 vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, float metallic, float roughness)
 {
 	vec3 light = -lightData.directionRAB.xyz;

@@ -26,7 +26,7 @@ void main()
 	float depth = texture(gDepthStencilTex, uv).r;
 	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
 	vec3 view = normalize(-position);	
-	vec3 albedo = texture(gAlbedoTex, uv).rgb;
+	vec4 albedo_ao = texture(gAlbedoTex, uv);
 	vec4 material = texture(gMaterialTex, uv);
 	float metallic = material.r;
 	float roughness = material.g;
@@ -41,7 +41,7 @@ void main()
 			shadowFactor = CalcShadowCube(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMapCube, 0.0005);
 	}
 	
-	vec3 result = CalcLight(light, normal, position, view, albedo, metallic, roughness) * shadowFactor;
+	vec3 result = CalcLight(light, normal, position, view, albedo_ao.rgb, metallic, roughness) * min(shadowFactor, 1-albedo_ao.a);
 	color = vec4(result, 1.0f);
 	//color = vec4(vec3(shadowFactor), 1.f);
 }

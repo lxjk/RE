@@ -42,6 +42,8 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl.h"
 
+#define SHADER_DEBUG_BUFFER 0
+
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
 
@@ -78,6 +80,8 @@ GLuint gUBO_Matrices = 0;
 GLuint gGBuffer = 0;
 Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gVelocityTex, gDepthStencilTex;
 
+GLuint gSSAOBuffer = 0;
+
 GLuint gSceneBuffer = 0;
 const int gSceneColorTexCount = 3;
 const int gSceneDepthTexCount = 2;
@@ -88,6 +92,11 @@ int gSceneDepthCurrentIdx, gSceneDepthHistoryIdx;
 
 GLuint gDepthOnlyBuffer = 0;
 Texture2D gShadowTex;
+
+#if SHADER_DEBUG_BUFFER
+Texture2D gDebugTex;
+float* gDebugTexBuffer;
+#endif
 
 // light const
 static glm::mat4 gLightOmniViewMat[6];
@@ -118,7 +127,7 @@ Shader gDirectionalLightShader;
 Shader gLightVolumeShader;
 Shader gLightDebugShader;
 Shader gSkyboxShader;
-Shader gFSQuadShader;
+Shader gSSAOShader;
 Shader gToneMapShader;
 Shader gTAAShader;
 
@@ -131,6 +140,7 @@ Material* gDirectionalLightMaterial;
 Material* gLightVolumeMaterial;
 Material* gLightDebugMaterial;
 Material* gSkyboxMaterial;
+Material* gSSAOMaterial;
 Material* gToneMapMaterial;
 Material* gTAAMaterial;
 
@@ -237,7 +247,7 @@ bool Init()
 	// init imgui
 	ImGui_Impl_Init(gWindow);
 	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->AddFontFromFileTTF("Content/Fonts/DroidSans.ttf", 22.0f);
+	io.Fonts->AddFontFromFileTTF("Content/Fonts/DroidSans.ttf", 20.0f);
 
 	//Use Vsync (or do not?)
 	if (SDL_GL_SetSwapInterval(0) < 0)
@@ -445,11 +455,26 @@ void MakeMeshComponents()
 
 void SetupFrameBuffers()
 {
+
+#if SHADER_DEBUG_BUFFER
+	if (!gDebugTex.textureID)
+	{
+		gDebugTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT, true);
+		gDebugTexBuffer = new float[gWindowWidth * gWindowHeight * 4];
+	}
+	else
+	{
+		gDebugTex.Reallocate(gWindowWidth, gWindowHeight);
+		delete[] gDebugTexBuffer;
+		gDebugTexBuffer = new float[gWindowWidth * gWindowHeight * 4];
+	}
+#endif
+
 	// G-Buffer
 	if(!gGBuffer)
 	{
 		// normal(RGB)
-		// color(RGB)
+		// color(RGB) + AO(A)
 		// matellic(R) + roughness(B)
 		glGenFramebuffers(1, &gGBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
@@ -491,6 +516,19 @@ void SetupFrameBuffers()
 		gVelocityTex.Reallocate(gWindowWidth, gWindowHeight);
 	}
 
+	// SSAO Buffer
+	if (!gSSAOBuffer)
+	{
+		glGenFramebuffers(1, &gSSAOBuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, gSSAOBuffer);
+		// bind albedo buffer
+		gAlbedoTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+		//gDebugTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
+		glReadBuffer(GL_NONE);
+
+		//GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+		//glDrawBuffers(_countof(attachments), attachments);
+	}
 
 	// Scene Buffer
 	if(!gSceneBuffer)
@@ -565,6 +603,7 @@ void LoadShaders(bool bReload)
 	gLightVolumeShader.Load("Shader/lightVolume.vert", "Shader/lightVolume.frag", !bReload);
 	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
 	gSkyboxShader.Load("Shader/skybox.vert", "Shader/skybox.frag", !bReload);
+	gSSAOShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSAO.frag", !bReload);
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 	gTAAShader.Load("Shader/fsQuad.vert", "Shader/fsQuadTAA.frag", !bReload);
 }
@@ -648,6 +687,7 @@ bool InitEngine()
 	gLightVolumeMaterial = Material::Create(&gLightVolumeShader);
 	gLightDebugMaterial = Material::Create(&gLightDebugShader);
 	gSkyboxMaterial = Material::Create(&gSkyboxShader);
+	gSSAOMaterial = Material::Create(&gSSAOShader);
 	gToneMapMaterial = Material::Create(&gToneMapShader);
 	gTAAMaterial = Material::Create(&gTAAShader);
 
@@ -904,6 +944,29 @@ void GeometryPass(RenderContext& renderContext)
 	}
 }
 
+void SSAOPass(RenderContext& renderContext)
+{
+	GPU_SCOPED_PROFILE("SSAO");
+
+	const static RenderState renderState([](RenderState& s) {
+		// no depth test, no depth write
+		s.bDepthTest = false;
+		s.bDepthWrite = false;
+		// only write alpha
+		s.bColorWrite = true;
+		s.bColorWriteR = false;
+		s.bColorWriteG = false;
+		s.bColorWriteB = false;
+		s.bColorWriteA = true;
+	});
+
+	renderState.Apply();
+
+	// no need to clear
+	
+	gFSQuadMesh->Draw(renderContext, gSSAOMaterial);
+}
+
 void DirectionalLightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("directional light");
@@ -917,14 +980,12 @@ void DirectionalLightPass(RenderContext& renderContext)
 		s.bDepthWrite = true;
 	});
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
-
-	glClearDepth(1);
-	glClear(GL_DEPTH_BUFFER_BIT);
-
 	// directional light
 	renderState.Apply();
+
+	glClearColor(0, 0, 0, 0);
+	glClearDepth(1);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	gDirectionalLightMaterial->SetParameter("lightCount", (int)gDirectionalLights.size());
 
@@ -959,8 +1020,6 @@ void DirectionalLightPass(RenderContext& renderContext)
 
 	// draw quad
 	gDirectionalLightMesh->Draw(renderContext);
-
-	glDisable(GL_BLEND);
 }
 
 void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights, const Mesh* lightVolumeMesh)
@@ -1008,9 +1067,6 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 		s.cullFaceMode = GL_FRONT;
 	});
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
-
 	std::vector<int> cameraInsideLight;
 	cameraInsideLight.reserve(4);
 
@@ -1019,14 +1075,14 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 	const Light* lightsPtr = lights.data();
 	for (int i = 0, ni = (int)lights.size(); i < ni; i += stencilBits)
 	{
+		// prepass
+		prepassRenderState.Apply();
+
 		// clear stencil
 		glClearStencil(0);
 		glClear(GL_STENCIL_BUFFER_BIT);
 
 		char cameraInsideFlag = 0;
-		
-		// prepass
-		prepassRenderState.Apply();
 
 		for (int j = 0; j < stencilBits && i + j < ni; ++j)
 		{
@@ -1158,8 +1214,6 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 
 		light.LightMesh->Draw(renderContext);
 	}
-
-	glDisable(GL_BLEND);
 }
 
 void PointLightPass(RenderContext& renderContext)
@@ -1177,18 +1231,18 @@ void SpotLightPass(RenderContext& renderContext)
 void LightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("light");
-	
-	// clear color buffer only.
-	glClearColor(0, 0, 0, 0);
-	//glClearDepth(1);
-	//glClearStencil(0);
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	glClear(GL_COLOR_BUFFER_BIT);
 
+	// enable blend for light additive
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+
+	// must have directional light pass, it clears color and write depth
 	DirectionalLightPass(renderContext);
 	PointLightPass(renderContext);
 	SpotLightPass(renderContext);
 
+	// disable blend
+	glDisable(GL_BLEND);
 }
 
 void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const RenderInfo& renderInfo, Material* material,
@@ -1741,6 +1795,7 @@ void UIPass()
 		ImGui::Checkbox("Light Volume", &gRenderSettings.bDrawLightVolume);
 		ImGui::Checkbox("TAA", &gRenderSettings.bUseTAA);
 		ImGui::Checkbox("Jitter", &gRenderSettings.bUseJitter);
+		ImGui::Checkbox("SSAO", &gRenderSettings.bSSAO);
 		ImGui::Checkbox("Skybox", &gRenderSettings.bSkybox);
 
 		ImGui::End();
@@ -1751,6 +1806,29 @@ void UIPass()
 	//	ImGui::SetNextWindowPos(ImVec2(650, 20), ImGuiSetCond_FirstUseEver);
 	//	ImGui::ShowTestWindow(&open);
 	//}
+
+#if SHADER_DEBUG_BUFFER
+	glBindTexture(GL_TEXTURE_2D, gDebugTex.textureID);
+	glGetTexImage(GL_TEXTURE_2D, 0, gDebugTex.format, gDebugTex.type, gDebugTexBuffer);
+
+	int x, y;
+	SDL_GetMouseState(&x, &y);
+
+	float* buffer = gDebugTexBuffer + ((gWindowHeight - 1 - y) * gWindowWidth + x) * 4;
+
+	{
+		static bool open = true;
+		ImGui::Begin("shader debug", &open);
+
+		ImGui::Text("pos : (%d, %d)", x, y);
+		ImGui::Text("R: %f", buffer[0]);
+		ImGui::Text("G: %f", buffer[1]);
+		ImGui::Text("B: %f", buffer[2]);
+		ImGui::Text("A: %f", buffer[3]);
+
+		ImGui::End();
+	}
+#endif
 
 	ImGui::Render();
 }
@@ -1810,18 +1888,26 @@ void Render()
 	glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
 
 	GeometryPass(renderContext);
+	
+	// bind deferred pass textures
+	gNormalTex.Bind(Shader::gNormalTexUnit);
+	gMaterialTex.Bind(Shader::gMaterialTexUnit);
+	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
+
+	// bind SSAO-buffer
+	if (gRenderSettings.bSSAO)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, gSSAOBuffer);
+		SSAOPass(renderContext);
+	}
+
+	gAlbedoTex.Bind(Shader::gAlbedoTexUnit);
 
 	// bind Scene-buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
 	// attach write texture
 	gSceneColorTex[gSceneColorWriteIdx].AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 	gSceneDepthStencilTex[gSceneDepthCurrentIdx].AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
-	
-	// bind deferred pass textures
-	gNormalTex.Bind(Shader::gNormalTexUnit);
-	gAlbedoTex.Bind(Shader::gAlbedoTexUnit);
-	gMaterialTex.Bind(Shader::gMaterialTexUnit);
-	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 	
 	LightPass(renderContext);
 

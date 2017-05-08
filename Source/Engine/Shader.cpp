@@ -177,19 +177,19 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 
 	// set texture unit
 	Use(); // must use program here
-		   // deferrd pass
+	// deferrd pass
 	if (bUseDeferredPassTex)
 	{
-		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
-		SetTextureUnit("gNormalTex", gNormalTexUnit);
-		SetTextureUnit("gAlbedoTex", gAlbedoTexUnit);
-		SetTextureUnit("gMaterialTex", gMaterialTexUnit);
+		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit, true);
+		SetTextureUnit("gNormalTex", gNormalTexUnit, true);
+		SetTextureUnit("gAlbedoTex", gAlbedoTexUnit, true);
+		SetTextureUnit("gMaterialTex", gMaterialTexUnit, true);
 	}
 	// post process pass
 	else if (bUsePostProcessPassTex)
 	{
-		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit);
-		SetTextureUnit("gSceneColorTex", gSceneColorTexUnit);
+		SetTextureUnit("gDepthStencilTex", gDepthStencilTexUnit, true);
+		SetTextureUnit("gSceneColorTex", gSceneColorTexUnit, true);
 	}
 	// custom
 	//for (auto it = TexUnitList.begin(); it != TexUnitList.end(); ++it)
@@ -203,29 +203,29 @@ void Shader::Use()
 	glUseProgram(programID);
 }
 
-GLint Shader::GetAttribuleLocation(const GLchar* name)
+GLint Shader::GetAttribuleLocation(const GLchar* name, bool bSilent)
 {
 	GLint location = -1;
 	location = glGetAttribLocation(programID, name);
-	if (location == -1)
+	if (location == -1 && !bSilent)
 	{
 		printf("%s is not a valid glsl program variable! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
 	}
 	return location;
 }
 
-GLint Shader::GetUniformLocation_Internal(const GLchar* name)
+GLint Shader::GetUniformLocation_Internal(const GLchar* name, bool bSilent)
 {
 	GLint location = -1;
 	location = glGetUniformLocation(programID, name);
-	if (location == -1)
+	if (location == -1 && !bSilent)
 	{
 		printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
 	}
 	return location;
 }
 
-GLint Shader::GetUniformLocation(const GLchar* name)
+GLint Shader::GetUniformLocation(const GLchar* name, bool bSilent)
 {
 	//return GetUniformLocation_Internal(name);
 	for (int i = 0, ni = (int)UniformLocationList.size(); i < ni; ++i)
@@ -234,7 +234,7 @@ GLint Shader::GetUniformLocation(const GLchar* name)
 		if (strcmp(pair.key, name) == 0)
 		{
 			if (pair.value < 0)
-				pair.value = GetUniformLocation_Internal(name);
+				pair.value = GetUniformLocation_Internal(name, bSilent);
 			return pair.value;
 		}
 	}
@@ -248,10 +248,10 @@ void Shader::BindUniformBlock(const GLchar* name, GLuint bindingPoint)
 		glUniformBlockBinding(programID, blockIdx, bindingPoint);
 }
 
-void Shader::SetTextureUnit(const GLchar* name, GLuint texUnit)
+void Shader::SetTextureUnit(const GLchar* name, GLuint texUnit, bool bSilent)
 {
 	// use internal here, since reserved texture is not in uniform map, and we only get texture location once
-	GLint location = GetUniformLocation_Internal(name);
+	GLint location = GetUniformLocation_Internal(name, bSilent);
 	if (location != -1)
 		glUniform1i(location, texUnit);
 }

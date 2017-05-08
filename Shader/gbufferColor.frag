@@ -11,10 +11,10 @@ in VS_OUT
 	vec4 prevPosCS;
 } fs_in;
 
-out vec3 gNormal;
-out vec3 gAlbedo;
-out vec2 gMaterial;
-out vec2 gVelocity;
+layout (location = 0) out vec3 gNormal;
+layout (location = 1) out vec4 gAlbedo_ao;
+layout (location = 2) out vec2 gMaterial;
+layout (location = 3) out vec2 gVelocity;
 
 uniform vec3 color;
 uniform sampler2D normalTex;
@@ -29,7 +29,7 @@ void main()
 	//gNormal = (TBN * normalize(texture(normalTex, fs_in.texCoords).rgb * 2.0f - 1.0f)) * 0.5f + 0.5f;
 	gNormal = faceNormal * 0.5f + 0.5f;
 	
-	gAlbedo = color;
+	gAlbedo_ao = vec4(color, 0);
 	//gAlbedo = vec3(1.0);
 	
 	gMaterial.r = metallic;

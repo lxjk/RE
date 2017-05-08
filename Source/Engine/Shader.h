@@ -115,15 +115,15 @@ public:
 	void Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, bool bAssert = true);
 	void Use();
 
-	GLint GetAttribuleLocation(const GLchar* name);
+	GLint GetAttribuleLocation(const GLchar* name, bool bSilent = false);
 
-	GLint GetUniformLocation_Internal(const GLchar* name);
+	GLint GetUniformLocation_Internal(const GLchar* name, bool bSilent = false);
 
-	GLint GetUniformLocation(const GLchar* name);
+	GLint GetUniformLocation(const GLchar* name, bool bSilent = false);
 
 	void BindUniformBlock(const GLchar* name, GLuint bindingPoint);
 
-	void SetTextureUnit(const GLchar* name, GLuint texUnit);
+	void SetTextureUnit(const GLchar* name, GLuint texUnit, bool bSilent = false);
 
 	GLint GetTextureUnit(const GLchar* name);
 };

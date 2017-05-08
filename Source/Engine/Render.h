@@ -42,6 +42,10 @@ struct RenderInfo
 struct RenderState
 {
 	bool bColorWrite = true;
+	bool bColorWriteR = true;
+	bool bColorWriteG = true;
+	bool bColorWriteB = true;
+	bool bColorWriteA = true;
 
 	bool bDepthTest = true;
 	GLenum depthTestFunc = GL_LESS;
@@ -71,7 +75,7 @@ struct RenderState
 	void Apply() const
 	{
 		if (bColorWrite)
-			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			glColorMask(bColorWriteR, bColorWriteG, bColorWriteB, bColorWriteA);
 		else
 			glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
@@ -114,6 +118,7 @@ struct RenderSettings
 	bool bDrawLightVolume		= false;
 	bool bUseTAA				= true;
 	bool bUseJitter				= true;
+	bool bSSAO					= true;
 	bool bSkybox				= true;
 
 	//RenderSettings() {};
