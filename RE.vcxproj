@@ -37,6 +37,7 @@
     <ClInclude Include="Source\Engine\Bounds.h" />
     <ClInclude Include="Source\Engine\Camera.h" />
     <ClInclude Include="Source\Engine\Component.h" />
+    <ClInclude Include="Source\Engine\FrameBuffer.h" />
     <ClInclude Include="Source\Engine\Light.h" />
     <ClInclude Include="Source\Engine\Material.h" />
     <ClInclude Include="Source\Engine\Math.h" />

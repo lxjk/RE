@@ -37,6 +37,7 @@
 #include "Engine/Profiler.h"
 #include "Engine/Render.h"
 #include "Engine/Bounds.h"
+#include "Engine/FrameBuffer.h"
 
 // imgui
 #include "imgui/imgui.h"
@@ -77,12 +78,12 @@ RenderSettings gRenderSettings;
 GLuint gUBO_Matrices = 0;
 
 // frame buffer
-GLuint gGBuffer = 0;
+FrameBuffer gGBuffer;
 Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gVelocityTex, gDepthStencilTex;
 
-GLuint gSSAOBuffer = 0;
+FrameBuffer gSSAOBuffer;
 
-GLuint gSceneBuffer = 0;
+FrameBuffer gSceneBuffer;
 const int gSceneColorTexCount = 3;
 const int gSceneDepthTexCount = 2;
 Texture2D gSceneColorTex[gSceneColorTexCount], gSceneDepthStencilTex[gSceneDepthTexCount];
@@ -90,7 +91,7 @@ GLuint gSceneDepthStencilRBO;
 int gSceneColorReadIdx, gSceneColorWriteIdx, gSceneColorHistoryIdx, gSceneColorPrevHistoryIdx;
 int gSceneDepthCurrentIdx, gSceneDepthHistoryIdx;
 
-GLuint gDepthOnlyBuffer = 0;
+FrameBuffer gDepthOnlyBuffer;
 Texture2D gShadowTex;
 
 #if SHADER_DEBUG_BUFFER
@@ -472,88 +473,30 @@ void MakeMeshComponents()
 	}
 }
 
-void SetupFrameBuffers()
+void AllocateRenderTarget(bool bCreate)
 {
+	if (bCreate)
+	{
 
 #if SHADER_DEBUG_BUFFER
-	if (!gDebugTex.textureID)
-	{
 		gDebugTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT, true);
 		gDebugTexBuffer = new float[gWindowWidth * gWindowHeight * 4];
-	}
-	else
-	{
-		gDebugTex.Reallocate(gWindowWidth, gWindowHeight);
-		delete[] gDebugTexBuffer;
-		gDebugTexBuffer = new float[gWindowWidth * gWindowHeight * 4];
-	}
 #endif
 
-	// G-Buffer
-	if(!gGBuffer)
-	{
-		// normal(RGB)
-		// color(RGB)
-		// matellic(R) + roughness(B) + AO(A)
-		glGenFramebuffers(1, &gGBuffer);
-		glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
+		// == GBuffer ==
 		// normal
 		//gNormalTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB16F, GL_RGB, GL_FLOAT);
 		gNormalTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
-		gNormalTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 		// albedo
 		gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
-		gAlbedoTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
-		// material: metallic + roughness
+		// material: metallic + roughness + ? + ao
 		gMaterialTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
-		gMaterialTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT2);
 		// velocity
 		gVelocityTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RG16, GL_RG, GL_UNSIGNED_BYTE);
-		gVelocityTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT3);
 		// depth stencil
 		gDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
-		gDepthStencilTex.AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
-
-		GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
-		glDrawBuffers(_countof(attachments), attachments);
-		glReadBuffer(GL_NONE);
-
-		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-			printf("Error: G Buffer not complete!\n");
-	}
-	else
-	{
-		// normal
-		gNormalTex.Reallocate(gWindowWidth, gWindowHeight);
-		// albedo
-		gAlbedoTex.Reallocate(gWindowWidth, gWindowHeight);
-		// material: metallic + roughness
-		gMaterialTex.Reallocate(gWindowWidth, gWindowHeight);
-		// depth stencil
-		gDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
-		// depth stencil
-		gVelocityTex.Reallocate(gWindowWidth, gWindowHeight);
-	}
-
-	// SSAO Buffer
-	if (!gSSAOBuffer)
-	{
-		glGenFramebuffers(1, &gSSAOBuffer);
-		glBindFramebuffer(GL_FRAMEBUFFER, gSSAOBuffer);
-		// bind material buffer
-		gMaterialTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
-		//gDebugTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
-		glReadBuffer(GL_NONE);
-
-		//GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-		//glDrawBuffers(_countof(attachments), attachments);
-	}
-
-	// Scene Buffer
-	if(!gSceneBuffer)
-	{
-		glGenFramebuffers(1, &gSceneBuffer);
-		glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
+		
+		// == Scene Buffer ==
 		// HDR scene color
 		for (int i = 0; i < gSceneColorTexCount; ++i)
 		{
@@ -569,17 +512,27 @@ void SetupFrameBuffers()
 		//glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
 		//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
 		//glBindRenderbuffer(GL_RENDERBUFFER, 0);
-		//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gSceneDepthStencilRBO);
-
-		//gDebugTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
-		//GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-		//glDrawBuffers(_countof(attachments), attachments);
-
-		//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		//	printf("Error: Scene Buffer not complete!\n");
 	}
 	else
 	{
+
+#if SHADER_DEBUG_BUFFER
+		gDebugTex.Reallocate(gWindowWidth, gWindowHeight);
+		delete[] gDebugTexBuffer;
+		gDebugTexBuffer = new float[gWindowWidth * gWindowHeight * 4];
+#endif
+
+		// normal
+		gNormalTex.Reallocate(gWindowWidth, gWindowHeight);
+		// albedo
+		gAlbedoTex.Reallocate(gWindowWidth, gWindowHeight);
+		// material: metallic + roughness + ? + ao
+		gMaterialTex.Reallocate(gWindowWidth, gWindowHeight);
+		// velocity
+		gVelocityTex.Reallocate(gWindowWidth, gWindowHeight);
+		// depth stencil
+		gDepthStencilTex.Reallocate(gWindowWidth, gWindowHeight);
+
 		// HDR scene color
 		for (int i = 0; i < gSceneColorTexCount; ++i)
 		{
@@ -595,19 +548,47 @@ void SetupFrameBuffers()
 		//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
 		//glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
+}
+
+void SetupFrameBuffers()
+{
+	// G-Buffer
+	{
+		gGBuffer.StartSetup();
+
+		Texture* colors[] =
+		{
+			&gNormalTex,		// normal(RGB)
+			&gAlbedoTex,		// color(RGB)
+			&gMaterialTex,		// matellic(R) + roughness(B) + AO(A)
+			&gVelocityTex,
+		};
+		gGBuffer.SetupColors(colors, _countof(colors));
+		gGBuffer.SetupDepth(&gDepthStencilTex, true);
+		gGBuffer.FinishSetup();
+
+		gGBuffer.TestComplete();
+	}
+
+	// SSAO Buffer
+	{
+		gSSAOBuffer.StartSetup();
+		gSSAOBuffer.SetupColor(&gMaterialTex);
+		gSSAOBuffer.FinishSetup();
+	}
+
+	// Scene Buffer
+	{
+		gSceneBuffer.StartSetup();
+		gSceneBuffer.SetupColor(0); // reserve a scene color tex
+		//gSceneBuffer.SetupColor(&gDebugTex); // debug
+		gSceneBuffer.FinishSetup();
+	}
 
 	// Shadow Buffer
-	if (!gDepthOnlyBuffer)
 	{
-		glGenFramebuffers(1, &gDepthOnlyBuffer);
-		glBindFramebuffer(GL_FRAMEBUFFER, gDepthOnlyBuffer);
-		
-		glDrawBuffer(GL_NONE);
-		glReadBuffer(GL_NONE);
-
-		//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		//	printf("Error: Shadow buffer not complete!\n");
-
+		gDepthOnlyBuffer.StartSetup();
+		gDepthOnlyBuffer.FinishSetup();
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -682,6 +663,7 @@ bool InitEngine()
 	InitializeLightOmniViewMat();
 
 	// frame buffers
+	AllocateRenderTarget(true);
 	SetupFrameBuffers();
 	// scene buffer idx
 	gSceneColorWriteIdx = 0;
@@ -778,7 +760,7 @@ void OnWindowResize(int newWidth, int newHeight)
 	gWindowWidth = newWidth;
 	gWindowHeight = newHeight;
 
-	SetupFrameBuffers();
+	AllocateRenderTarget(false);
 	gHasResetFrame = true;
 }
 
@@ -1277,7 +1259,7 @@ void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const Ren
 	std::vector<MeshComponent*>& involvedMeshComps)
 {
 	// attach to frame buffers
-	shadowMap->AttachToFrameBuffer(GL_DEPTH_ATTACHMENT);
+	gDepthOnlyBuffer.AttachDepth(shadowMap, false);
 
 	// set viewport
 	glViewport(0, 0, shadowMap->width, shadowMap->height);
@@ -1679,7 +1661,7 @@ void PreparePostProcessPass(bool bClear = false)
 	// bind read texture
 	gSceneColorTex[gSceneColorReadIdx].Bind(Shader::gSceneColorTexUnit);
 	// attach write texture
-	gSceneColorTex[gSceneColorWriteIdx].AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+	gSceneBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
 	if (bClear)
 	{
 		glClearColor(0, 0, 0, 0);
@@ -1901,7 +1883,7 @@ void Render()
 	if (gRenderSettings.bDrawShadow)
 	{
 		// bind shadow buffer
-		glBindFramebuffer(GL_FRAMEBUFFER, gDepthOnlyBuffer);
+		gDepthOnlyBuffer.Bind();
 		ShadowPass(renderContext);
 	}
 
@@ -1934,7 +1916,7 @@ void Render()
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	
 	// bind G-buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
+	gGBuffer.Bind();
 
 	GeometryPass(renderContext);
 	
@@ -1946,17 +1928,17 @@ void Render()
 	// bind SSAO-buffer
 	if (gRenderSettings.bSSAO)
 	{
-		glBindFramebuffer(GL_FRAMEBUFFER, gSSAOBuffer);
+		gSSAOBuffer.Bind();
 		SSAOPass(renderContext);
 	}
 
 	gAlbedoTex.Bind(Shader::gAlbedoTexUnit);
 
 	// bind Scene-buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, gSceneBuffer);
+	gSceneBuffer.Bind();
 	// attach write texture
-	gSceneColorTex[gSceneColorWriteIdx].AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
-	gSceneDepthStencilTex[gSceneDepthCurrentIdx].AttachToFrameBuffer(GL_DEPTH_STENCIL_ATTACHMENT);
+	gSceneBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
+	gSceneBuffer.AttachDepth(&gSceneDepthStencilTex[gSceneDepthCurrentIdx], true);
 	
 	LightPass(renderContext);
 

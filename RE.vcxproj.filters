@@ -132,5 +132,8 @@
     <ClInclude Include="Source\Engine\TextureCube.h">
       <Filter>Source\Engine</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\FrameBuffer.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
