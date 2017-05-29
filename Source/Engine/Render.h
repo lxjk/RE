@@ -34,7 +34,7 @@ struct RenderInfo
 	glm::mat4 PrevView;		// 16 * 4
 	glm::mat4 PrevProj;		// 16 * 4
 	glm::mat4 PrevViewProj;	// 16 * 4
-	glm::vec2 Resolution;	// 8
+	glm::vec4 Resolution;	// 16
 	float Time;				// 4
 	float Exposure;			// 4
 };
@@ -119,6 +119,7 @@ struct RenderSettings
 	bool bUseTAA				= true;
 	bool bUseJitter				= true;
 	bool bSSAO					= true;
+	bool bSSR					= true;
 	bool bSkybox				= true;
 
 	//RenderSettings() {};

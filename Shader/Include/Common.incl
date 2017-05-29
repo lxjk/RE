@@ -28,6 +28,12 @@ float GetRandom(vec4 seed4)
     return fract(sin(dot_product) * 43758.5453);
 }
 
+float GetViewZFromDepth(float depth, mat4 projMat)
+{
+	float ndcZ = depth * 2.f - 1.f;
+	return projMat[3][2] / (projMat[2][3] * ndcZ - projMat[2][2]);
+}
+
 vec3 GetPositionVSFromDepth(float depth, mat4 projMat, vec3 fragPosVS)
 {
 	float ndcZ = depth * 2.f - 1.f;

@@ -128,6 +128,7 @@ Shader gLightVolumeShader;
 Shader gLightDebugShader;
 Shader gSkyboxShader;
 Shader gSSAOShader;
+Shader gSSRShader;
 Shader gToneMapShader;
 Shader gTAAShader;
 
@@ -141,6 +142,7 @@ Material* gLightVolumeMaterial;
 Material* gLightDebugMaterial;
 Material* gSkyboxMaterial;
 Material* gSSAOMaterial;
+Material* gSSRMaterial;
 Material* gToneMapMaterial;
 Material* gTAAMaterial;
 
@@ -167,6 +169,9 @@ Mesh* gSpotLightDebugMesh;
 // texture
 Texture2D* gDiffuseMap;
 Texture2D* gNormalMap;
+
+Texture2D* gFloorDiffuseMap;
+Texture2D* gFloorNormalMap;
 
 TextureCube* gSkyboxMap;
 
@@ -390,7 +395,7 @@ void MakeMeshComponents()
 	{
 		Mesh* sphereMesh = Mesh::Create(&gSphereMeshData, Material::Create(gGBufferMaterial));
 		sphereMesh->material->SetParameter("metallic", 1.f);
-		sphereMesh->material->SetParameter("roughness", i * 0.045f + 0.1f);
+		sphereMesh->material->SetParameter("roughness", i * 0.9f / 19.f + 0.1f);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(sphereMesh);
 		meshComp->SetPosition(glm::vec3(-20 + i * 2.5, 0, 7.5));
@@ -442,14 +447,28 @@ void MakeMeshComponents()
 
 	// floor
 	{
-		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(&gGBufferColorShader));
+		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+		floorMesh->material->SetParameter("diffuseTex", gFloorDiffuseMap);
+		floorMesh->material->SetParameter("normalTex", gFloorNormalMap);
+		floorMesh->material->SetParameter("tile", glm::vec4(32, 32, 0, 0));
 		floorMesh->material->SetParameter("metallic", 0.f);
-		floorMesh->material->SetParameter("roughness", 1.f);
+		floorMesh->material->SetParameter("roughness", 0.3f);
 		floorMesh->material->SetParameter("color", glm::vec3(0.2f));
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(floorMesh);
 		meshComp->SetPosition(glm::vec3(0.f, -1.2f, 0.f));
 		meshComp->SetScale(glm::vec3(32.f, 0.2f, 32.f));
+	}
+
+	{
+		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(&gGBufferColorShader));
+		floorMesh->material->SetParameter("metallic", 0.f);
+		floorMesh->material->SetParameter("roughness", 0.f);
+		floorMesh->material->SetParameter("color", glm::vec3(0.2f));
+		MeshComponent* meshComp = MeshComponent::Create();
+		meshComp->AddMesh(floorMesh);
+		meshComp->SetPosition(glm::vec3(-21.2f, 0.f, 0.f));
+		meshComp->SetScale(glm::vec3(0.2f, 5.f, 32.f));
 	}
 }
 
@@ -474,8 +493,8 @@ void SetupFrameBuffers()
 	if(!gGBuffer)
 	{
 		// normal(RGB)
-		// color(RGB) + AO(A)
-		// matellic(R) + roughness(B)
+		// color(RGB)
+		// matellic(R) + roughness(B) + AO(A)
 		glGenFramebuffers(1, &gGBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gGBuffer);
 		// normal
@@ -521,8 +540,8 @@ void SetupFrameBuffers()
 	{
 		glGenFramebuffers(1, &gSSAOBuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, gSSAOBuffer);
-		// bind albedo buffer
-		gAlbedoTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
+		// bind material buffer
+		gMaterialTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT0);
 		//gDebugTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
 		glReadBuffer(GL_NONE);
 
@@ -551,6 +570,10 @@ void SetupFrameBuffers()
 		//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
 		//glBindRenderbuffer(GL_RENDERBUFFER, 0);
 		//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gSceneDepthStencilRBO);
+
+		//gDebugTex.AttachToFrameBuffer(GL_COLOR_ATTACHMENT1);
+		//GLuint attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+		//glDrawBuffers(_countof(attachments), attachments);
 
 		//if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		//	printf("Error: Scene Buffer not complete!\n");
@@ -604,6 +627,7 @@ void LoadShaders(bool bReload)
 	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
 	gSkyboxShader.Load("Shader/skybox.vert", "Shader/skybox.frag", !bReload);
 	gSSAOShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSAO.frag", !bReload);
+	gSSRShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSR.frag", !bReload);
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 	gTAAShader.Load("Shader/fsQuad.vert", "Shader/fsQuadTAA.frag", !bReload);
 }
@@ -688,6 +712,7 @@ bool InitEngine()
 	gLightDebugMaterial = Material::Create(&gLightDebugShader);
 	gSkyboxMaterial = Material::Create(&gSkyboxShader);
 	gSSAOMaterial = Material::Create(&gSSAOShader);
+	gSSRMaterial = Material::Create(&gSSRShader);
 	gToneMapMaterial = Material::Create(&gToneMapShader);
 	gTAAMaterial = Material::Create(&gTAAShader);
 
@@ -714,8 +739,10 @@ bool InitEngine()
 	gSpotLightDebugMesh = Mesh::Create(&gConeMeshData, gLightDebugMaterial);
 
 	// texture
-	gDiffuseMap = Texture2D::FindOrCreate("Content/Texture/154.jpg", true);
-	gNormalMap = Texture2D::FindOrCreate("Content/Texture/154_norm.jpg", false);
+	gDiffuseMap = Texture2D::FindOrCreate("Content/Texture/154.jpg", true, GL_REPEAT, GL_REPEAT);
+	gNormalMap = Texture2D::FindOrCreate("Content/Texture/154_norm.jpg", false, GL_REPEAT, GL_REPEAT);
+	gFloorDiffuseMap = Texture2D::FindOrCreate("Content/Texture/178.jpg", true, GL_REPEAT, GL_REPEAT);
+	gFloorNormalMap = Texture2D::FindOrCreate("Content/Texture/178_norm.jpg", false, GL_REPEAT, GL_REPEAT);
 
 	gSkyboxMap = TextureCube::Create();
 	std::vector<const char*> skyboxMapNames;
@@ -730,6 +757,7 @@ bool InitEngine()
 	// set textures
 	gGBufferMaterial->SetParameter("diffuseTex", gDiffuseMap);
 	gGBufferMaterial->SetParameter("normalTex", gNormalMap);
+	gGBufferMaterial->SetParameter("tile", glm::vec4(1, 1, 0, 0));
 
 	// light
 	MakeLights();
@@ -1508,7 +1536,7 @@ void ShadowPass(RenderContext& renderContext)
 
 void DebugForwardPass(RenderContext& renderContext)
 {
-	GPU_SCOPED_PROFILE("debug foward");
+	//GPU_SCOPED_PROFILE("debug foward");
 
 	static const RenderState renderState;
 
@@ -1670,12 +1698,30 @@ void PostProcessPass(RenderContext& renderContext)
 
 	renderState.Apply();
 	
-	// find post process pass textures
+	// bind post process pass textures
 	gSceneDepthStencilTex[gSceneDepthCurrentIdx].Bind(Shader::gDepthStencilTexUnit);
+
+	// SSR
+	if (gRenderSettings.bSSR)
+	{
+		GPU_SCOPED_PROFILE("SSR");
+
+		PreparePostProcessPass();
+
+		gSSRMaterial->SetParameter("albedoTex", &gAlbedoTex);
+		gSSRMaterial->SetParameter("normalTex", &gNormalTex);
+		gSSRMaterial->SetParameter("materialTex", &gMaterialTex);
+		gSSRMaterial->SetParameter("skyTex", gSkyboxMap);
+
+		// draw quad
+		gFSQuadMesh->Draw(renderContext, gSSRMaterial);
+	}
 
 	// TAA
 	if(gRenderSettings.bUseTAA)
 	{
+		GPU_SCOPED_PROFILE("TAA");
+
 		PreparePostProcessPass();
 		// for the first frame, just use the same frame for history
 		if (gHasResetFrame)
@@ -1742,7 +1788,7 @@ void PostProcessPass(RenderContext& renderContext)
 
 void UIPass()
 {
-	GPU_SCOPED_PROFILE("UI");
+	//GPU_SCOPED_PROFILE("UI");
 
 	{
 		ImColor red(1.f, 0.f, 0.f);
@@ -1796,6 +1842,7 @@ void UIPass()
 		ImGui::Checkbox("TAA", &gRenderSettings.bUseTAA);
 		ImGui::Checkbox("Jitter", &gRenderSettings.bUseJitter);
 		ImGui::Checkbox("SSAO", &gRenderSettings.bSSAO);
+		ImGui::Checkbox("SSR", &gRenderSettings.bSSR);
 		ImGui::Checkbox("Skybox", &gRenderSettings.bSkybox);
 
 		ImGui::End();
@@ -1820,7 +1867,7 @@ void UIPass()
 		static bool open = true;
 		ImGui::Begin("shader debug", &open);
 
-		ImGui::Text("pos : (%d, %d)", x, y);
+		ImGui::Text("pos : (%d, %d) (%.2f, %.2f)", x, y, (float)x / gWindowWidth, (float)(gWindowHeight - 1 - y) / gWindowHeight);
 		ImGui::Text("R: %f", buffer[0]);
 		ImGui::Text("G: %f", buffer[1]);
 		ImGui::Text("B: %f", buffer[2]);
@@ -1877,6 +1924,8 @@ void Render()
 	}
 	gRenderInfo.Resolution.x = renderContext.viewPoint.width;
 	gRenderInfo.Resolution.y = renderContext.viewPoint.height;
+	gRenderInfo.Resolution.z = renderContext.viewPoint.nearPlane;
+	gRenderInfo.Resolution.w = renderContext.viewPoint.farPlane;
 	gRenderInfo.Time = (float)gTime;
 	gRenderInfo.Exposure = 1.0f;
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);

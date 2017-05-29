@@ -13,7 +13,7 @@ in VS_OUT
 
 layout (location = 0) out vec3 gNormal;
 layout (location = 1) out vec4 gAlbedo_ao;
-layout (location = 2) out vec2 gMaterial;
+layout (location = 2) out vec4 gMaterial;
 layout (location = 3) out vec2 gVelocity;
 
 uniform vec3 color;
@@ -32,8 +32,7 @@ void main()
 	gAlbedo_ao = vec4(color, 0);
 	//gAlbedo = vec3(1.0);
 	
-	gMaterial.r = metallic;
-	gMaterial.g = roughness;
+	gMaterial = vec4(metallic, roughness, 0, 0);
 	
 	vec2 velocity = fs_in.posCS.xy / fs_in.posCS.w - fs_in.prevPosCS.xy / fs_in.prevPosCS.w;
 	gVelocity = EncodeVelocityToTexture(velocity);

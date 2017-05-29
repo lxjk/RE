@@ -10,7 +10,7 @@ layout(std140) uniform RenderInfo
 	mat4 prevViewMat;
 	mat4 prevProjMat;
 	mat4 prevViewProjMat;
-	vec2 resolution;
+	vec4 resolution; // x,y screen size, z near plane, w far plane
 	float time;
 	float exposure;
 };

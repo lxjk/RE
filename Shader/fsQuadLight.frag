@@ -47,12 +47,13 @@ void main()
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
 	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
 	vec3 view = normalize(-position);
-	vec4 albedo_ao = texture(gAlbedoTex, uv);
+	vec4 albedo = texture(gAlbedoTex, uv);
 	vec4 material = texture(gMaterialTex, uv);
 	float metallic = material.r;
 	float roughness = material.g;
+	float ao = material.a;
 	
-	vec3 ambient = albedo_ao.rgb * (0.035 * (1-albedo_ao.a));
+	vec3 ambient = albedo.rgb * (0.035 * (1-ao));
 	vec3 result = ambient;
 	vec3 csmColorCode = vec3(0);
 	int shadowCount = 0;
@@ -71,7 +72,7 @@ void main()
 		}
 		shadowCount += lights[i].shadowDataCount;
 		//shadowFactor = 0;
-		result += CalcLight(lights[i], normal, position, view, albedo_ao.rgb, metallic, roughness) * min(shadowFactor, 1-albedo_ao.a);
+		result += CalcLight(lights[i], normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);
 		//result = vec3(shadowFactor);
 	}
 	//result = mix(result, csmColorCode, 0.05f);
