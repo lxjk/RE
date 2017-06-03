@@ -33,6 +33,18 @@ float GeometrySmith(float NdotL, float NdotV, float roughness)
 	return ggx1 * ggx2;
 }
 
+float GeometrySmithBaked(float NdotL, float NdotV, float roughness)
+{
+	float k = (roughness + 1) * (roughness + 1) / 8.f;
+	return 1.0 / (4 * (NdotV * (1-k) + k) * (NdotL * (1-k) + k) + 0.0001f);
+}
+
+float GeometrySmithJointBaked(float NdotL, float NdotV, float roughness)
+{
+	float k = (roughness * roughness);
+	return 1.0 / (2 * mix(2 * NdotL * NdotV, NdotL + NdotV, k) + 0.0001f);
+}
+
 vec3 FresnelSchlick(float cosTheta, vec3 F0)
 {
 	// based on unreal approximation
@@ -117,14 +129,13 @@ vec3 CalcLightPBR2(vec3 L, vec3 N, vec3 V, vec3 lightColor, vec3 albedo, float m
 	
 	float NDF = DistributionGGX(NdotH, roughness);
 	vec3 F = FresnelSchlick(VdotH, F0);
-#if 0	
-	// geometry term baked in
-	vec3 brdf_spec = (NDF * F) / (2 * mix(2 * NdotL * NdotV, NdotL + NdotV, roughness) + 0.001f);
+#if 1	
+	float G = GeometrySmithJointBaked(NdotL, NdotV, roughness);
 #else	
-	float G = GeometrySmith(NdotL, NdotV, roughness);
-	
-	vec3 brdf_spec = (NDF * G * F) / (4 * NdotV * NdotL + 0.001f);
+	float G = GeometrySmithBaked(NdotL, NdotV, roughness);
 #endif
+	
+	vec3 brdf_spec = min(NDF * G * F, 1.0);
 	
 	float facing = 0.5 + 0.5 * LdotV;
 	float diffRough = facing * (0.9 - 0.4 * facing) * (0.5 + NdotH) / (NdotH + 0.001f);
@@ -137,6 +148,22 @@ vec3 CalcLightPBR2(vec3 L, vec3 N, vec3 V, vec3 lightColor, vec3 albedo, float m
 	//return ((1.0f - metallic) * (1 - F) * albedo / PI + brdf_spec) * radiance * NdotL;
 	//return (brdf_spec) * radiance * NdotL;
 	return ((1.0f - metallic) * brdf_diff + brdf_spec) * radiance * NdotL;
+}
+
+vec3 CalcReflectBRDF(vec3 L, vec3 N, vec3 albedo, float metallic, float roughness)
+{
+	float NdotL = max(dot(N, L), 0.f);
+	
+	vec3 F0 = vec3(0.1f);
+	F0 = mix(F0, albedo, metallic);
+	
+	float NDF = min(1 / PI / (roughness + 0.0001), 1.0);
+	//vec3 F = FresnelSchlick(NdotL, F0);
+	vec3 F = F0;
+	
+	float G = GeometrySmithJointBaked(NdotL, NdotL, roughness);
+	
+	return min(NDF * G, 1.0) * F;
 }
 
 vec3 CalcLightBlinnPhong(vec3 light, vec3 normal, vec3 view, vec3 lightColor, vec3 albedo, float attenuation)

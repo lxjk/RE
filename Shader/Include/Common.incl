@@ -97,4 +97,9 @@ vec4 YCoCgToRGB(vec4 c)
 	return vec4(YCoCgToRGB(c.xyz), c.w);
 }
 
+float Luminance(vec4 c)
+{
+	return dot(c.xyz, vec3(0.3, 0.59, 0.11));
+}
+
 #endif

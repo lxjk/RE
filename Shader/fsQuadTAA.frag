@@ -13,7 +13,7 @@ in VS_OUT
 out vec4 color;
 
 uniform sampler2D historyColorTex;
-uniform sampler2D historyDepthStencilTex;
+//uniform sampler2D historyDepthStencilTex;
 uniform sampler2D velocityTex;
 uniform float plusWeights[5];
 
@@ -325,10 +325,11 @@ void main()
 		prevUV = curUV; // don't change uv
 	}
 	
-	float prevDepth = texture(historyDepthStencilTex, prevUV).r;
-	vec3 prevPosVSFromDepth = GetPositionVSFromDepth(prevDepth, prevProjMat, prevPosVS.xyz);
+	//float prevDepth = texture(historyDepthStencilTex, prevUV).r;
+	//vec3 prevPosVSFromDepth = GetPositionVSFromDepth(prevDepth, prevProjMat, prevPosVS.xyz);
 	
-	color = ProcessAA2(curUV, prevUV, velocity, depth, prevPosVSFromDepth.z - prevPosVS.z);
+	color = ProcessAA2(curUV, prevUV, velocity, depth, 0);
+	//color = ProcessAA2(curUV, prevUV, velocity, depth, prevPosVSFromDepth.z - prevPosVS.z);
 	//color = ProcessAA2(curUV, prevUV, depth, 0);
 	//color = ProcessAA(curUV, prevUV, depth, 0);
 	

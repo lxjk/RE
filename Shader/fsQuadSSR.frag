@@ -3,6 +3,7 @@
 #include "Include/CommonUBO.incl"
 #include "Include/PostProcessPassTex.incl"
 #include "Include/Common.incl"
+#include "Include/DeferredLighting.incl";
 
 in VS_OUT
 {
@@ -177,7 +178,14 @@ void main()
 	vec4 sceneColor = texture(gSceneColorTex, uv);
 	vec4 depthStencil = texture(gDepthStencilTex, uv);
 	float depth = depthStencil.r;
-	if(depth == 1)
+	
+	vec4 material = texture(materialTex, uv);
+	float metallic = material.r;
+	float roughness = material.g;
+	float ao = material.a;
+	
+	const float roughnessCutoff = 0.8;
+	if(depth == 1 || roughness > roughnessCutoff)
 	{
 		color = sceneColor;
 		return;
@@ -185,10 +193,6 @@ void main()
 	vec3 albedo = texture(albedoTex, uv).rgb;
 	vec3 normal = normalize(texture(normalTex, uv).rgb * 2.0f - 1.0f);
 	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
-	vec4 material = texture(materialTex, uv);
-	float metallic = material.r;
-	float roughness = material.g;
-	float ao = material.a;
 	
 	vec3 dir = normalize(reflect(position, normal));
 	
@@ -219,6 +223,9 @@ void main()
 	}
 	reflectColor /= sampleCount;
 	
+	vec3 brdf = CalcReflectBRDF(dir, normal, albedo, metallic, roughness);
+	
 	float reflectRatio = (1-roughness) * (1-ao);
-	color = reflectColor * mix(vec3(0.2), albedo, metallic) * reflectRatio + sceneColor;
+	//color = reflectColor * vec4(albedo, 1) * mix(0.4, 1.0, metallic) * reflectRatio + sceneColor;
+	color = reflectColor * brdf * (1-ao) * clamp((roughnessCutoff - roughness) / 0.2, 0.0, 1.0) + sceneColor;
 }

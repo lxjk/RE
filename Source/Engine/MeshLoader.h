@@ -99,7 +99,12 @@ void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShade
 			std::string texPath = localPath;
 			texPath.append(str.C_Str());
 			Texture2D* tex = Texture2D::FindOrCreate(texPath.c_str(), true, GL_REPEAT, GL_REPEAT);
+			material->SetParameter("hasDiffuseTex", 1);
 			material->SetParameter("diffuseTex", tex);
+		}
+		else
+		{
+			material->SetParameter("hasDiffuseTex", 0);
 		}
 
 		// normal
@@ -110,7 +115,28 @@ void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShade
 			std::string texPath = localPath;
 			texPath.append(str.C_Str());
 			Texture2D* tex = Texture2D::FindOrCreate(texPath.c_str(), false, GL_REPEAT, GL_REPEAT);
+			material->SetParameter("hasNormalTex", 1);
 			material->SetParameter("normalTex", tex);
+		}
+		else
+		{
+			material->SetParameter("hasNormalTex", 0);
+		}
+
+		// rouhness
+		if (aiMaterial->GetTextureCount(aiTextureType_SPECULAR) > 0)
+		{
+			aiString str;
+			aiMaterial->GetTexture(aiTextureType_SPECULAR, 0, &str);
+			std::string texPath = localPath;
+			texPath.append(str.C_Str());
+			Texture2D* tex = Texture2D::FindOrCreate(texPath.c_str(), false, GL_REPEAT, GL_REPEAT);
+			material->SetParameter("hasRoughnessTex", 1);
+			material->SetParameter("roughnessTex", tex);
+		}
+		else
+		{
+			material->SetParameter("hasRoughnessTex", 0);
 		}
 	}
 

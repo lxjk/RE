@@ -121,7 +121,6 @@ int gJitterIdx = 0;
 
 // shader
 Shader gGBufferShader;
-Shader gGBufferColorShader;
 Shader gPrepassShader;
 Shader gPrepassCubeShader;
 Shader gDirectionalLightShader;
@@ -130,12 +129,12 @@ Shader gLightDebugShader;
 Shader gSkyboxShader;
 Shader gSSAOShader;
 Shader gSSRShader;
+Shader gSSRStencilShader;
 Shader gToneMapShader;
 Shader gTAAShader;
 
 // material
 Material* gGBufferMaterial;
-Material* gGBufferColorMaterial;
 Material* gPrepassMaterial;
 Material* gPrepassCubeMaterial;
 Material* gDirectionalLightMaterial;
@@ -144,6 +143,7 @@ Material* gLightDebugMaterial;
 Material* gSkyboxMaterial;
 Material* gSSAOMaterial;
 Material* gSSRMaterial;
+Material* gSSRStencilMaterial;
 Material* gToneMapMaterial;
 Material* gTAAMaterial;
 
@@ -426,8 +426,8 @@ void MakeMeshComponents()
 			if (!material)
 				continue;
 
-			material->SetParameter("metallic", 0.f);
-			material->SetParameter("roughness", 0.3f);
+			material->SetParameter("metallic", 0.5f);
+			material->SetParameter("roughness", 0.2f);
 		}
 
 		//for (int i = 0; i < gNanosuitMeshes.size(); ++i)
@@ -462,7 +462,9 @@ void MakeMeshComponents()
 	}
 
 	{
-		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(&gGBufferColorShader));
+		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+		floorMesh->material->SetParameter("hasDiffuseTex", 0);
+		floorMesh->material->SetParameter("hasNormalTex", 0);
 		floorMesh->material->SetParameter("metallic", 0.f);
 		floorMesh->material->SetParameter("roughness", 0.f);
 		floorMesh->material->SetParameter("color", glm::vec3(0.2f));
@@ -503,15 +505,15 @@ void AllocateRenderTarget(bool bCreate)
 			gSceneColorTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT, true);
 		}
 		// depth stencil
-		for (int i = 0; i < gSceneDepthTexCount; ++i)
-		{
-			gSceneDepthStencilTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
-		}
+		//for (int i = 0; i < gSceneDepthTexCount; ++i)
+		//{
+		//	gSceneDepthStencilTex[i].AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
+		//}
 		// depth stencil rbo
-		//glGenRenderbuffers(1, &gSceneDepthStencilRBO);
-		//glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
-		//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
-		//glBindRenderbuffer(GL_RENDERBUFFER, 0);
+		glGenRenderbuffers(1, &gSceneDepthStencilRBO);
+		glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
 	else
 	{
@@ -539,14 +541,14 @@ void AllocateRenderTarget(bool bCreate)
 			gSceneColorTex[i].Reallocate(gWindowWidth, gWindowHeight);
 		}
 		// depth stencil
-		for (int i = 0; i < gSceneDepthTexCount; ++i)
-		{
-			gSceneDepthStencilTex[i].Reallocate(gWindowWidth, gWindowHeight);
-		}
+		//for (int i = 0; i < gSceneDepthTexCount; ++i)
+		//{
+		//	gSceneDepthStencilTex[i].Reallocate(gWindowWidth, gWindowHeight);
+		//}
 		// depth stencil rbo
-		//glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
-		//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
-		//glBindRenderbuffer(GL_RENDERBUFFER, 0);
+		glBindRenderbuffer(GL_RENDERBUFFER, gSceneDepthStencilRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, gWindowWidth, gWindowHeight);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
 }
 
@@ -582,6 +584,7 @@ void SetupFrameBuffers()
 		gSceneBuffer.StartSetup();
 		gSceneBuffer.SetupColor(0); // reserve a scene color tex
 		//gSceneBuffer.SetupColor(&gDebugTex); // debug
+		gSceneBuffer.SetupDepth(gSceneDepthStencilRBO, true);
 		gSceneBuffer.FinishSetup();
 	}
 
@@ -600,7 +603,6 @@ void LoadShaders(bool bReload)
 	gShaderFileCache.clear();
 
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
-	gGBufferColorShader.Load("Shader/gbuffer.vert", "Shader/gbufferColor.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
 	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepass.geom", "Shader/prepass.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
@@ -609,6 +611,7 @@ void LoadShaders(bool bReload)
 	gSkyboxShader.Load("Shader/skybox.vert", "Shader/skybox.frag", !bReload);
 	gSSAOShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSAO.frag", !bReload);
 	gSSRShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSR.frag", !bReload);
+	gSSRStencilShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSRStencil.frag", !bReload);
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 	gTAAShader.Load("Shader/fsQuad.vert", "Shader/fsQuadTAA.frag", !bReload);
 }
@@ -686,7 +689,6 @@ bool InitEngine()
 
 	// materials
 	gGBufferMaterial = Material::Create(&gGBufferShader);
-	gGBufferColorMaterial = Material::Create(&gGBufferColorShader);
 	gPrepassMaterial = Material::Create(&gPrepassShader);
 	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
@@ -695,6 +697,7 @@ bool InitEngine()
 	gSkyboxMaterial = Material::Create(&gSkyboxShader);
 	gSSAOMaterial = Material::Create(&gSSAOShader);
 	gSSRMaterial = Material::Create(&gSSRShader);
+	gSSRStencilMaterial = Material::Create(&gSSRStencilShader);
 	gToneMapMaterial = Material::Create(&gToneMapShader);
 	gTAAMaterial = Material::Create(&gTAAShader);
 
@@ -737,8 +740,11 @@ bool InitEngine()
 	gSkyboxMap->Load(skyboxMapNames, true);
 
 	// set textures
+	gGBufferMaterial->SetParameter("hasDiffuseTex", 1);
 	gGBufferMaterial->SetParameter("diffuseTex", gDiffuseMap);
+	gGBufferMaterial->SetParameter("hasNormalTex", 1);
 	gGBufferMaterial->SetParameter("normalTex", gNormalMap);
+	gGBufferMaterial->SetParameter("hasRoughnessTex", 0);
 	gGBufferMaterial->SetParameter("tile", glm::vec4(1, 1, 0, 0));
 
 	// light
@@ -1681,7 +1687,7 @@ void PostProcessPass(RenderContext& renderContext)
 	renderState.Apply();
 	
 	// bind post process pass textures
-	gSceneDepthStencilTex[gSceneDepthCurrentIdx].Bind(Shader::gDepthStencilTexUnit);
+	//gSceneDepthStencilTex[gSceneDepthCurrentIdx].Bind(Shader::gDepthStencilTexUnit);
 
 	// SSR
 	if (gRenderSettings.bSSR)
@@ -1690,6 +1696,7 @@ void PostProcessPass(RenderContext& renderContext)
 
 		PreparePostProcessPass();
 
+#if 1
 		gSSRMaterial->SetParameter("albedoTex", &gAlbedoTex);
 		gSSRMaterial->SetParameter("normalTex", &gNormalTex);
 		gSSRMaterial->SetParameter("materialTex", &gMaterialTex);
@@ -1697,6 +1704,50 @@ void PostProcessPass(RenderContext& renderContext)
 
 		// draw quad
 		gFSQuadMesh->Draw(renderContext, gSSRMaterial);
+#else
+		const static RenderState renderStateSSRStencil([](RenderState& s) {
+			// don't test depth
+			s.bDepthTest = false;
+			// write stencil
+			s.bStencilTest = true;
+			s.stencilTestFunc = GL_ALWAYS;
+			s.stencilTestRef = 1;
+			s.stencilWriteDPass = GL_REPLACE;
+		});
+
+		const static RenderState renderStateSSR([](RenderState& s) {
+			// depth test less
+			s.bDepthTest = true;
+			s.depthTestFunc = GL_GREATER;
+			s.bDepthWrite = false;
+			// test stencil
+			s.bStencilTest = true;
+			s.stencilTestFunc = GL_NOTEQUAL;
+			s.stencilTestRef = 1;
+		});
+
+		renderStateSSRStencil.Apply();
+
+		glClearStencil(0);
+		glClear(GL_STENCIL_BUFFER_BIT);
+		
+		gSSRStencilMaterial->SetParameter("materialTex", &gMaterialTex);
+		
+		// draw quad
+		gFSQuadMesh->Draw(renderContext, gSSRStencilMaterial);
+		
+		renderStateSSR.Apply();
+
+		gSSRMaterial->SetParameter("albedoTex", &gAlbedoTex);
+		gSSRMaterial->SetParameter("normalTex", &gNormalTex);
+		gSSRMaterial->SetParameter("materialTex", &gMaterialTex);
+		gSSRMaterial->SetParameter("skyTex", gSkyboxMap);
+
+		// draw quad
+		gFSQuadMesh->Draw(renderContext, gSSRMaterial);
+
+		renderState.Apply();
+#endif
 	}
 
 	// TAA
@@ -1709,12 +1760,12 @@ void PostProcessPass(RenderContext& renderContext)
 		if (gHasResetFrame)
 		{
 			gTAAMaterial->SetParameter("historyColorTex", &gSceneColorTex[gSceneColorReadIdx]);
-			gTAAMaterial->SetParameter("historyDepthStencilTex", &gSceneDepthStencilTex[gSceneDepthCurrentIdx]);
+			//gTAAMaterial->SetParameter("historyDepthStencilTex", &gSceneDepthStencilTex[gSceneDepthCurrentIdx]);
 		}
 		else
 		{
 			gTAAMaterial->SetParameter("historyColorTex", &gSceneColorTex[gSceneColorHistoryIdx]);
-			gTAAMaterial->SetParameter("historyDepthStencilTex", &gSceneDepthStencilTex[gSceneDepthHistoryIdx]);
+			//gTAAMaterial->SetParameter("historyDepthStencilTex", &gSceneDepthStencilTex[gSceneDepthHistoryIdx]);
 		}
 		gTAAMaterial->SetParameter("velocityTex", &gVelocityTex);
 #if 0
@@ -1938,7 +1989,7 @@ void Render()
 	gSceneBuffer.Bind();
 	// attach write texture
 	gSceneBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
-	gSceneBuffer.AttachDepth(&gSceneDepthStencilTex[gSceneDepthCurrentIdx], true);
+	//gSceneBuffer.AttachDepth(&gSceneDepthStencilTex[gSceneDepthCurrentIdx], true);
 	
 	LightPass(renderContext);
 
@@ -1948,7 +1999,7 @@ void Render()
 		SkyboxPass(renderContext);
 
 	// detach depth texture
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 
 	PostProcessPass(renderContext);
 
