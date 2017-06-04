@@ -125,6 +125,7 @@ Shader gPrepassShader;
 Shader gPrepassCubeShader;
 Shader gDirectionalLightShader;
 Shader gLightVolumeShader;
+Shader gLightVolumeFogShader;
 Shader gLightDebugShader;
 Shader gSkyboxShader;
 Shader gSSAOShader;
@@ -138,7 +139,6 @@ Material* gGBufferMaterial;
 Material* gPrepassMaterial;
 Material* gPrepassCubeMaterial;
 Material* gDirectionalLightMaterial;
-Material* gLightVolumeMaterial;
 Material* gLightDebugMaterial;
 Material* gSkyboxMaterial;
 Material* gSSAOMaterial;
@@ -323,7 +323,7 @@ void MakeLights()
 	gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeFogShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(10, 2, 2),
@@ -332,6 +332,7 @@ void MakeLights()
 		/*int=*/	20
 	);
 	gPointLights[plIdx].bCastShadow = true;
+	gPointLights[plIdx].bVolumetricFog = true;
 
 	gPointLights.push_back(
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
@@ -361,7 +362,7 @@ void MakeLights()
 	// spot lights
 	int slIdx = 0;
 	gSpotLights.push_back(
-		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader))));
+		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeFogShader))));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
 		/*pos=*/	glm::vec3(0, 3, 10),
@@ -373,6 +374,7 @@ void MakeLights()
 		/*int=*/	1000
 	);
 	gSpotLights[slIdx].bCastShadow = true;
+	gSpotLights[slIdx].bVolumetricFog = true;
 }
 
 void MakeMeshComponents()
@@ -607,6 +609,7 @@ void LoadShaders(bool bReload)
 	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepass.geom", "Shader/prepass.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
 	gLightVolumeShader.Load("Shader/lightVolume.vert", "Shader/lightVolume.frag", !bReload);
+	gLightVolumeFogShader.Load("Shader/lightVolume.vert", "Shader/lightVolumeFog.frag", !bReload);
 	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
 	gSkyboxShader.Load("Shader/skybox.vert", "Shader/skybox.frag", !bReload);
 	gSSAOShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSAO.frag", !bReload);
@@ -692,7 +695,6 @@ bool InitEngine()
 	gPrepassMaterial = Material::Create(&gPrepassShader);
 	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
-	gLightVolumeMaterial = Material::Create(&gLightVolumeShader);
 	gLightDebugMaterial = Material::Create(&gLightDebugShader);
 	gSkyboxMaterial = Material::Create(&gSkyboxShader);
 	gSSAOMaterial = Material::Create(&gSSAOShader);
@@ -717,8 +719,8 @@ bool InitEngine()
 	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader);
 
 	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, gDirectionalLightMaterial);
-	gPointLightMesh = Mesh::Create(&gIcosahedronMeshData, gLightVolumeMaterial);
-	gSpotLightMesh = Mesh::Create(&gConeMeshData, gLightVolumeMaterial);
+	gPointLightMesh = Mesh::Create(&gIcosahedronMeshData);
+	gSpotLightMesh = Mesh::Create(&gConeMeshData);
 
 	gPointLightDebugMesh = Mesh::Create(&gIcosahedronMeshData, gLightDebugMaterial);
 	gSpotLightDebugMesh = Mesh::Create(&gConeMeshData, gLightDebugMaterial);
@@ -1038,6 +1040,40 @@ void DirectionalLightPass(RenderContext& renderContext)
 	gDirectionalLightMesh->Draw(renderContext);
 }
 
+void SetupLightVolumeMaterial(RenderContext& renderContext, const Light& light)
+{
+	bool bSpot = (light.attenParams.y > 0);
+
+	light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
+	light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
+	light.LightMesh->material->SetParameter("modelMat", light.modelMat);
+
+	bool bDrawShadow = gRenderSettings.bDrawShadow && light.bCastShadow;
+	if (bSpot)
+		bDrawShadow &= gRenderSettings.bDrawShadowSpot;
+	else
+		bDrawShadow &= gRenderSettings.bDrawShadowPoint;
+	// shadow
+	if (bDrawShadow)
+	{
+		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
+		light.LightMesh->material->SetParameter("shadowMat", light.shadowData[0].shadowMat);
+		if (bSpot)
+		{
+			light.LightMesh->material->SetParameter("shadowMap", light.shadowData[0].shadowMap);
+		}
+		else
+		{
+			light.LightMesh->material->SetParameter("shadowMapCube", light.shadowData[0].shadowMap);
+			light.LightMesh->material->SetParameter("lightProjRemapMat", light.shadowData[0].lightProjRemapMat);
+		}
+	}
+	else
+	{
+		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 0);
+	}
+}
+
 void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights, const Mesh* lightVolumeMesh)
 {
 	//GPU_SCOPED_PROFILE("light volume");
@@ -1083,8 +1119,21 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 		s.cullFaceMode = GL_FRONT;
 	});
 
+	// one pass render state, when camera inside volume
+	const static RenderState frontFogVolumeRenderState([](RenderState& s) {
+		// inverse depth test only, don't write depth
+		s.bDepthTest = false;
+		//s.depthTestFunc = GL_LESS;
+		//s.bDepthWrite = false;
+		// draw backface
+		s.bCullFace = true;
+		s.cullFaceMode = GL_FRONT;
+	});
+
 	std::vector<int> cameraInsideLight;
 	cameraInsideLight.reserve(4);
+	std::vector<int> volumetricLight;
+	volumetricLight.reserve(4);
 
 	int stencilBits = 8;
 
@@ -1098,7 +1147,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 		glClearStencil(0);
 		glClear(GL_STENCIL_BUFFER_BIT);
 
-		char cameraInsideFlag = 0;
+		char skipFlag = 0;
 
 		for (int j = 0; j < stencilBits && i + j < ni; ++j)
 		{
@@ -1107,6 +1156,14 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 
 			const Light& light = lightsPtr[lightIdx];
 			bool bSpot = (light.attenParams.y > 0);
+
+			// volumetric?
+			if (light.bVolumetricFog)
+			{
+				skipFlag |= mask;
+				volumetricLight.push_back(lightIdx);
+				continue;
+			}
 
 			// camera in light volume?
 			glm::vec3 lightToCamera = renderContext.viewPoint.position - light.position;
@@ -1129,7 +1186,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 
 			if (isInLightVolume)
 			{
-				cameraInsideFlag |= mask;
+				skipFlag |= mask;
 				cameraInsideLight.push_back(lightIdx);
 				continue;
 			}
@@ -1153,41 +1210,13 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 			const Light& light = lightsPtr[lightIdx];
 			bool bSpot = (light.attenParams.y > 0);
 
-			if (cameraInsideFlag & mask)
+			if (skipFlag & mask)
 				continue;
 
 			// set mask
 			glStencilFunc(lightingRenderState.stencilTestFunc, mask, mask);
 
-			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
-			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
-			light.LightMesh->material->SetParameter("modelMat", light.modelMat);
-
-			bool bDrawShadow = gRenderSettings.bDrawShadow && light.bCastShadow;
-			if (bSpot)
-				bDrawShadow &= gRenderSettings.bDrawShadowSpot;
-			else
-				bDrawShadow &= gRenderSettings.bDrawShadowPoint;
-			// shadow
-			if (bDrawShadow)
-			{
-				light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
-				light.LightMesh->material->SetParameter("shadowMat", light.shadowData[0].shadowMat);
-				if (bSpot)
-				{
-					light.LightMesh->material->SetParameter("shadowMap", light.shadowData[0].shadowMap);
-				}
-				else
-				{
-					light.LightMesh->material->SetParameter("shadowMapCube", light.shadowData[0].shadowMap);
-					light.LightMesh->material->SetParameter("lightProjRemapMat", light.shadowData[0].lightProjRemapMat);
-				}
-			}
-			else
-			{
-				light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 0);
-			}
-
+			SetupLightVolumeMaterial(renderContext, light);
 			light.LightMesh->Draw(renderContext);
 		}
 	}
@@ -1197,37 +1226,15 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 	for (int i = 0, ni = (int)cameraInsideLight.size(); i < ni; ++i)
 	{
 		const Light& light = lightsPtr[cameraInsideLight.data()[i]];
-		bool bSpot = (light.attenParams.y > 0);
+		SetupLightVolumeMaterial(renderContext, light);
+		light.LightMesh->Draw(renderContext);
+	}
 
-		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
-		light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
-		light.LightMesh->material->SetParameter("modelMat", light.modelMat);
-
-		bool bDrawShadow = gRenderSettings.bDrawShadow && light.bCastShadow;
-		if (bSpot)
-			bDrawShadow &= gRenderSettings.bDrawShadowSpot;
-		else
-			bDrawShadow &= gRenderSettings.bDrawShadowPoint;
-		// shadow
-		if (bDrawShadow)
-		{
-			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
-			light.LightMesh->material->SetParameter("shadowMat", light.shadowData[0].shadowMat);
-			if (bSpot)
-			{
-				light.LightMesh->material->SetParameter("shadowMap", light.shadowData[0].shadowMap);
-			}
-			else
-			{
-				light.LightMesh->material->SetParameter("shadowMapCube", light.shadowData[0].shadowMap);
-				light.LightMesh->material->SetParameter("lightProjRemapMat", light.shadowData[0].lightProjRemapMat);
-			}
-		}
-		else
-		{
-			light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 0);
-		}
-
+	frontFogVolumeRenderState.Apply();
+	for (int i = 0, ni = (int)volumetricLight.size(); i < ni; ++i)
+	{
+		const Light& light = lightsPtr[volumetricLight.data()[i]];
+		SetupLightVolumeMaterial(renderContext, light);
 		light.LightMesh->Draw(renderContext);
 	}
 }
@@ -1638,10 +1645,16 @@ void SkyboxPass(RenderContext& renderContext)
 
 	renderState.Apply();
 
+	// enable blend for skybox additive
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+
 	//gSkyboxMaterial->SetParameter("cubeMap", gPointLights[1].shadowData[0].shadowMap);
 	gSkyboxMaterial->SetParameter("cubeMap", gSkyboxMap);
 
 	gCubeMesh->Draw(renderContext, gSkyboxMaterial);
+	
+	glDisable(GL_BLEND);
 }
 
 void SwapSceneDepthHistory()
@@ -1993,8 +2006,6 @@ void Render()
 	
 	LightPass(renderContext);
 
-	DebugForwardPass(renderContext);
-
 	if(gRenderSettings.bSkybox)
 		SkyboxPass(renderContext);
 
@@ -2002,6 +2013,22 @@ void Render()
 	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 
 	PostProcessPass(renderContext);
+
+	// copy depth buffer for debug forward
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, gSceneBuffer.frameBufferID);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(0, 0, gWindowWidth, gWindowHeight, 0, 0, gWindowWidth, gWindowHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+	// unjitter
+	RenderInfo debugRenderInfo = gRenderInfo;
+	debugRenderInfo.Proj[2][0] = 0;
+	debugRenderInfo.Proj[2][1] = 0;
+	debugRenderInfo.ViewProj = debugRenderInfo.Proj * debugRenderInfo.View;
+	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &debugRenderInfo, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	DebugForwardPass(renderContext);
 
 	UIPass();
 }

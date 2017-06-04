@@ -178,12 +178,11 @@ vec3 CalcLightBlinnPhong(vec3 light, vec3 normal, vec3 view, vec3 lightColor, ve
 	return diff + spec;
 }
 
-vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, float metallic, float roughness)
+void GetAttenuationAndLightDir(Light lightData, vec3 pos, out float attenuation, out vec3 light)
 {
-	vec3 light = -lightData.directionRAB.xyz;
-	
+	light = -lightData.directionRAB.xyz;	
 	// attenuation
-	float attenuation = 1.f;
+	attenuation = 1.f;
 	if(lightData.attenParams.x > 0.5f)
 	{
 		// radial
@@ -208,8 +207,16 @@ vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, f
 		//float spotRatio = min((1 - dot(light, -lightData.direction)) / (1 - lightData.cosHalfAngle), 1.f);
 		float spotRatio = clamp((dot(light, -lightData.directionRAB.xyz) - lightData.attenParams.z) * lightData.attenParams.w, 0.f, 1.f);
 		//attenuation *= (1 - spotRatio);
+		//spotRatio = 0;
 		attenuation *= spotRatio;
 	}
+}
+
+vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, float metallic, float roughness)
+{
+	vec3 light;
+	float attenuation;
+	GetAttenuationAndLightDir(lightData, pos, attenuation, light);	
 	
 	//return CalcLightBlinnPhong(light, normal, view, lightData.color, albedo, attenuation);
 	//return CalcLightPBR(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);

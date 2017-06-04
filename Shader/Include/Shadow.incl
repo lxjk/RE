@@ -150,6 +150,11 @@ float CalcShadowPoisson(vec3 viewPos, mat4 shadowMat, sampler2D shadowMap, float
 	return smoothstep(-depthRange * 0.5f, depthRange * 0.5f, depthDiff);
 }
 
+float CalcShadowFog(vec3 viewPos, vec3 light, mat4 shadowMat, sampler2D shadowMap, float bias)
+{
+	return CalcShadowBasic(viewPos, shadowMat, shadowMap, bias);
+}
+
 float CalcShadow(vec3 viewPos, vec3 normal, vec3 light, mat4 shadowMat, sampler2D shadowMap, float biasFactor)
 {
 	float bias = GetBias(normal, light, biasFactor);
@@ -159,6 +164,10 @@ float CalcShadow(vec3 viewPos, vec3 normal, vec3 light, mat4 shadowMat, sampler2
 	//return CalcShadowLerp(viewPos, shadowMat, shadowMap, bias);
 }
 
+float CalcShadowCubeFog(vec3 viewPos, vec3 light, mat4 lightProjRemapMat, mat4 shadowMat, samplerCube shadowMap, float bias)
+{
+	return CalcShadowBasicCube(viewPos, lightProjRemapMat, shadowMat, shadowMap, bias);
+}
 
 float CalcShadowCube(vec3 viewPos, vec3 normal, vec3 light, mat4 lightProjRemapMat, mat4 shadowMat, samplerCube shadowMap, float biasFactor)
 {

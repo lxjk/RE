@@ -38,6 +38,7 @@ public:
 
 	bool bCastShadow;
 	bool bDynamic;
+	bool bVolumetricFog;
 
 	glm::vec3 colorIntensity;
 	float invRadius;
