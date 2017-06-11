@@ -44,6 +44,7 @@
 #include "imgui/imgui_impl.h"
 
 #define SHADER_DEBUG_BUFFER 0
+#define LOAD_SCENE_MESH 0
 
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
@@ -159,6 +160,7 @@ Mesh* gCubeMesh;
 Mesh* gSphereMesh;
 Mesh* gFSQuadMesh;
 std::vector<Mesh*> gNanosuitMeshes;
+std::vector<Mesh*> gSceneMeshes;
 
 Mesh* gDirectionalLightMesh;
 Mesh* gPointLightMesh;
@@ -291,7 +293,11 @@ void MakeLights()
 	gDirectionalLights.push_back(Light(gDirectionalLightMesh));
 	dlIdx = (int)gDirectionalLights.size() - 1;
 	gDirectionalLights[dlIdx].SetDirectionLight(
+#if LOAD_SCENE_MESH
+		/*dir=*/	glm::vec3(-0.8, -5, -2),
+#else
 		/*dir=*/	glm::vec3(-0.8, -1, -2),
+#endif
 		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
 		/*int=*/	1
 	);
@@ -305,11 +311,12 @@ void MakeLights()
 	//	Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	//plIdx = (int)gPointLights.size() - 1;
 	//gPointLights[plIdx].SetPointLight(
-	//	/*pos=*/	glm::vec3(0, 10, 20),
-	//	/*radius=*/	4.f,
+	//	/*pos=*/	glm::vec3(-5, 20, 0),
+	//	/*radius=*/	80.f,
 	//	/*color=*/	glm::vec3(1.f, 1.f, 1.f),
-	//	/*int=*/	20
+	//	/*int=*/	40
 	//);
+	//gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
@@ -323,7 +330,7 @@ void MakeLights()
 	gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeFogShader))));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	glm::vec3(10, 2, 2),
@@ -332,7 +339,7 @@ void MakeLights()
 		/*int=*/	20
 	);
 	gPointLights[plIdx].bCastShadow = true;
-	gPointLights[plIdx].bVolumetricFog = true;
+	//gPointLights[plIdx].bVolumetricFog = true;
 
 	gPointLights.push_back(
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
@@ -362,7 +369,7 @@ void MakeLights()
 	// spot lights
 	int slIdx = 0;
 	gSpotLights.push_back(
-		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeFogShader))));
+		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader))));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
 		/*pos=*/	glm::vec3(0, 3, 10),
@@ -374,7 +381,7 @@ void MakeLights()
 		/*int=*/	1000
 	);
 	gSpotLights[slIdx].bCastShadow = true;
-	gSpotLights[slIdx].bVolumetricFog = true;
+	//gSpotLights[slIdx].bVolumetricFog = true;
 }
 
 void MakeMeshComponents()
@@ -448,6 +455,42 @@ void MakeMeshComponents()
 		//}
 	}
 
+	// scene
+#if LOAD_SCENE_MESH
+	{
+		//MeshComponent* meshComp = MeshComponent::Create();
+		//meshComp->SetMeshList(gSceneMeshes);
+		//meshComp->SetPosition(glm::vec3(0, -1, 6));
+		//meshComp->SetScale(glm::vec3(1.f, 1.f, 1.f) * 0.07f);
+
+		//const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
+		//for (int i = 0; i < meshList.size(); ++i)
+		//{
+		//	Material* material = meshList[i]->material;
+		//	if (!material)
+		//		continue;
+
+		//	material->SetParameter("metallic", 0.f);
+		//	material->SetParameter("roughness", 1.f);
+		//}
+
+		for (int i = 0; i < gSceneMeshes.size(); ++i)
+		{
+			MeshComponent* meshComp = MeshComponent::Create();
+			meshComp->AddMesh(gSceneMeshes[i]);
+			meshComp->SetPosition(glm::vec3(0, -1, 6));
+			meshComp->SetScale(glm::vec3(1.f, 1.f, 1.f) * 0.07f);
+
+			Material* material = gSceneMeshes[i]->material;
+			if (!material)
+				continue;
+
+			material->SetParameter("metallic", 0.f);
+			material->SetParameter("roughness", 1.f);
+		}
+	}
+#endif
+
 	// floor
 	{
 		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
@@ -463,18 +506,18 @@ void MakeMeshComponents()
 		meshComp->SetScale(glm::vec3(32.f, 0.2f, 32.f));
 	}
 
-	{
-		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
-		floorMesh->material->SetParameter("hasDiffuseTex", 0);
-		floorMesh->material->SetParameter("hasNormalTex", 0);
-		floorMesh->material->SetParameter("metallic", 0.f);
-		floorMesh->material->SetParameter("roughness", 0.f);
-		floorMesh->material->SetParameter("color", glm::vec3(0.2f));
-		MeshComponent* meshComp = MeshComponent::Create();
-		meshComp->AddMesh(floorMesh);
-		meshComp->SetPosition(glm::vec3(-21.2f, 0.f, 0.f));
-		meshComp->SetScale(glm::vec3(0.2f, 5.f, 32.f));
-	}
+	//{
+	//	Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+	//	floorMesh->material->SetParameter("hasDiffuseTex", 0);
+	//	floorMesh->material->SetParameter("hasNormalTex", 0);
+	//	floorMesh->material->SetParameter("metallic", 0.f);
+	//	floorMesh->material->SetParameter("roughness", 0.f);
+	//	floorMesh->material->SetParameter("color", glm::vec3(0.2f));
+	//	MeshComponent* meshComp = MeshComponent::Create();
+	//	meshComp->AddMesh(floorMesh);
+	//	meshComp->SetPosition(glm::vec3(-21.2f, 0.f, 0.f));
+	//	meshComp->SetScale(glm::vec3(0.2f, 5.f, 32.f));
+	//}
 }
 
 void AllocateRenderTarget(bool bCreate)
@@ -717,6 +760,9 @@ bool InitEngine()
 
 	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader);
 	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader);
+#if LOAD_SCENE_MESH
+	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", &gGBufferShader);
+#endif
 
 	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, gDirectionalLightMaterial);
 	gPointLightMesh = Mesh::Create(&gIcosahedronMeshData);
@@ -1383,7 +1429,7 @@ void ShadowPass(RenderContext& renderContext)
 
 				// extent test bound max(near plane) a little bit to include geometry behind us
 				// this value need to be increased if we are missing shadow
-				const float stepBack = 30.f;
+				const float stepBack = 50.f;
 				frustumBounds.max.z += stepBack;
 
 				std::vector<MeshComponent*> involvedMeshComps;
@@ -1942,7 +1988,7 @@ void Render()
 		if (gJitterIdx >= gJitterCount)
 			gJitterIdx -= gJitterCount;
 	}
-	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 100.f, jitterX, jitterY);
+	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 200.f, jitterX, jitterY);
 	
 	if (gRenderSettings.bDrawShadow)
 	{

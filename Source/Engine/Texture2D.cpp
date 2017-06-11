@@ -24,8 +24,26 @@ void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLi
 		return;
 	}
 
+
+	//printf("format: %s\n", SDL_GetPixelFormatName(image->format->format));
+
+	bool bHasAlpha = SDL_ISPIXELFORMAT_ALPHA(image->format->format);
+	//if (SDL_ISPIXELFORMAT_INDEXED(image->format->format))
+	if(image->format->format != SDL_PIXELFORMAT_ABGR8888 &&
+		image->format->format != SDL_PIXELFORMAT_RGB24)
+	{
+		SDL_Surface* srcImage = image;
+		image = SDL_ConvertSurfaceFormat(srcImage, bHasAlpha ? SDL_PIXELFORMAT_ABGR8888 : SDL_PIXELFORMAT_RGB24, 0);
+		SDL_FreeSurface(srcImage);
+		if (!image)
+		{
+			printf("Fail to load image %s, error : %s\n", name, SDL_GetError());
+			return;
+		}
+	}
+
 	// find internal format
-	if (SDL_ISPIXELFORMAT_ALPHA(image->format->format))
+	if (bHasAlpha)
 	{
 		internalFormat = bSRGB ? GL_SRGB_ALPHA : GL_RGBA;
 		format = GL_RGBA;

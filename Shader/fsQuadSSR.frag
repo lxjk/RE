@@ -219,7 +219,7 @@ void main()
 			offset.x * randSin + offset.y * randCos
 		) * (roughness * 0.25);
 		vec3 sampleDir = normalize(dir + offset.x * right + offset.y * up);
-		reflectColor += GetReflectColor2(uv, position, sampleDir, normal, 6, randOffset);
+		reflectColor += GetReflectColor2(uv, position, sampleDir, normal, 12, randOffset);
 	}
 	reflectColor /= sampleCount;
 	
