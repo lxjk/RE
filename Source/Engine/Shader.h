@@ -7,7 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+#include <set>
 #include <cassert>
+
+class Material;
 
 enum class EVertexType
 {
@@ -88,6 +91,10 @@ public:
 	GLchar fragmentFilePath[256];
 	GLchar geometryFilePath[256];
 
+	std::set<std::string> dependentFileNames;
+
+	std::set<Material*> referenceMaterials;
+
 	std::vector<ValuePair> TexUnitList;
 	std::vector<ValuePair> UniformLocationList;
 
@@ -105,6 +112,7 @@ public:
 
 	void Reload()
 	{
+		printf("Shader Reload: %s %s %s\n", vertexFilePath, geometryFilePath, fragmentFilePath);
 		Load(vertexFilePath, geometryFilePath, fragmentFilePath, false);
 	}
 

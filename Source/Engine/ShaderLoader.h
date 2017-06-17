@@ -6,6 +6,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <stack>
+#include <set>
 #include <cassert>
 
 #include "Shader.h"
@@ -81,11 +82,14 @@ public:
 	ShaderUniforms shaderUniforms;
 	ShaderStructs shaderStructs;
 	ShaderDefines shaderDefines;
+	std::set<std::string> involvedFiles;
 
 	EVertexType vertexType = EVertexType::None;
 
 	bool bUseDeferredPassTex = false;
 	bool bUsePostProcessPassTex = false;
+
+	bool bNeedReload = true;
 
 	void Append(const ShaderInfo& other)
 	{
@@ -100,12 +104,22 @@ public:
 			assert(vertexType == EVertexType::None);
 			vertexType = other.vertexType;
 		}
+		involvedFiles.insert(other.involvedFiles.begin(), other.involvedFiles.end());
 	}
 
 	bool IsValid()
 	{
 		return shaderCode.size() > 0 && !(bUseDeferredPassTex && bUsePostProcessPassTex);
 	}
+};
+
+class ShaderFileInfo
+{
+public:
+	std::string fileName;
+	ShaderInfo shaderInfo;
+	std::set<Shader*> shaders;
+	std::set<std::string> childFiles;
 };
 
 class ExpressionParser
@@ -247,7 +261,7 @@ public:
 
 const int MAX_INCLUDE_DEPTH = 8;
 
-extern std::unordered_map<std::string, ShaderInfo> gShaderFileCache;
+extern std::unordered_map<std::string, ShaderFileInfo> gShaderFileCache;
 
 static bool ParseVariable(ShaderInfo& shaderInfo, ShaderUniforms& outputUniforms, std::string line, size_t offset = 0)
 {
@@ -365,13 +379,37 @@ static bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 
 		fileName = path;
 	}
 
+	ShaderFileInfo* shaderFileInfo = 0;
 	// do we have it in cache?
 	auto it = gShaderFileCache.find(fileName);
 	if (it != gShaderFileCache.end())
 	{
 		// find it
-		output.Append(it->second);
-		return true;
+		shaderFileInfo = &it->second;
+		// need reload?
+		if (it->second.shaderInfo.bNeedReload)
+		{
+			// reload, un-register child files info
+			for (const auto& file : shaderFileInfo->shaderInfo.involvedFiles)
+			{
+				gShaderFileCache[file].childFiles.erase(fileName);
+			}
+			// new shader info
+			it->second.shaderInfo = ShaderInfo();
+		}
+		else
+		{
+			// we are good
+			output.Append(it->second.shaderInfo);
+			return true;
+		}
+	}
+	else
+	{
+		// add new info
+		auto newPair = gShaderFileCache.emplace(fileName, ShaderFileInfo{});
+		shaderFileInfo = &newPair.first->second;
+		shaderFileInfo->fileName = fileName;
 	}
 
 	// we need to load from disk
@@ -400,7 +438,8 @@ static bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 
 		return false;
 	}
 
-	ShaderInfo localOutput;
+	ShaderInfo& localOutput = shaderFileInfo->shaderInfo;
+	localOutput.involvedFiles.insert(fileName);
 	bool bShouldProcessUniform = true;
 	bool bInsideStruct = false;
 	ShaderUniforms* activeStructUniforms = 0;
@@ -565,12 +604,19 @@ static bool LoadShader(ShaderInfo& output, std::string path, int includeDepth = 
 	//localOutput.shaderCode.append("\n");
 
 	assert(localOutput.IsValid());
-
-	// we load the file, now add it to cache
-	gShaderFileCache[fileName] = localOutput;
 	
 	// add to output
 	output.Append(localOutput);
+
+	// we are good
+	localOutput.bNeedReload = false;
+
+	// register child files
+	for (const auto& file : localOutput.involvedFiles)
+	{
+		if(file != fileName)
+			gShaderFileCache[file].childFiles.insert(fileName);
+	}
 
 #if DUMP_SHADER
 	// only dump top level

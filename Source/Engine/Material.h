@@ -116,12 +116,19 @@ public:
 	Material(Shader* inShader)
 	{
 		shader = inShader;
+		shader->referenceMaterials.insert(this);
 	}
 	Material(Material* otherMaterial)
 	{
 		shader = otherMaterial->shader;
+		shader->referenceMaterials.insert(this);
 		parameterData = otherMaterial->parameterData;
 		parameterList = otherMaterial->parameterList;
+	}
+	~Material()
+	{
+		if (shader)
+			shader->referenceMaterials.erase(this);
 	}
 
 	void Reload();

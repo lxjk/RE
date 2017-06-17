@@ -2,6 +2,7 @@
 #define SHADOW_INCL
 
 #include "Common.incl"
+#include "CommonUBO.incl"
 
 const float ShadowWeights5[5][5] =
 {

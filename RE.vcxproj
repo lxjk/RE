@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Source\Engine\FileWatcher.cpp" />
     <ClCompile Include="Source\Engine\Material.cpp" />
     <ClCompile Include="Source\Engine\Mesh.cpp" />
     <ClCompile Include="Source\Engine\MeshComponent.cpp" />
@@ -37,6 +38,7 @@
     <ClInclude Include="Source\Engine\Bounds.h" />
     <ClInclude Include="Source\Engine\Camera.h" />
     <ClInclude Include="Source\Engine\Component.h" />
+    <ClInclude Include="Source\Engine\FileWatcher.h" />
     <ClInclude Include="Source\Engine\FrameBuffer.h" />
     <ClInclude Include="Source\Engine\Light.h" />
     <ClInclude Include="Source\Engine\Material.h" />
@@ -48,6 +50,7 @@
     <ClInclude Include="Source\Engine\Render.h" />
     <ClInclude Include="Source\Engine\Shader.h" />
     <ClInclude Include="Source\Engine\ShaderLoader.h" />
+    <ClInclude Include="Source\Engine\spsc.h" />
     <ClInclude Include="Source\Engine\Texture.h" />
     <ClInclude Include="Source\Engine\Texture2D.h" />
     <ClInclude Include="Source\Engine\TextureCube.h" />

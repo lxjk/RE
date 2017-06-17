@@ -38,6 +38,7 @@
 #include "Engine/Render.h"
 #include "Engine/Bounds.h"
 #include "Engine/FrameBuffer.h"
+#include "Engine/FileWatcher.h"
 
 // imgui
 #include "imgui/imgui.h"
@@ -58,7 +59,8 @@ SDL_Window* gWindow = NULL;
 SDL_GLContext gContext;
 
 // shader file cache
-std::unordered_map<std::string, ShaderInfo> gShaderFileCache;
+std::unordered_map<std::string, ShaderFileInfo> gShaderFileCache;
+FileWatcher fileWatcher;
 
 // time
 bool gHasResetFrame;
@@ -732,6 +734,8 @@ bool InitEngine()
 	
 	// shader
 	LoadShaders(false);
+	fileWatcher.Start("Shader");
+	fileWatcher.Start("Shader/Include");
 
 	// materials
 	gGBufferMaterial = Material::Create(&gGBufferShader);
@@ -820,6 +824,8 @@ void OnWindowResize(int newWidth, int newHeight)
 
 void Close()
 {
+	fileWatcher.Stop();
+
 	// shut down imgui
 	ImGui_Impl_Shutdown();
 
@@ -2079,6 +2085,55 @@ void Render()
 	UIPass();
 }
 
+void ProcessShaderReload()
+{
+	static std::vector<FileChangeResult> results;
+	static std::set<std::string> changedFiles;
+	static std::set<Shader*> changedShaders;
+	results.clear();
+	changedFiles.clear();
+	changedShaders.clear();
+	fileWatcher.Update(results);
+	for (int i = 0; i < results.size(); ++i)
+	{
+		FileChangeResult& result = results[i];
+		if (result.type == EFileChangeType::FileUpdated)
+		{
+			printf("update %d: %s\n", (int)results[i].type, results[i].fileName.c_str());
+			auto it = gShaderFileCache.find(result.fileName);
+			if (it != gShaderFileCache.end())
+			{
+				auto pair = changedFiles.insert(result.fileName);
+				if (pair.second)
+				{
+					ShaderFileInfo& shaderFileInfo = gShaderFileCache[result.fileName];
+					for (const std::string& childFile : shaderFileInfo.childFiles)
+					{
+						changedFiles.insert(childFile);
+					}
+				}
+			}
+		}
+	}
+	for (auto& changedFile : changedFiles)
+	{
+		ShaderFileInfo& shaderFileInfo = gShaderFileCache[changedFile];
+		shaderFileInfo.shaderInfo.bNeedReload = true;
+		for (Shader* shader : shaderFileInfo.shaders)
+		{
+			changedShaders.insert(shader);
+		}
+	}
+	for (Shader* shader : changedShaders)
+	{
+		shader->Reload();
+		for (Material* material : shader->referenceMaterials)
+		{
+			material->Reload();
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	if (!Init())
@@ -2130,6 +2185,8 @@ int main(int argc, char **argv)
 					}
 				}
 			}
+
+			ProcessShaderReload();
 
 			Update(gLastDeltaTime);
 

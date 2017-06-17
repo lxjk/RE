@@ -9,7 +9,7 @@ bool LoadSingleShader(GLenum type, const GLchar* path, GLuint programID, ShaderI
 {
 	if (!LoadShader(outShaderInfo, path))
 	{
-		printf("Error: fail to read shader vertex: %s", path);
+		printf("Error: fail to read shader file: %s", path);
 		if (bAssert)
 			assert(0);
 		else
@@ -153,11 +153,26 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 	else if (bUsePostProcessPassTex)
 		nextTexUnit = postProcessPassTexCount;
 
+	// unregister shader
+	for (auto& dependent : dependentFileNames)
+	{
+		auto it = gShaderFileCache.find(dependent);
+		if (it != gShaderFileCache.end())
+		{
+			it->second.shaders.erase(this);
+		}
+	}
+	dependentFileNames.clear();
+
 	TexUnitList.clear();
 	UniformLocationList.clear();
 	for (int shaderInfoIdx = 0; shaderInfoIdx < shaderInfoCount; ++shaderInfoIdx)
 	{
 		ShaderInfo& shaderInfo = shaderInfoListPtr[shaderInfoIdx];
+		// add dependent
+		dependentFileNames.insert(shaderInfo.involvedFiles.begin(), shaderInfo.involvedFiles.end());
+
+		// process uniforms
 		for (auto it = shaderInfo.shaderUniforms.typeMap.begin(); it != shaderInfo.shaderUniforms.typeMap.end(); ++it)
 		{
 			for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
@@ -174,6 +189,15 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 		}
 	}
 
+	// register shader
+	for (auto& dependent : dependentFileNames)
+	{
+		auto it = gShaderFileCache.find(dependent);
+		if (it != gShaderFileCache.end())
+		{
+			it->second.shaders.insert(this);
+		}
+	}
 
 	// set texture unit
 	Use(); // must use program here
