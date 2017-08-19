@@ -227,5 +227,5 @@ void main()
 	
 	float reflectRatio = (1-roughness) * (1-ao);
 	//color = reflectColor * vec4(albedo, 1) * mix(0.4, 1.0, metallic) * reflectRatio + sceneColor;
-	color = reflectColor * brdf * (1-ao) * clamp((roughnessCutoff - roughness) / 0.2, 0.0, 1.0) + sceneColor;
+	color = reflectColor * vec4(brdf, 1.0) * (1-ao) * clamp((roughnessCutoff - roughness) / 0.2, 0.0, 1.0) + sceneColor;
 }

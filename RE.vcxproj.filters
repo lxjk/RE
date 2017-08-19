@@ -14,6 +14,9 @@
     <Filter Include="Source\imgui">
       <UniqueIdentifier>{2dab1f80-e917-43ba-937e-232400689a3c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Math">
+      <UniqueIdentifier>{93b85b93-5450-40a9-8acf-d070b2f5a4c3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\imgui\imgui.cpp">
@@ -143,6 +146,15 @@
     </ClInclude>
     <ClInclude Include="Source\Engine\FileWatcher.h">
       <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Math\Vector4.h">
+      <Filter>Source\Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Math\MathUtil.h">
+      <Filter>Source\Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Math\MathSSE.h">
+      <Filter>Source\Math</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

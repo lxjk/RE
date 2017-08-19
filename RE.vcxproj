@@ -63,6 +63,9 @@
     <ClInclude Include="Source\imgui\stb_rect_pack.h" />
     <ClInclude Include="Source\imgui\stb_textedit.h" />
     <ClInclude Include="Source\imgui\stb_truetype.h" />
+    <ClInclude Include="Source\Math\MathSSE.h" />
+    <ClInclude Include="Source\Math\MathUtil.h" />
+    <ClInclude Include="Source\Math\Vector4.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{49FB9721-3360-4CA1-A129-D7B96A4F0115}</ProjectGuid>
