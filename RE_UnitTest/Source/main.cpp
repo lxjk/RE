@@ -5,13 +5,10 @@
 
 #include "../../3rdparty/glm/glm/glm.hpp"
 
+#include "UnitTest.h"
 #include "UT_Vector4.h"
 
-union IntFloatUnion
-{
-	unsigned __int32 i;
-	float f;
-};
+#include "Windows.h"
 
 __declspec(noinline)
 unsigned __int64 rdtsc()
@@ -20,48 +17,21 @@ unsigned __int64 rdtsc()
 }
 
 __declspec(noinline)
-Vector4 Test_Float(Vector4 v1, Vector4 v2)
+float Test_VV2F_SSE(Vector4 v1, Vector4 v2)
 {
-	return Vector4(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z, v1.w + v2.w);
+	return v1.Dot(v2);
 }
 
 __declspec(noinline)
-Vector4 Test_SSE(Vector4 v1, Vector4 v2)
+float Test_VV2F_Flt(Vector4 v1, Vector4 v2)
 {
-	return -v1;
+	return UT_Vector4_Dot(v1, v2);
 }
 
-__declspec(noinline)
-Vector4 Test_SSE(Vector4 v1)
+//__declspec(noinline)
+inline float Test_VV2F_Glm(Vector4 v1, Vector4 v2)
 {
-	return -v1;
-}
-
-__declspec(noinline)
-Vector4 Test_SSE_M(Vector4 v1, Vector4 v2)
-{
-	Vec128 t0 = _mm_load_ps(v1.m);
-	Vec128 t1 = _mm_load_ps(v2.m);
-	Vector4 r;
-	_mm_store_ps(r.m, _mm_add_ps(t0, t1));
-	return r;
-}
-
-__declspec(noinline)
-Vector4 Test_SSE_M(Vector4 v1)
-{
-	return _mm_xor_ps(v1.mVec, _mm_set1_ps(-0.f));
-}
-
-__declspec(noinline)
-float PostBenchLoop(Vector4 r1, Vector4 r2, glm::vec4 r3, 
-	unsigned __int64 &acc_t0, unsigned __int64 &acc_t1, unsigned __int64 &acc_t2,
-	unsigned __int64 t0, unsigned __int64 t1, unsigned __int64 t2, unsigned __int64 t3
-)
-{
-	acc_t0 += (t1 - t0);
-	acc_t1 += (t2 - t1);
-	return r1.x + r2.x + r3.x;
+	return 0;
 }
 
 __declspec(noinline)
@@ -82,348 +52,164 @@ float PostBenchLoop(glm::vec4 r,
 	return r.x;
 }
 
+__declspec(noinline)
+float PostBenchLoop(float r,
+	unsigned __int64 &acc_t0, unsigned __int64 t0, unsigned __int64 t1
+	)
+{
+	acc_t0 += (t1 - t0);
+	return r;
+}
+
 void Bench()
 {
-	int count = 1000000;
-	float tmp = 0;
-	unsigned __int64 acc_t0 = 0, acc_t1 = 0, acc_t2;
+	LARGE_INTEGER performFreq;
+	QueryPerformanceFrequency(&performFreq);
+	double InvPerformanceFreq = (double)1.0 / (double)(performFreq.QuadPart);
 
-#if 0
-	for (int i = 0; i < count; ++i)
-	{
-		Vector4 v1(rand(), rand(), rand(), rand());
-		Vector4 v2(rand(), rand(), rand(), rand());
-		glm::vec4 gv1(rand(), rand(), rand(), rand());
-		glm::vec4 gv2(rand(), rand(), rand(), rand());
+	const int count = 10000000;
+	//float tmp = 0;
+	Vector4 tmp;
+	unsigned __int64 acc_t0 = 0, acc_t1 = 0, acc_t2 = 0, acc_tt = 0;
+	LARGE_INTEGER pc0, pc1, pc2, pc3;
 
-		unsigned __int64 t0 = rdtsc();
-		Vector4 v3 = v1 + v2;
-		unsigned __int64 t1 = rdtsc();
-		Vector4 v4 = UT_Vector4_Add(v1, v2);
-		unsigned __int64 t2 = rdtsc();
-		glm::vec4 gv3 = gv1 + gv2;
-		unsigned __int64 t3 = rdtsc();
+	//Vector4 v1(RandF(), RandF(), RandF(), RandF());
+	//Vector4 v2(RandF(), RandF(), RandF(), RandF());
+	//float f = RandF();
 
-		tmp += PostBenchLoop(v3, v4, gv3, acc_t0, acc_t1, acc_t2, t0, t1, t2, t3);
-	}
-#else
+	Vector4* v1 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
+	Vector4* v2 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
+	float* f = (float*)_aligned_malloc(sizeof(float) * count, 16);
 
 	for (int i = 0; i < count; ++i)
 	{
-		Vector4 v1(rand(), rand(), rand(), rand());
-		Vector4 v2(rand(), rand(), rand(), rand());
-
-		unsigned __int64 t0 = rdtsc();
-		Vector4 v3 = v1 + v2;
-		unsigned __int64 t1 = rdtsc();
-
-		tmp += PostBenchLoop(v3, acc_t0, t0, t1);
+		v1[i] = Vector4(RandF(), RandF(), RandF(), RandF());
+		v2[i] = Vector4(RandF(), RandF(), RandF(), RandF());
+		f[i] = RandF();
 	}
 
+	// -- warmup
 	for (int i = 0; i < count; ++i)
 	{
-		Vector4 v1(rand(), rand(), rand(), rand());
-		Vector4 v2(rand(), rand(), rand(), rand());
-
-		unsigned __int64 t0 = rdtsc();
-		Vector4 v3 = UT_Vector4_Add(v1, v2);
-		unsigned __int64 t1 = rdtsc();
-
-		tmp += PostBenchLoop(v3, acc_t1, t0, t1);
+		tmp += v1[i].x + v2[i].x + f[i];
 	}
+	// -- warmup
 
-	for (int i = 0; i < count; ++i)
+	// begin
+	QueryPerformanceCounter(&pc0);
+
 	{
-		glm::vec4 v1(rand(), rand(), rand(), rand());
-		glm::vec4 v2(rand(), rand(), rand(), rand());
-
-		unsigned __int64 t0 = rdtsc();
-		glm::vec4 v3 = v1 + v2;
-		unsigned __int64 t1 = rdtsc();
-
-		tmp += PostBenchLoop(v3, acc_t2, t0, t1);
+		unsigned __int64 t0 = __rdtsc();
+		for (int i = 0; i < count; ++i)
+		{
+			Vector4 r = v1[i] + v2[i];
+			//float r = v1[i].Dot(v2[i]);
+			tmp += r;
+		}
+		unsigned __int64 t1 = __rdtsc();
+		acc_t0 += (t1 - t0);
 	}
-#endif
 
-	printf("t0 SSE \t= %lld\n", acc_t0);
-	printf("t1 flt \t= %lld\n", acc_t1);
-	printf("t2 glm \t= %lld\n", acc_t2);
+	QueryPerformanceCounter(&pc1);
+
+	{
+		unsigned __int64 t0 = __rdtsc();
+		for (int i = 0; i < count; ++i)
+		{
+			Vector4 r = UT_Vector4_Add(v1[i], v2[i]);
+			//float r = UT_Vector4_Dot3(v1[i], v2[i]);
+			tmp += r;
+		}
+		unsigned __int64 t1 = __rdtsc();
+		acc_t1 += (t1 - t0);
+	}
+
+	QueryPerformanceCounter(&pc2);
+
+	{
+		unsigned __int64 t0 = __rdtsc();
+		for (int i = 0; i < count; ++i)
+		{
+			Vector4 r = UT_Vector3_Add(v1[i], v2[i]);
+			//Vector4 r = UT_Vector4_GetNormalized3(v1[i]);
+			//Vector4 r = GlmVec4ToVector4(glm::vec4(glm::normalize(glm::vec3(Vector4ToGlmVec4(v1[i]))), 0));
+			//float r = UT_Vector4_Dot2_Glm(v1[i], v2[i]);
+			tmp += r;
+		}
+		unsigned __int64 t1 = __rdtsc();
+		acc_t2 += (t1 - t0);
+	}
+
+	QueryPerformanceCounter(&pc3);
+
+	double pt0 = (double)(pc1.QuadPart - pc0.QuadPart) * InvPerformanceFreq;
+	double pt1 = (double)(pc2.QuadPart - pc1.QuadPart) * InvPerformanceFreq;
+	double pt2 = (double)(pc3.QuadPart - pc2.QuadPart) * InvPerformanceFreq;
+
+	printf("t0 SSE \t= %lld \t %f\n", acc_t0, pt0);
+	printf("t1 flt \t= %lld \t %f\n", acc_t1, pt1);
+	printf("t2 glm \t= %lld \t %f\n", acc_t2, pt2);
+	printf("tt tmp \t= %lld\n", acc_tt);
 	printf("tmp = %f\n", tmp);
+	//printf("tmp = %f %f %f %f\n", tmp.x, tmp.y, tmp.z, tmp.w);
 }
 
-#define FloatSpecial(i) ((i & 0x7F800000) == 0x7F800000)
-#define IsQNaN(i) (FloatSpecial(i) && (i & 0x00400000) == 0x00400000)
-#define IsSNaN(i) (FloatSpecial(i) && (i & 0x00400000) == 0)
-#define max(a, b) (a > b ? a : b)
-
-// 0 same, 1 within threshould, 2 different special value, 3 differnt valid float
-inline int FloatEquals(float f1, float f2)
-{
-	IntFloatUnion u1, u2;
-	u1.f = f1;
-	u2.f = f2;
-	
-	if (u1.i == u2.i)
-		return 0;
-
-	if (FloatSpecial(u1.i) || FloatSpecial(u2.i))
-	{
-		// if same type of NaN, let it pass
-		if ((IsQNaN(u1.i) && IsQNaN(u2.i)) ||
-			(IsSNaN(u1.i) && IsSNaN(u2.i)))
-			return 0;
-		else
-			return 2;
-	}
-
-	if (abs(f1 - f2) < SMALL_NUMBER)
-		return 1;
-
-	if (FloatSpecial(u1.i) || FloatSpecial(u2.i))
-		return 2;
-
-	return 3;
-}
-
-#define VectorEquals(v1, v2) max(FloatEquals(v1.x, v2.x),max(FloatEquals(v1.y, v2.y),max(FloatEquals(v1.z, v2.z),FloatEquals(v1.w, v2.w))))
-
-//inline int VectorEquals(const Vector4& v1, const Vector4& v2)
-//{
-//	return max(FloatEquals(v1.x, v2.x),
-//		max(FloatEquals(v1.y, v2.y),
-//		max(FloatEquals(v1.z, v2.z),
-//		FloatEquals(v1.w, v2.w))));
-//}
-//
-//inline int VectorEquals(const Vector4& v1, const glm::vec4& v2)
-//{
-//	return max(FloatEquals(v1.x, v2.x),
-//		max(FloatEquals(v1.y, v2.y),
-//		max(FloatEquals(v1.z, v2.z),
-//		FloatEquals(v1.w, v2.w))));
-//}
-
-#define PrintVector4(v) {\
-	for(int i = 0; i < 4; ++i) {\
-		IntFloatUnion u;\
-		u.f = v.m[i];\
-		printf("\t[%08x, %+.04e]", u.i, u.f);\
-	}\
-	printf("\n");}
-
-#define PrintGlmVec4(v) {\
-	for(int i = 0; i < 4; ++i) {\
-		IntFloatUnion u;\
-		u.f = v[i]; printf("\t[%08x, %+.04e]", u.i, u.f);\
-	}\
-	printf("\n");}
-
-#define PrintFloat(f) {\
-	IntFloatUnion u;\
-	u.f = f;\
-	printf("\t[%08x, %+.04e]", u.i, u.f);\
-	printf("\n");}
-
-inline void Check(int result, IntFloatUnion u)
-{
-	if (result > 0)
-	{
-		printf("result: %d, i: %x, f: %f\n", result, u.i, u.f);
-		__debugbreak();
-	}
-}
-
-inline void Check(int result, Vector4 op, Vector4 r1, Vector4 r2)
-{
-	if (result > 0)
-	{
-		printf("result: %d\n", result);
-		for (int i = 0; i < 4; ++i)
-		{
-			IntFloatUnion u_op, u_r1, u_r2;
-			u_op.f = op.m[i];
-			u_r1.f = r1.m[i];
-			u_r2.f = r2.m[i];
-			printf("\t%d: i: %x, f: %f --> i: %x, f: %f | i: %x, f: %f\n", 
-				i, u_op.i, u_op.f, 
-				u_r1.i, u_r1.f, u_r2.i, u_r2.f);
-		}
-		__debugbreak();
-	}
-}
-
-inline void Check(int result, Vector4 op1, Vector4 op2, Vector4 r1, Vector4 r2)
-{
-	if (result > 0)
-	{
-		printf("result: %d\n", result);
-		for (int i = 0; i < 4; ++i)
-		{
-			IntFloatUnion u_op1, u_op2, u_r1, u_r2;
-			u_op1.f = op1.m[i];
-			u_op2.f = op2.m[i];
-			u_r1.f = r1.m[i];
-			u_r2.f = r2.m[i];
-			printf("\t%d: i: %x, f: %f +++ i: %x, f: %f\n\t\t --> i: %x, f: %f | i: %x, f: %f\n", 
-				i, u_op1.i, u_op1.f, u_op2.i, u_op2.f,
-				u_r1.i, u_r1.f, u_r2.i, u_r2.f);
-		}
-		__debugbreak();
-	}
-}
-
-inline void Check(int result, Vector4 op1, Vector4 op2, Vector4 r1, glm::vec4 r2)
-{
-	if (result > 0)
-	{		
-		printf("result: %d\n", result);
-		for (int i = 0; i < 4; ++i)
-		{
-			IntFloatUnion u_op1, u_op2, u_r1, u_r2;
-			u_op1.f = op1.m[i];
-			u_op2.f = op2.m[i];
-			u_r1.f = r1.m[i];
-			u_r2.f = r2[i];
-			printf("\t%d: i: %x, f: %f +++ i: %x, f: %f\n\t\t --> i: %x, f: %f | i: %x, f: %f\n",
-				i, u_op1.i, u_op1.f, u_op2.i, u_op2.f,
-				u_r1.i, u_r1.f, u_r2.i, u_r2.f);
-
-		}
-		__debugbreak();
-	}
-}
-
-void ExhaustTest()
-{
-	IntFloatUnion u;
-
-	unsigned __int64 i64;
-
-	unsigned int counter = 0;
-
-	i64 = 0;
-	while (i64 <= 0xFFFFFFFF)
-	{
-		u.i = i64;
-
-		Vector4 v1(u.f, u.f, u.f, u.f);
-		Vector4 v2(u.f, u.f, u.f, u.f);
-		glm::vec4 gv1(u.f, u.f, u.f, u.f);
-		glm::vec4 gv2(u.f, u.f, u.f, u.f);
-
-		Vector4 v3 = v1 + v2;
-		Vector4 v4 = UT_Vector4_Add(v1, v2);
-		glm::vec4 gv3 = gv1 + gv2;
-
-		Check(VectorEquals(v3, v4), u);
-
-		Check(VectorEquals(v3, gv3), u);
-
-		++i64;
-
-		if ((u.i >> 24) > counter)
-		{
-			printf("%x\n", counter);
-			++counter;
-		}
-	}
-
-
-	printf("done\n");
-}
-
-inline float RandF()
-{
-	// http://en.cppreference.com/w/cpp/numeric/random/RAND_MAX
-	// RAND_MAX is at least 0x7FFF, so we use 15 bits
-	IntFloatUnion u;
-	u.i =
-		((((unsigned __int32)rand() << 17) & 0xFFFE0000) |
-		(((unsigned __int32)rand() << 2) & 0x0001FFFC) |
-		(rand() & 0x00000002));
-	return u.f;
-}
-
-void RandomTest()
-{
-	// float bit
-	// 31 30-23(8) 22-0(23)
-	//sign exp     frac
-
-	IntFloatUnion specials[] =
-	{
-		0xFFFFFFFF, // - QNaN
-		0x7FFFFFFF, // + QNaN
-		0xFF800001, // - SNaN
-		0x7F800001, // + SNaN
-		0xFF800000, // - Infinity
-		0x7F800000, // + Infinity
-		0xFF7FFFFF, // - Max
-		0x7F7FFFFF, // + Max
-		0xBF800000, // - 1.0
-		0x3F800000, // + 1.0
-		0x80800000, // - Normalized Min
-		0x00800000, // + Normalized Min
-		0x807FFFFF, // - Denormalized Max
-		0x007FFFFF, // + Denormalized Max
-		0x80000001, // - Min
-		0x00000001, // + Min
-		0x80000000, // - 0.0
-		0x00000000, // + 0.0
-	};
-	int spNum = _countof(specials);
-
-	int count = 40000;
-	for (int i = 0; i < count; i += 4)
-	{
-		Vector4 v1(
-			i+0 < spNum ? specials[i+0].f : RandF(),
-			i+1 < spNum ? specials[i+1].f : RandF(),
-			i+2 < spNum ? specials[i+2].f : RandF(),
-			i+3 < spNum ? specials[i+3].f : RandF());
-		glm::vec4 gv1(v1.x, v1.y, v1.z, v1.w);
-
-		for (int j = 0; j < count; j+=4)
-		{
-			Vector4 v2(
-				j+0 < spNum ? specials[j+0].f : RandF(),
-				j+1 < spNum ? specials[j+1].f : RandF(),
-				j+2 < spNum ? specials[j+2].f : RandF(),
-				j+3 < spNum ? specials[j+3].f : RandF());
-			glm::vec4 gv2(v2.x, v2.y, v2.z, v2.w);
-
-			Vector4 v3 = v1 + v2;
-			Vector4 v4 = UT_Vector4_Add(v1, v2);
-			glm::vec4 gv3 = gv1 + gv2;
-			
-			Check(VectorEquals(v3, v4), v1, v2, v3, v4);
-
-			Check(VectorEquals(v3, gv3), v1, v2, v3, gv3);
-		}
-
-		printf("%d\n", i);
-	}
-}
 
 int main(int argc, char **argv)
 {
 	srand(time(0));
-
-	Vector4 v1(RandF(), RandF(), RandF(), RandF());
-
-	PrintVector4(v1);
-
-	//Bench();
+	
+	Bench();
 
 	//ExhaustTest();
-	//RandomTest();
 
-	//Vector4 v(1, 2, 3, 4);
+	//RandomTest<FuncVV2V>(
+	//	[](const Vector4& v1, const Vector4& v2) { Vector4 r = v1.Cross3(v2); r.w = 0; return r;},
+	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Cross3(v1, v2);},
+	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Cross3_Glm(v1, v2);},
+	//	-2, 2, 20000, 0
+	//	);
+	
+	//RandomTest<FuncVV2F>(
+	//	[](const Vector4& v1, const Vector4& v2) { return v1.Dot3(v2);},
+	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot3(v1, v2);},
+	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot3_Glm(v1, v2);},
+	//	-2, 2, 20000, 0
+	//	);
 
-	//v = Test_SSE(v);
-	//v = Test_SSE_M(v);
+	//RandomTest<FuncVF2V>(
+	//	[](const Vector4& v1, float f) { return v1 / f;},
+	//	[](const Vector4& v1, float f) { return UT_Vector4_Div(v1, f);},
+	//	[](const Vector4& v1, float f) { return UT_Vector4_Div_Glm(v1, f);},
+	//	20000
+	//	);
+	
+	//RandomTest<FuncV2V>(
+	//	[](const Vector4& v1) { return v1.GetNormalized2();},
+	//	[](const Vector4& v1) { return v1.GetNormalized2();},
+	//	[](const Vector4& v1) { return (v1.SizeSqr2() < SMALL_NUMBER) ? Vector4::Zero() : UT_Vector4_GetNormalized2_Glm(v1);},
+	//	-2, 2, 20000, 3
+	//	);
 
-	//printf("%f", v.x);
+	//Vector4 v3(RandF(), RandF(), RandF(), RandF());
+	//Vector4 v2(5, 6, 7, 8);
+
+	//v3.Normalize();
+	//Vector4 v1(0, 0, 0, 0);
+	//Vector4 v2(VecZero());
+
+	//float r = Test_VV2F_SSE(v1, v3);
+	//v3 = Vector4::Zero();
+	//r += Test_VV2F_SSE(v2, v3);
+
+	//PrintValue(v3);
+
+	//Vector4 r1 = Test_SSE(v1, v2);
+	//Vector4 r2 = Test_SSE_M(v1, v2);
+
+	//printf("done %f", v3);
+
+	printf("done\n");
 
 	getchar();
 	return 0;

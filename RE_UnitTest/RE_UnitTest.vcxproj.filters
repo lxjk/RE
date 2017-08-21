@@ -23,5 +23,8 @@
     <ClInclude Include="Source\UT_Vector4.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\UnitTest.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
