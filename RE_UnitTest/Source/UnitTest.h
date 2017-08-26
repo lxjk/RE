@@ -5,6 +5,7 @@
 
 #include "Math/MathUtil.h"
 #include "UT_Vector4.h"
+#include "UT_Matrix4.h"
 
 // float bit
 // 31 30-23(8) 22-0(23)
@@ -45,6 +46,15 @@ template<typename T>
 void PrintValue(T v);
 
 template<>
+inline void PrintValue(float v)
+{
+	IntFloatUnion u;
+	u.f = v;
+	printf("\t[%08x, %+.04e]", u.i, u.f);
+	printf("\n");
+}
+
+template<>
 inline void PrintValue(Vector4 v)
 {
 	for (int i = 0; i < 4; ++i)
@@ -57,12 +67,12 @@ inline void PrintValue(Vector4 v)
 }
 
 template<>
-inline void PrintValue(float v)
+inline void PrintValue(Matrix4 v)
 {
-	IntFloatUnion u;
-	u.f = v;
-	printf("\t[%08x, %+.04e]", u.i, u.f);
-	printf("\n");
+	for (int i = 0; i < 4; ++i)
+	{
+		PrintValue(v.mColumns[i]);
+	}
 }
 
 template<typename T>
@@ -106,8 +116,11 @@ inline int CheckEquals(float f1, float f2)
 		if (IsNaN(i1) && IsNaN(i2))
 			return 2;
 
-		printf("%08x\n", i1);
-		printf("%08x\n", i2);
+		if (f1 == 0 || f2 == 0)
+			return 2;
+
+		//PrintValue(f1);
+		//PrintValue(f2);
 
 		return 4;
 	}
@@ -129,6 +142,16 @@ inline int CheckEquals(Vector4 v1, Vector4 v2)
 		max(CheckEquals(v1.y, v2.y),
 		max(CheckEquals(v1.z, v2.z),
 			CheckEquals(v1.w, v2.w))));
+}
+
+template<>
+inline int CheckEquals(Matrix4 m1, Matrix4 m2)
+{
+	return 
+		max(CheckEquals(m1.mColumns[0], m2.mColumns[0]),
+		max(CheckEquals(m1.mColumns[1], m2.mColumns[1]),
+		max(CheckEquals(m1.mColumns[2], m2.mColumns[2]),
+			CheckEquals(m1.mColumns[3], m2.mColumns[3]))));
 }
 
 template<typename T_op1, typename T_op2, typename T_r>
@@ -192,7 +215,7 @@ void ExhaustTest()
 	i64 = 0;
 	while (i64 <= 0xFFFFFFFF)
 	{
-		u.i = i64;
+		u.u = (unsigned int)i64;
 
 		//Vector4 v1(u.f, u.f, u.f, u.f);
 		//Vector4 v2(u.f, u.f, u.f, u.f);
@@ -209,7 +232,7 @@ void ExhaustTest()
 
 		++i64;
 
-		if ((u.i >> 24) > counter)
+		if ((u.u >> 24) > counter)
 		{
 			printf("%x\n", counter);
 			++counter;
@@ -238,19 +261,37 @@ inline float RandRangeF(float minR, float maxR)
 	return minR + rand() / (float)RAND_MAX * (maxR - minR);
 }
 
-#define VectorLoopBegin(idx, count, name) for(int idx = 0; idx < (count); idx += 4)\
-{ Vector4 name(\
+#define RandVectorIdx(idx) Vector4(\
 	idx + 0 < FloatSpecialNum ? FloatSpecials[idx + 0].f : RandF(),\
 	idx + 1 < FloatSpecialNum ? FloatSpecials[idx + 1].f : RandF(),\
 	idx + 2 < FloatSpecialNum ? FloatSpecials[idx + 2].f : RandF(),\
-	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandF());
+	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandF())
 
-#define VectorRangeLoopBegin(idx, count, name, minR, maxR) for(int idx = 0; idx < (count); idx += 4)\
-{ Vector4 name(\
+#define RandRangeVectorIdx(idx, minR, maxR) Vector4(\
 	idx + 0 < FloatSpecialNum ? FloatSpecials[idx + 0].f : RandRangeF(minR, maxR),\
 	idx + 1 < FloatSpecialNum ? FloatSpecials[idx + 1].f : RandRangeF(minR, maxR),\
 	idx + 2 < FloatSpecialNum ? FloatSpecials[idx + 2].f : RandRangeF(minR, maxR),\
-	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandRangeF(minR, maxR));
+	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandRangeF(minR, maxR))
+
+#define MatrixLoopBegin(idx, count, name) for(int idx = 0; idx < (count); idx += 16)\
+{ Matrix4 name (\
+	RandVectorIdx(idx),\
+	RandVectorIdx(idx + 4),\
+	RandVectorIdx(idx + 8),\
+	RandVectorIdx(idx + 12));
+
+#define MatrixRangeLoopBegin(idx, count, name, minR, maxR) for(int idx = 0; idx < (count); idx += 16)\
+{ Matrix4 name (\
+	RandRangeVectorIdx(idx, minR, maxR),\
+	RandRangeVectorIdx(idx + 4, minR, maxR),\
+	RandRangeVectorIdx(idx + 8, minR, maxR),\
+	RandRangeVectorIdx(idx + 12, minR, maxR));
+
+#define VectorLoopBegin(idx, count, name) for(int idx = 0; idx < (count); idx += 4)\
+{ Vector4 name = RandVectorIdx(idx);
+
+#define VectorRangeLoopBegin(idx, count, name, minR, maxR) for(int idx = 0; idx < (count); idx += 4)\
+{ Vector4 name = RandRangeVectorIdx(idx, minR, maxR);
 
 #define FloatLoopBegin(idx, count, name) for(int idx = 0; idx < (count); ++idx)\
 { float name = idx < FloatSpecialNum ? FloatSpecials[idx].f : RandF();
@@ -260,6 +301,9 @@ inline float RandRangeF(float minR, float maxR)
 
 #define LoopEnd }
 
+typedef std::function<Matrix4(const Matrix4&, const Matrix4&)> FuncMM2M;
+typedef std::function<Vector4(const Matrix4&, const Vector4&)> FuncMV2V;
+typedef std::function<Matrix4(const Matrix4&)> FuncM2M;
 typedef std::function<Vector4(const Vector4&, const Vector4&)> FuncVV2V;
 typedef std::function<float(const Vector4&, const Vector4&)> FuncVV2F;
 typedef std::function<Vector4(const Vector4&, float)> FuncVF2V;
@@ -267,6 +311,78 @@ typedef std::function<Vector4(const Vector4&)> FuncV2V;
 
 template<typename T>
 void RandomTest(T f1, T f2, T f3, float minR, float maxR, int count = 10000, int level = 0);
+
+template<>
+void RandomTest(FuncMM2M f1, FuncMM2M f2, FuncMM2M f3, float minR, float maxR, int count, int level)
+{
+	MatrixLoopBegin(i, count, v1)
+	{
+		MatrixLoopBegin(j, count, v2)
+		{
+			Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+		}
+		LoopEnd
+			printf("%d\n", i);
+	}
+	LoopEnd
+
+	MatrixRangeLoopBegin(i, count, v1, minR, maxR)
+	{
+		MatrixRangeLoopBegin(j, count, v2, minR, maxR)
+		{
+			Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+		}
+		LoopEnd
+			printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void RandomTest(FuncMV2V f1, FuncMV2V f2, FuncMV2V f3, float minR, float maxR, int count, int level)
+{
+	MatrixLoopBegin(i, count, v1)
+	{
+		VectorLoopBegin(j, count, v2)
+		{
+			Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+		}
+		LoopEnd
+			printf("%d\n", i);
+	}
+	LoopEnd
+
+	MatrixRangeLoopBegin(i, count, v1, minR, maxR)
+	{
+		VectorRangeLoopBegin(j, count, v2, minR, maxR)
+		{
+			Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+		}
+		LoopEnd
+			printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void RandomTest(FuncM2M f1, FuncM2M f2, FuncM2M f3, float minR, float maxR, int count, int level)
+{
+	MatrixLoopBegin(i, count, v)
+	{
+		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+
+	MatrixRangeLoopBegin(i, count, v, minR, maxR)
+	{
+		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
 
 template<>
 void RandomTest(FuncVV2V f1, FuncVV2V f2, FuncVV2V f3, float minR, float maxR, int count, int level)
@@ -351,6 +467,10 @@ void RandomTest(FuncV2V f1, FuncV2V f2, FuncV2V f3, float minR, float maxR, int 
 {
 	VectorLoopBegin(i, count, v)
 	{
+		//Vector4 t = VecRSqrt(v.mVec);
+		//IntFloatUnion u;
+		//PrintValue(t);
+
 		Check(v, f1(v), f2(v), f3(v), level);
 
 		printf("%d\n", i);

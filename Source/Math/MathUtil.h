@@ -9,7 +9,7 @@
 
 union IntFloatUnion
 {
-	__int32 i;
 	unsigned __int32 u;
+	__int32 i;
 	float f;
 };

@@ -201,17 +201,13 @@ public:
 
 	// normalize
 	// Vector4 version: SSE > normal
-	inline void Normalize()
-	{
-		*this = GetNormalized();
-	}
 	inline Vector4 GetNormalized() const
 	{
 		// sse method without branch
 		Vec128 sizeSqr = VecDotV(mVec, mVec);
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		return VecBlend(
-			VecDiv(mVec, _mm_sqrt_ps(sizeSqr)),
+			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)));
 
@@ -222,13 +218,19 @@ public:
 			VecDiv(mVec, VecSet1(sqrt(sizeSqr)));
 #endif
 	}
+	// precision around 0.0003
+	inline Vector4 GetNormalizedFast() const
+	{
+		// sse method without branch
+		Vec128 sizeSqr = VecDotV(mVec, mVec);
+		// if sizeSqr < SMALL_NUMBER return 0, else normalize
+		return VecBlend(
+			VecMul(mVec, VecInvSqrtFast(sizeSqr)),
+			VecZero(),
+			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)));
+	}
 
 	// Vector4_3 version: SSE(set1(Dot3)) > SSE(VecDot3V) > normal
-	// only take x,y,z; w will set to 0
-	inline void Normalize3()
-	{
-		*this = GetNormalized3();
-	}
 	// only take x,y,z; w will set to 0
 	inline Vector4 GetNormalized3() const
 	{
@@ -239,17 +241,12 @@ public:
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		// also mask w value so it's always 0 (w mask value all 1)
 		return VecBlend(
-			VecDiv(mVec, _mm_sqrt_ps(sizeSqr)),
+			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecOr(VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)), Vec128Const::VecMaskW));
 	}
 	
 	// Vector4_2 version: SSE(set1(Dot2)) > normal > SSE(VecDot2V)
-	// only take x,y; z,w will set to 0
-	inline void Normalize2()
-	{
-		*this = GetNormalized2();
-	}
 	// only take x,y; z,w will set to 0
 	inline Vector4 GetNormalized2() const
 	{
@@ -260,7 +257,7 @@ public:
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		// also mask z,w value so it's always 0 (zw mask value all 1)
 		return VecBlend(
-			VecDiv(mVec, _mm_sqrt_ps(sizeSqr)),
+			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecOr(VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)), Vec128Const::VecMaskZW));
 	}

@@ -20,7 +20,8 @@ namespace Vec128Const {
 	const Vec128 VecMaskZW		= VecSet_i(0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF);
 	const Vec128 VecMaskW		= VecSet_i(0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF);
 
-	const Vec128 SignMask		= VecSet1(-0.f);
+	const Vec128 SignMask		= VecSet1_i(0x80000000);
+	const Vec128 InvSignMask	= VecSet1_i(0x7FFFFFFF);
 };
 
 #define VecLoad1(f_ptr)			_mm_load1_ps(f_ptr)
@@ -35,8 +36,10 @@ namespace Vec128Const {
 
 //#define VecNegate(vec)			_mm_sub_ps(_mm_setzero_ps(), vec)
 #define VecNegate(vec)			_mm_xor_ps(vec, Vec128Const::SignMask)
+#define VecAbs(vec)				_mm_and_ps(vec, Vec128Const::InvSignMask)
 
 #define VecSqrt(vec)			_mm_sqrt_ps(vec)
+#define VecRcp(vec)				_mm_rcp_ps(vec)
 
 #define VecMoveMask(vec)		_mm_movemask_ps(vec)
 #define VecCmpLT(vec1, vec2)	_mm_cmplt_ps(vec1, vec2)
@@ -53,6 +56,7 @@ namespace Vec128Const {
 
 // vec(0, 1, 2, 3) -> (vec[x], vec[y], vec[z], vec[w])
 #define VecSwizzle(vec, x, y, z, w)			_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,y,z,w))
+#define VecSwizzle1(vec, x)					_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,x,x,x))
 #define VecSwizzleMask(vec, mask)			_mm_shuffle_ps(vec, vec, mask)
 
 //			0		1		 2		  3
@@ -60,15 +64,57 @@ namespace Vec128Const {
 #define VecShuffle(vec1, vec2, x, y, z, w)	_mm_shuffle_ps(vec1, vec2, MakeShuffleMask(x,y,z,w))
 #define VecShuffleMask(vec1, vec2, mask)	_mm_shuffle_ps(vec1, vec2, mask)
 
+// this is slightly faster at the cost of precision around 2-3 bits of fraction
+inline Vec128 VecInvSqrtFast(Vec128 v)
+{
+	const static Vec128 a = _mm_set1_ps(1.5f);
+	Vec128 x = _mm_rsqrt_ps(v);
+	v = _mm_mul_ps(v, _mm_set1_ps(-0.5f));
+
+	// one iteration
+	// x1 = x0 * (1.5 - 0.5 * v * x0 * x0)
+	Vec128 x2 = _mm_mul_ps(x, x);
+	Vec128 t = _mm_add_ps(a, _mm_mul_ps(v, x2));
+	return _mm_mul_ps(x, t);
+}
+
+#if 0
+// this is slower than sqrt and div, just for reference
+inline Vec128 VecInvSqrtEpic(Vec128 v)
+{
+	const static Vec128 a = _mm_set1_ps(0.5f);
+	Vec128 x = _mm_rsqrt_ps(v);
+	v = _mm_mul_ps(v, a);
+
+	// Based on unreal implementation, it would make sure rsqrt(1) = 1
+	// x1 = x0 + x0 * (0.5 - 0.5 * v * x0 * x0)
+	Vec128 x2 = _mm_mul_ps(x, x);
+	Vec128 t = _mm_sub_ps(a, _mm_mul_ps(v, x2));
+	x = _mm_add_ps(x, _mm_mul_ps(x, t));
+
+	x2 = _mm_mul_ps(x, x);
+	t = _mm_sub_ps(a, _mm_mul_ps(v, x2));
+	return _mm_add_ps(x, _mm_mul_ps(x, t));
+}
+#endif
+
 // return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
 //#define VecDot(vec1, vec2)		_mm_cvtss_f32(_mm_dp_ps(vec1, vec2, 0xF1))
 // This is faster than _mm_dp_ps ?!!!
 inline float VecDot(Vec128 vec1, Vec128 vec2)
 {
+	Vec128 v = _mm_mul_ps(vec1, vec2); // 3, 2, 1, 0
+	Vec128 shuf = _mm_movehdup_ps(v); // 3, 3, 1, 1
+	Vec128 sums = _mm_add_ps(v, shuf); // 3+3, 2+3, 1+1, 0+1
+	shuf = _mm_movehl_ps(shuf, sums); // 3, 1, 3+3, 2+3
+	sums = _mm_add_ss(sums, shuf); //x, x, x, 0+1+2+3
+	return _mm_cvtss_f32(sums);
+#if 0
 	Vec128 t0 = _mm_mul_ps(vec1, vec2);
 	Vec128 t1 = _mm_hadd_ps(t0, t0);
 	Vec128 t2 = _mm_hadd_ps(t1, t1);
 	return _mm_cvtss_f32(t2);
+#endif
 }
 
 inline Vec128 VecDotV(Vec128 vec1, Vec128 vec2)
@@ -78,14 +124,24 @@ inline Vec128 VecDotV(Vec128 vec1, Vec128 vec2)
 	return _mm_hadd_ps(t1, t1);
 }
 
+
+#if 0
+// not very useful, for doing vector 2 or 3, we would better do float version
 // return float value x1*x2 + y1*y2 + z1*z2
 //#define VecDot3(vec1, vec2)		_mm_cvtss_f32(_mm_dp_ps(vec1, vec2, 0x71))
 inline float VecDot3(Vec128 vec1, Vec128 vec2)
 {
+	Vec128 v = _mm_mul_ps(vec1, vec2); // 3, 2, 1, 0
+	Vec128 t0 = _mm_movehdup_ps(v); // 3, 3, 1, 1
+	Vec128 t1 = _mm_add_ps(v, t0); // 3+3, 2+3, 1+1, 0+1
+	Vec128 t2 = _mm_movehl_ps(v, v); // 3, 2, 3, 2
+	Vec128 t3 = _mm_add_ps(t1, t2); // x, x, x, 2+1+0
+#if 0
 	Vec128 t0 = _mm_mul_ps(vec1, vec2); // 3, 2, 1, 0
 	Vec128 t1 = _mm_hadd_ps(t0, t0); // 3+2, 1+0, 3+2, 1+0
 	Vec128 t2 = _mm_movehl_ps(t0, t0); // 3, 2, 3, 2
 	Vec128 t3 = _mm_add_ps(t1, t2); // x, x, x, 2+1+0
+#endif
 	return _mm_cvtss_f32(t3);
 }
 inline Vec128 VecDot3V(Vec128 vec1, Vec128 vec2)
@@ -109,9 +165,9 @@ inline Vec128 VecDot2V(Vec128 vec1, Vec128 vec2)
 	Vec128 t1 = _mm_hadd_ps(t0, t0); // 3+2, 1+0, 3+2, 1+0
 	return _mm_moveldup_ps(t1); // duplicate 0, 2 to 1, 3
 }
+#endif
 
 // return vector value (x1*x2 + y1*y2, z1*z2 + w1*w2, ?, ?)
-//#define VecDot2P(vec1, vec2)	_mm_add_ps(_mm_dp_ps(vec1, vec2, 0x31), _mm_dp_ps(vec1, vec2, 0xC2))
 inline Vec128 VecDot2P(Vec128 vec1, Vec128 vec2)
 {
 	Vec128 v = _mm_mul_ps(vec1, vec2);

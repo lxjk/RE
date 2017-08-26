@@ -3,12 +3,12 @@
 #include "../../3rdparty/glm/glm/glm.hpp"
 #include "Math/Vector4.h"
 
-#define Vector4ToGlmVec4Named(name, value) glm::vec4 name(value.x, value.y, value.z, value.w)
-#define Vector4ToGlmVec4(value) glm::vec4(value.x, value.y, value.z, value.w)
+//#define Vector4ToGlmVec4(value) glm::vec4(value.x, value.y, value.z, value.w)
+#define Vector4ToGlmVec4(value) *(glm::vec4*)(&value)
 #define Vector4ToGlmVec3(value) glm::vec3(value.x, value.y, value.z)
 #define Vector4ToGlmVec2(value) glm::vec2(value.x, value.y)
-#define GlmVec4ToVector4Named(name, value) Vector4 name(value.x, value.y, value.z, value.w)
-#define GlmVec4ToVector4(value) Vector4(value.x, value.y, value.z, value.w)
+//#define GlmVec4ToVector4(value) Vector4(value.x, value.y, value.z, value.w)
+#define GlmVec4ToVector4(value) *(Vector4*)(&value)
 #define GlmVec3ToVector4(value) Vector4(value.x, value.y, value.z, 0)
 #define GlmVec2ToVector4(value) Vector4(value.x, value.y, 0, 0)
 
@@ -157,7 +157,7 @@ inline Vector4 UT_Vector4_GetNormalized3(const Vector4& v1)
 }
 inline Vector4 UT_Vector4_GetNormalized3_Glm(const Vector4& v1)
 {
-	return GlmVec3ToVector4(glm::normalize(Vector4ToGlmVec3(v1)), 0);
+	return GlmVec3ToVector4(glm::normalize(Vector4ToGlmVec3(v1)));
 }
 
 inline Vector4 UT_Vector4_GetNormalized2(const Vector4& v1)
@@ -169,7 +169,7 @@ inline Vector4 UT_Vector4_GetNormalized2(const Vector4& v1)
 }
 inline Vector4 UT_Vector4_GetNormalized2_Glm(const Vector4& v1)
 {
-	return GlmVec2ToVector4(glm::normalize(Vector4ToGlmVec2(v1)), 0);
+	return GlmVec2ToVector4(glm::normalize(Vector4ToGlmVec2(v1)));
 }
 
 

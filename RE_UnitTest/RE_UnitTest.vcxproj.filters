@@ -26,5 +26,8 @@
     <ClInclude Include="Source\UnitTest.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\UT_Matrix4.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
