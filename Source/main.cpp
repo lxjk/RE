@@ -1595,7 +1595,6 @@ void DebugForwardPass(RenderContext& renderContext)
 		glm::mat4 modelMat(1);
 		modelMat = glm::translate(modelMat, gPointLights[i].position);
 		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
 		gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity);
 
@@ -1609,7 +1608,6 @@ void DebugForwardPass(RenderContext& renderContext)
 		modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
 		modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
 		modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius) / gSpotLights[i].radius * 0.6f);
-		glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
 		gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity);
 
@@ -1653,7 +1651,6 @@ void DebugForwardPass(RenderContext& renderContext)
 			glm::mat4 modelMat(1);
 			modelMat = glm::translate(modelMat, gPointLights[i].position);
 			modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
-			glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
 			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity);
@@ -1669,7 +1666,6 @@ void DebugForwardPass(RenderContext& renderContext)
 			modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
 			modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
 			modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius));
-			glm::mat3 normalMat = glm::inverseTranspose(glm::mat3(modelMat));
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
 			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity);

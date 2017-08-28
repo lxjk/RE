@@ -1,7 +1,9 @@
 #pragma once
 
 #include <stdlib.h>
+#include <stdarg.h>
 #include <functional>
+#include "Windows.h"
 
 #include "Math/MathUtil.h"
 #include "UT_Vector4.h"
@@ -41,17 +43,30 @@ int FloatSpecialNum = _countof(FloatSpecials);
 #define max(a, b) (a > b ? a : b)
 
 
-
 template<typename T>
 void PrintValue(T v);
+
+
+inline void _cdecl DebugLog(const char* format, ...)
+{
+	static char logBuf[512];
+	static int bufCount = _countof(logBuf);
+	va_list args;
+	va_start(args, format);
+	_vfprintf_l(stdout, format, NULL, args);
+	_vsprintf_s_l(logBuf, bufCount, format, NULL, args);
+	va_end(args);
+	OutputDebugString(logBuf);
+}
+
 
 template<>
 inline void PrintValue(float v)
 {
 	IntFloatUnion u;
 	u.f = v;
-	printf("\t[%08x, %+.04e]", u.i, u.f);
-	printf("\n");
+	DebugLog("\t[%08x, %+.04e]", u.i, u.f);
+	DebugLog("\n");
 }
 
 template<>
@@ -61,9 +76,9 @@ inline void PrintValue(Vector4 v)
 	{
 		IntFloatUnion u;
 		u.f = v.m[i];
-		printf("\t[%08x, %+.04e]", u.i, u.f);
+		DebugLog("\t[%08x, %+.04e]", u.i, u.f);
 	}
-	printf("\n");
+	DebugLog("\n");
 }
 
 template<>
@@ -71,7 +86,7 @@ inline void PrintValue(Matrix4 v)
 {
 	for (int i = 0; i < 4; ++i)
 	{
-		PrintValue(v.mColumns[i]);
+		PrintValue(v.mCol[i]);
 	}
 }
 
@@ -125,11 +140,19 @@ inline int CheckEquals(float f1, float f2)
 		return 4;
 	}
 
-	if (abs(u1.i - u2.i) < 2)
+	//if (f1 == 0 || f2 == 0)
+	//	return 3;
+
+	float diff = abs(f1 - f2);
+	float maxValue = max(1, max(abs(f1), abs(f2)));
+	if (diff <= maxValue * 0.0000001)
 		return 3;
 
-	if (abs(f1 - f2) < SMALL_NUMBER)
+	if (abs(u1.i - u2.i) < 0x3)
 		return 3;
+
+	//if (abs(f1 - f2) < SMALL_NUMBER)
+	//	return 3;
 
 	return 5;
 }
@@ -148,10 +171,10 @@ template<>
 inline int CheckEquals(Matrix4 m1, Matrix4 m2)
 {
 	return 
-		max(CheckEquals(m1.mColumns[0], m2.mColumns[0]),
-		max(CheckEquals(m1.mColumns[1], m2.mColumns[1]),
-		max(CheckEquals(m1.mColumns[2], m2.mColumns[2]),
-			CheckEquals(m1.mColumns[3], m2.mColumns[3]))));
+		max(CheckEquals(m1.mCol[0], m2.mCol[0]),
+		max(CheckEquals(m1.mCol[1], m2.mCol[1]),
+		max(CheckEquals(m1.mCol[2], m2.mCol[2]),
+			CheckEquals(m1.mCol[3], m2.mCol[3]))));
 }
 
 template<typename T_op1, typename T_op2, typename T_r>
@@ -160,23 +183,23 @@ void Check(T_op1 v1, T_op2 v2, T_r r1, T_r r2, T_r r3, int level)
 	int e2 = CheckEquals(r1, r2);
 	if (e2 >level)
 	{
-		printf("1-2 result: %d\n", e2);
+		DebugLog("1-2 result: %d\n", e2);
 		PrintValue(v1);
 		PrintValue(v2);
 		PrintValue(r1);
 		PrintValue(r2);
-		__debugbreak();
+		//__debugbreak();
 	}
 
 	int e3 = CheckEquals(r1, r3);
 	if (e3 > level)
 	{
-		printf("1-3 result: %d\n", e3);
+		DebugLog("1-3 result: %d\n", e3);
 		PrintValue(v1);
 		PrintValue(v2);
 		PrintValue(r1);
 		PrintValue(r3);
-		__debugbreak();
+		//__debugbreak();
 	}
 }
 
@@ -186,21 +209,21 @@ void Check(T_op v, T_r r1, T_r r2, T_r r3, int level)
 	int e2 = CheckEquals(r1, r2);
 	if (e2 >level)
 	{
-		printf("1-2 result: %d\n", e2);
+		DebugLog("1-2 result: %d\n", e2);
 		PrintValue(v);
 		PrintValue(r1);
 		PrintValue(r2);
-		__debugbreak();
+		//__debugbreak();
 	}
 
 	int e3 = CheckEquals(r1, r3);
 	if (e3 > level)
 	{
-		printf("1-3 result: %d\n", e3);
+		DebugLog("1-3 result: %d\n", e3);
 		PrintValue(v);
 		PrintValue(r1);
 		PrintValue(r3);
-		__debugbreak();
+		//__debugbreak();
 	}
 }
 
@@ -261,6 +284,21 @@ inline float RandRangeF(float minR, float maxR)
 	return minR + rand() / (float)RAND_MAX * (maxR - minR);
 }
 
+inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float maxS)
+{
+	Vector4 q(RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f));
+	q = q.GetNormalized();
+	Matrix4 r = {
+		{1 - 2*q.y*q.y - 2*q.z*q.z,	2*q.x*q.y + 2*q.z*q.w,		2*q.x*q.z - 2*q.y*q.w,		0},
+		{2*q.x*q.y - 2*q.z*q.w,		1 - 2*q.x*q.x - 2*q.z*q.z,	2*q.y*q.z + 2*q.x*q.w,		0},
+		{2*q.x*q.z + 2*q.y*q.w,		2*q.y*q.z - 2*q.x*q.w,		1 - 2*q.x*q.x - 2*q.y*q.y,	0},
+		{RandRangeF(minT, maxT),	RandRangeF(minT, maxT),		RandRangeF(minT, maxT),		1} };
+	r.mCol[0] *= RandRangeF(minS, maxS);
+	r.mCol[1] *= RandRangeF(minS, maxS);
+	r.mCol[2] *= RandRangeF(minS, maxS);
+	return r;
+}
+
 #define RandVectorIdx(idx) Vector4(\
 	idx + 0 < FloatSpecialNum ? FloatSpecials[idx + 0].f : RandF(),\
 	idx + 1 < FloatSpecialNum ? FloatSpecials[idx + 1].f : RandF(),\
@@ -272,6 +310,9 @@ inline float RandRangeF(float minR, float maxR)
 	idx + 1 < FloatSpecialNum ? FloatSpecials[idx + 1].f : RandRangeF(minR, maxR),\
 	idx + 2 < FloatSpecialNum ? FloatSpecials[idx + 2].f : RandRangeF(minR, maxR),\
 	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandRangeF(minR, maxR))
+
+#define TransformMatrixLoopBegin(idx, count, name, minT, maxT, minS, maxS) for(int idx = 0; idx < (count); idx += 16)\
+{ Matrix4 name = RandTransformMatrix(minT, maxT, minS, maxS);
 
 #define MatrixLoopBegin(idx, count, name) for(int idx = 0; idx < (count); idx += 16)\
 { Matrix4 name (\
@@ -304,6 +345,7 @@ inline float RandRangeF(float minR, float maxR)
 typedef std::function<Matrix4(const Matrix4&, const Matrix4&)> FuncMM2M;
 typedef std::function<Vector4(const Matrix4&, const Vector4&)> FuncMV2V;
 typedef std::function<Matrix4(const Matrix4&)> FuncM2M;
+typedef std::function<float(const Matrix4&)> FuncM2F;
 typedef std::function<Vector4(const Vector4&, const Vector4&)> FuncVV2V;
 typedef std::function<float(const Vector4&, const Vector4&)> FuncVV2F;
 typedef std::function<Vector4(const Vector4&, float)> FuncVF2V;
@@ -366,6 +408,26 @@ void RandomTest(FuncMV2V f1, FuncMV2V f2, FuncMV2V f3, float minR, float maxR, i
 
 template<>
 void RandomTest(FuncM2M f1, FuncM2M f2, FuncM2M f3, float minR, float maxR, int count, int level)
+{
+	MatrixLoopBegin(i, count, v)
+	{
+		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+
+	MatrixRangeLoopBegin(i, count, v, minR, maxR)
+	{
+		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void RandomTest(FuncM2F f1, FuncM2F f2, FuncM2F f3, float minR, float maxR, int count, int level)
 {
 	MatrixLoopBegin(i, count, v)
 	{
@@ -480,6 +542,38 @@ void RandomTest(FuncV2V f1, FuncV2V f2, FuncV2V f3, float minR, float maxR, int 
 	VectorRangeLoopBegin(i, count, v, minR, maxR)
 	{
 		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<typename T>
+void TransformRandomTest(T f1, T f2, T f3, float minT, float maxT, float minS, float maxS, int count = 10000, int level = 0);
+
+
+template<>
+void TransformRandomTest(FuncM2M f1, FuncM2M f2, FuncM2M f3, float minT, float maxT, float minS, float maxS, int count, int level)
+{
+	TransformMatrixLoopBegin(i, count, v, minT, maxT, minS, maxS)
+	{
+		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void TransformRandomTest(FuncMV2V f1, FuncMV2V f2, FuncMV2V f3, float minT, float maxT, float minS, float maxS, int count, int level)
+{
+	TransformMatrixLoopBegin(i, count, v1, minT, maxT, minS, maxS)
+	{
+		VectorRangeLoopBegin(j, count, v2, minT, maxT)
+		{
+			Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+		}
+		LoopEnd
 
 		printf("%d\n", i);
 	}

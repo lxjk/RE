@@ -19,13 +19,13 @@ unsigned __int64 rdtsc()
 __declspec(noinline)
 float Test_VV2F_SSE(Vector4 v1, Vector4 v2)
 {
-	return v1.Dot(v2);
+	return v1.Dot4(v2);
 }
 
 __declspec(noinline)
 float Test_VV2F_Flt(Vector4 v1, Vector4 v2)
 {
-	return UT_Vector4_Dot(v1, v2);
+	return UT_Vector4_Dot4(v1, v2);
 }
 
 //__declspec(noinline)
@@ -61,6 +61,15 @@ float PostBenchLoop(float r,
 	return r;
 }
 
+struct BenchData
+{
+	Matrix4 m1;
+	//Matrix4 m2;
+	//Vector4 v1;
+	//Vector4 v2;
+	//float f;
+};
+
 void Bench()
 {
 	LARGE_INTEGER performFreq;
@@ -78,23 +87,32 @@ void Bench()
 	//Vector4 v2(RandF(), RandF(), RandF(), RandF());
 	//float f = RandF();
 
-	Matrix4* m1 = (Matrix4*)_aligned_malloc(sizeof(Matrix4) * count, 16);
-	Matrix4* m2 = (Matrix4*)_aligned_malloc(sizeof(Matrix4) * count, 16);
-	Vector4* v1 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
-	Vector4* v2 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
-	float* f = (float*)_aligned_malloc(sizeof(float) * count, 16);
+	BenchData* d = (BenchData*)_aligned_malloc(sizeof(BenchData) * count, 16);
+	//Matrix4* m1 = (Matrix4*)_aligned_malloc(sizeof(Matrix4) * count, 16);
+	//Matrix4* m2 = (Matrix4*)_aligned_malloc(sizeof(Matrix4) * count, 16);
+	//Vector4* v1 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
+	//Vector4* v2 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
+	//float* f = (float*)_aligned_malloc(sizeof(float) * count, 16);
 
-	//for (int i = 0; i < count; ++i)
-	//{
-	//	v1[i] = Vector4(RandF(), RandF(), RandF(), RandF());
-	//	v2[i] = Vector4(RandF(), RandF(), RandF(), RandF());
-	//	f[i] = RandF();
-	//}
+	const float minR = -20.f;
+	const float maxR = 20.f;
+
+	for (int i = 0; i < count; ++i)
+	{
+		d[i].m1 = { 
+			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
+			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
+			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
+			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) } };
+		//d[i].v1 = Vector4(RandF(), RandF(), RandF(), RandF());
+		//d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
+		//d[i].f = RandF();
+	}
 
 	// -- warmup
 	for (int i = 0; i < count; ++i)
 	{
-		tmp += m1[i].m[0][0] + m2[i].m[0][0] + v1[i].x + v2[i].x + f[i];
+		tmp += *(float*)&d[i];
 	}
 	// -- warmup
 
@@ -105,7 +123,10 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += m1[i].GetTransposed();
+			tmp += d[i].m1.GetInverse();
+			//tmp += UT_Matrix4_GetInverse_Intel(d[i].m1);
+			//tmp += d[i].m1.InverseTransformPoint(d[i].v1);
+			//tmp += d[i].m1.GetDeterminant();
 		}
 		unsigned __int64 t1 = __rdtsc();
 		acc_t0 += (t1 - t0);
@@ -117,8 +138,10 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += GlmMat4ToMatrix4(glm::transpose(Matrix4ToGlmMat4(m1[i])));
-			//tmp += UT_Matrix4_Add_Glm(m1[i], v1[i]);
+			tmp += d[i].m1.GetTransformInverseNoScale();
+			//tmp += UT_Matrix4_GetInverse_UE4(d[i].m1);
+			//tmp += d[i].m1.InverseTransformPointNoScale(d[i].v1);
+			//tmp += d[i].m1.GetDeterminant();
 		}
 		unsigned __int64 t1 = __rdtsc();
 		acc_t1 += (t1 - t0);
@@ -130,7 +153,11 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += UT_Matrix4_GetTransposed(m1[i]);
+			tmp += d[i].m1.GetTransformInverse();
+			//tmp += UT_Matrix4_GetInverse_DirectX(d[i].m1);
+			//tmp += d[i].m1.GetTransformInverse().TransformPoint(d[i].v1);
+			//tmp += GlmMat4ToMatrix4(glm::inverse(Matrix4ToGlmMat4(d[i].m1)));
+			//tmp += UT_Matrix4_GetDeterminant(d[i].m1);
 		}
 		unsigned __int64 t1 = __rdtsc();
 		acc_t2 += (t1 - t0);
@@ -159,11 +186,39 @@ int main(int argc, char **argv)
 
 	//ExhaustTest();
 
+	//TransformRandomTest<FuncM2M>(
+	//	[](const Matrix4& m1) { return UT_Matrix4_GetInverseTransposed3(m1);},
+	//	[](const Matrix4& m1) { return m1.GetInverseTransposed3(); },
+	//	[](const Matrix4& m1) { return m1.GetInverseTransposed3(); },
+	//	-10000.f, 10000.f, 0.01f, 1000.f, 20000, 3
+	//	);
+
+	//TransformRandomTest<FuncMV2V>(
+	//	[](const Matrix4& m1, const Vector4& v2) { return m1.InverseTransformVector(v2); },
+	//	[](const Matrix4& m1, const Vector4& v2) { Vector4 r = m1.GetTransformInverse().TransformVector(v2); r.w = 0; return r;},
+	//	[](const Matrix4& m1, const Vector4& v2) { return m1.InverseTransformVector(v2);},
+	//	-10000.f, 10000.f, 0.01f, 1000.f, 20000, 4
+	//	);
+
+	//RandomTest<FuncM2F>(
+	//	[](const Matrix4& m1) { return m1.GetDeterminant(); },
+	//	[](const Matrix4& m1) { return m1.GetDeterminant(); },
+	//	[](const Matrix4& m1) { return UT_Matrix4_GetDeterminant(m1); },
+	//	-2, 2, 20000, 3
+	//	);
+
 	//RandomTest<FuncM2M>(
-	//	[](const Matrix4& m1) { return m1.GetTransposed(); },
-	//	[](const Matrix4& m1) { return UT_Matrix4_GetTransposed(m1); },
-	//	[](const Matrix4& m1) { return UT_Matrix4_GetTransposed_Glm(m1); },
-	//	-2, 2, 20000, 0
+	//	[](const Matrix4& m1) { return m1.GetInverseTransposed3(); },
+	//	[](const Matrix4& m1) { return UT_Matrix4_GetInverseTransposed3(m1);},
+	//	[](const Matrix4& m1) { return m1.GetInverseTransposed3(); },
+	//	-2, 2, 20000, 3
+	//	);
+
+	//RandomTest<FuncM2M>(
+	//	[](const Matrix4& m1) { return m1.GetInverse(); },
+	//	[](const Matrix4& m1) { Matrix4 r = m1.GetTransposed(); return UT_Matrix4_GetInverse_Intel(r).GetTransposed();},
+	//	[](const Matrix4& m1) { Matrix4 r = m1.GetTransposed(); return UT_Matrix4_GetInverse_UE4(r).GetTransposed();},
+	//	-2, 2, 20000, 3
 	//	);
 
 	//RandomTest<FuncMM2M>(
@@ -181,16 +236,16 @@ int main(int argc, char **argv)
 	//	);
 
 	//RandomTest<FuncVV2V>(
-	//	[](const Vector4& v1, const Vector4& v2) { Vector4 r = v1.Cross3(v2); r.w = 0; return r;},
-	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Cross3(v1, v2);},
-	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Cross3_Glm(v1, v2);},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecDot2V(v1.mVec, v2.mVec);},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecSet1(UT_Vector4_Dot2(v1, v2));},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecSet1(UT_Vector4_Dot2_Glm(v1, v2));},
 	//	-2, 2, 20000, 0
 	//	);
 	
 	//RandomTest<FuncVV2F>(
-	//	[](const Vector4& v1, const Vector4& v2) { return v1.Dot3(v2);},
-	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot3(v1, v2);},
-	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot3_Glm(v1, v2);},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecDot2(v1.mVec, v2.mVec);},
+	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot2(v1, v2);},
+	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot2_Glm(v1, v2);},
 	//	-2, 2, 20000, 0
 	//	);
 

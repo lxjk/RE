@@ -1,6 +1,7 @@
 #pragma once
 
 #include <emmintrin.h>
+#include <smmintrin.h>
 
 
 typedef __m128	Vec128;
@@ -10,7 +11,7 @@ typedef __m128	Vec128;
 #define VecSet1(f)				_mm_set1_ps(f)
 #define VecSet1_i(i)			_mm_castsi128_ps(_mm_set1_epi32(i))
 
-#define VecSet(x,y,z,w)			_mm_setr_ps(x,y,z,w);
+#define VecSet(x,y,z,w)			_mm_setr_ps(x,y,z,w)
 #define VecSet_i(x,y,z,w)		_mm_castsi128_ps(_mm_setr_epi32(x,y,z,w))
 
 namespace Vec128Const {
@@ -28,6 +29,7 @@ namespace Vec128Const {
 
 #define VecAnd(vec1, vec2)		_mm_and_ps(vec1, vec2)
 #define VecOr(vec1, vec2)		_mm_or_ps(vec1, vec2)
+#define VecXor(vec1, vec2)		_mm_xor_ps(vec1, vec2)
 
 #define VecAdd(vec1, vec2)		_mm_add_ps(vec1, vec2)
 #define VecSub(vec1, vec2)		_mm_sub_ps(vec1, vec2)
@@ -47,6 +49,8 @@ namespace Vec128Const {
 #define VecCmpGT(vec1, vec2)	_mm_cmpgt_ps(vec1, vec2)
 #define VecCmpGE(vec1, vec2)	_mm_cmpge_ps(vec1, vec2)
 
+#define VecToFloat(vec)			_mm_cvtss_f32(vec)
+
 // mask is Vec128, only highest bit of each f32 component is used
 #define VecBlend(vec1, vec2, mask)			_mm_blendv_ps(vec1, vec2, mask);
 // mask is const int, only lowest 4 bits are used
@@ -58,14 +62,22 @@ namespace Vec128Const {
 #define VecSwizzle(vec, x, y, z, w)			_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,y,z,w))
 #define VecSwizzle1(vec, x)					_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,x,x,x))
 #define VecSwizzleMask(vec, mask)			_mm_shuffle_ps(vec, vec, mask)
+// special swizzle
+#define VecSwizzle_0101(vec)				_mm_movelh_ps(vec, vec)
+#define VecSwizzle_2323(vec)				_mm_movehl_ps(vec, vec)
+#define VecSwizzle_0022(vec)				_mm_moveldup_ps(vec)
+#define VecSwizzle_1133(vec)				_mm_movehdup_ps(vec)
 
 //			0		1		 2		  3
 // return (vec1[x], vec1[y], vec2[z], vec2[w])
 #define VecShuffle(vec1, vec2, x, y, z, w)	_mm_shuffle_ps(vec1, vec2, MakeShuffleMask(x,y,z,w))
 #define VecShuffleMask(vec1, vec2, mask)	_mm_shuffle_ps(vec1, vec2, mask)
+// special shuffle
+#define VecShuffle_0101(vec1, vec2)			_mm_movelh_ps(vec1, vec2)
+#define VecShuffle_2323(vec1, vec2)			_mm_movehl_ps(vec2, vec1)
 
 // this is slightly faster at the cost of precision around 2-3 bits of fraction
-inline Vec128 VecInvSqrtFast(Vec128 v)
+__forceinline Vec128 VecInvSqrtFast(Vec128 v)
 {
 	const static Vec128 a = _mm_set1_ps(1.5f);
 	Vec128 x = _mm_rsqrt_ps(v);
@@ -80,7 +92,7 @@ inline Vec128 VecInvSqrtFast(Vec128 v)
 
 #if 0
 // this is slower than sqrt and div, just for reference
-inline Vec128 VecInvSqrtEpic(Vec128 v)
+__forceinline Vec128 VecInvSqrtEpic(Vec128 v)
 {
 	const static Vec128 a = _mm_set1_ps(0.5f);
 	Vec128 x = _mm_rsqrt_ps(v);
@@ -101,80 +113,79 @@ inline Vec128 VecInvSqrtEpic(Vec128 v)
 // return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
 //#define VecDot(vec1, vec2)		_mm_cvtss_f32(_mm_dp_ps(vec1, vec2, 0xF1))
 // This is faster than _mm_dp_ps ?!!!
-inline float VecDot(Vec128 vec1, Vec128 vec2)
+__forceinline float VecDot(Vec128 vec1, Vec128 vec2)
 {
-	Vec128 v = _mm_mul_ps(vec1, vec2); // 3, 2, 1, 0
-	Vec128 shuf = _mm_movehdup_ps(v); // 3, 3, 1, 1
-	Vec128 sums = _mm_add_ps(v, shuf); // 3+3, 2+3, 1+1, 0+1
-	shuf = _mm_movehl_ps(shuf, sums); // 3, 1, 3+3, 2+3
-	sums = _mm_add_ss(sums, shuf); //x, x, x, 0+1+2+3
+	Vec128 v = _mm_mul_ps(vec1, vec2); // 0, 1, 2, 3
+	Vec128 shuf = VecSwizzle_1133(v); // 1, 1, 3, 3
+	Vec128 sums = _mm_add_ps(v, shuf); // 0+1, 1+1, 2+3, 3+3
+	shuf = VecShuffle_2323(sums, shuf); // 2+3, 3+3, 3, 3
+	sums = _mm_add_ps(sums, shuf); //0+1+2+3, x, x, x, 
 	return _mm_cvtss_f32(sums);
 #if 0
-	Vec128 t0 = _mm_mul_ps(vec1, vec2);
+	Vec128 t0 = VecMul(vec1, vec2);
 	Vec128 t1 = _mm_hadd_ps(t0, t0);
 	Vec128 t2 = _mm_hadd_ps(t1, t1);
 	return _mm_cvtss_f32(t2);
 #endif
 }
 
-inline Vec128 VecDotV(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 VecDotV(Vec128 vec1, Vec128 vec2)
 {
 	Vec128 t0 = _mm_mul_ps(vec1, vec2);
 	Vec128 t1 = _mm_hadd_ps(t0, t0);
 	return _mm_hadd_ps(t1, t1);
 }
 
-
-#if 0
-// not very useful, for doing vector 2 or 3, we would better do float version
+// for doing vector 3 by itself, we would better do float version
 // return float value x1*x2 + y1*y2 + z1*z2
 //#define VecDot3(vec1, vec2)		_mm_cvtss_f32(_mm_dp_ps(vec1, vec2, 0x71))
-inline float VecDot3(Vec128 vec1, Vec128 vec2)
+__forceinline float VecDot3(Vec128 vec1, Vec128 vec2)
 {
-	Vec128 v = _mm_mul_ps(vec1, vec2); // 3, 2, 1, 0
-	Vec128 t0 = _mm_movehdup_ps(v); // 3, 3, 1, 1
-	Vec128 t1 = _mm_add_ps(v, t0); // 3+3, 2+3, 1+1, 0+1
-	Vec128 t2 = _mm_movehl_ps(v, v); // 3, 2, 3, 2
-	Vec128 t3 = _mm_add_ps(t1, t2); // x, x, x, 2+1+0
+	Vec128 v = _mm_mul_ps(vec1, vec2);// 0, 1, 2, 3
+	Vec128 t0 = VecSwizzle_1133(v); // 1, 1, 3, 3
+	Vec128 t1 = _mm_add_ps(v, t0); // 0+1, 1+1, 2+3, 3+3
+	Vec128 t2 = VecSwizzle_2323(v, v); // 2, 3, 2, 3
+	Vec128 t3 = _mm_add_ps(t1, t2); // 0+1+2, x, x, x
 #if 0
-	Vec128 t0 = _mm_mul_ps(vec1, vec2); // 3, 2, 1, 0
-	Vec128 t1 = _mm_hadd_ps(t0, t0); // 3+2, 1+0, 3+2, 1+0
-	Vec128 t2 = _mm_movehl_ps(t0, t0); // 3, 2, 3, 2
-	Vec128 t3 = _mm_add_ps(t1, t2); // x, x, x, 2+1+0
+	Vec128 t0 = _mm_mul_ps(vec1, vec2); // 0, 1, 2, 3
+	Vec128 t1 = _mm_hadd_ps(t0, t0); // 0+1, 2+3, 0+1, 2+3
+	Vec128 t2 = VecSwizzle_2323(t0, t0); // 2, 3, 2, 3
+	Vec128 t3 = _mm_add_ps(t1, t2); // 0+1+2, x, x, x
 #endif
 	return _mm_cvtss_f32(t3);
 }
-inline Vec128 VecDot3V(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 VecDot3V(Vec128 vec1, Vec128 vec2)
 {
-	Vec128 t0 = _mm_mul_ps(vec1, vec2); // 3, 2, 1, 0
-	Vec128 t1 = _mm_hadd_ps(t0, t0); // 3+2, 1+0, 3+2, 1+0
-	Vec128 t2 = _mm_add_ps(t1, t0); // x, 2+1+0, x, x
-	return VecSwizzle(t2, 2, 2, 2, 2);
+	Vec128 t0 = _mm_mul_ps(vec1, vec2); // 0, 1, 2, 3
+	Vec128 t1 = _mm_hadd_ps(t0, t0); // 0+1, 2+3, 0+1, 2+3
+	Vec128 t2 = _mm_add_ps(t0, t1); // x, x, 0+1+2, x
+	return VecSwizzle1(t2, 2);
 }
+
+// for doing vector 2 by itself, we would better do float version
 // return float value x1*x2 + y1*y2
 //#define VecDot2(vec1, vec2)		_mm_cvtss_f32(_mm_dp_ps(vec1, vec2, 0x31))
-inline float VecDot2(Vec128 vec1, Vec128 vec2)
+__forceinline float VecDot2(Vec128 vec1, Vec128 vec2)
 {
 	Vec128 t0 = _mm_mul_ps(vec1, vec2);
 	Vec128 t1 = _mm_hadd_ps(t0, t0);
 	return _mm_cvtss_f32(t1);
 }
-inline Vec128 VecDot2V(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 VecDot2V(Vec128 vec1, Vec128 vec2)
 {
 	Vec128 t0 = _mm_mul_ps(vec1, vec2);
-	Vec128 t1 = _mm_hadd_ps(t0, t0); // 3+2, 1+0, 3+2, 1+0
-	return _mm_moveldup_ps(t1); // duplicate 0, 2 to 1, 3
+	Vec128 t1 = _mm_hadd_ps(t0, t0); // 0+1, 2+3, 0+1, 2+3
+	return VecSwizzle_0022(t1); // duplicate 0, 2 to 1, 3
 }
-#endif
 
 // return vector value (x1*x2 + y1*y2, z1*z2 + w1*w2, ?, ?)
-inline Vec128 VecDot2P(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 VecDot2P(Vec128 vec1, Vec128 vec2)
 {
 	Vec128 v = _mm_mul_ps(vec1, vec2);
 	return _mm_hadd_ps(v, v);
 }
 
-inline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
 {
 	// 3 shuffle version: http://threadlocalmutex.com/?p=8
 	const int mask = MakeShuffleMask(1, 2, 0, 3);
@@ -189,4 +200,31 @@ inline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
 	Vec128 v2_zxy = VecSwizzle(vec2, 2, 0, 1, 3);
 	return _mm_sub_ps(_mm_mul_ps(v1_yzx, v2_zxy), _mm_mul_ps(v1_zxy, v2_zxy));
 #endif
+}
+
+// Matrix 2x2 operations
+// we use Vec128 to represent 2x2 column major matrix as A = | A0  A2 |
+//                                                           | A1  A3 |
+
+// 2x2 column major Matrix multiply A*B
+__forceinline Vec128 VecMat2Mul(Vec128 vec1, Vec128 vec2)
+{
+	return 
+		_mm_add_ps(	_mm_mul_ps(						vec1, VecSwizzle(vec2, 0,0,3,3)),
+					_mm_mul_ps(VecSwizzle(vec1, 2,3,0,1), VecSwizzle(vec2, 1,1,2,2)));
+}
+// 2x2 column major Matrix adjugate multiply adj(A)*B
+__forceinline Vec128 VecMat2AdjMul(Vec128 vec1, Vec128 vec2)
+{
+	return
+		_mm_sub_ps(	_mm_mul_ps(VecSwizzle(vec1, 3,0,3,0), vec2),
+					_mm_mul_ps(VecSwizzle(vec1, 2,1,2,1), VecSwizzle(vec2, 1,0,3,2)));
+
+}
+// 2x2 column major Matrix multiply adjugate A*adj(B)
+__forceinline Vec128 VecMat2MulAdj(Vec128 vec1, Vec128 vec2)
+{
+	return
+		_mm_sub_ps(	_mm_mul_ps(						vec1, VecSwizzle(vec2, 3,3,0,0)),
+					_mm_mul_ps(VecSwizzle(vec1, 2,3,0,1), VecSwizzle(vec2, 1,1,2,2)));
 }

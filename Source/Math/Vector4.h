@@ -6,8 +6,7 @@ struct Vector4;
 typedef Vector4 Vector4_3;
 typedef Vector4 Vector4_2;
 
-__declspec(align(16))
-struct Vector4
+__declspec(align(16)) struct Vector4
 {
 public:
 	union
@@ -127,7 +126,7 @@ public:
 	}
 
 	// vector4 dot: return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
-	inline float Dot(const Vector4& v) const
+	inline float Dot4(const Vector4& v) const
 	{
 		return VecDot(mVec, v.mVec);
 	}
@@ -149,7 +148,7 @@ public:
 	}
 
 	// vector4 dot: return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
-	static inline float Dot(const Vector4& v1, const Vector4& v2) { return v1.Dot(v2); }
+	static inline float Dot4(const Vector4& v1, const Vector4& v2) { return v1.Dot4(v2); }
 	// vector4_3 dot: return float value x1*x2 + y1*y2 + z1*z2
 	static inline float Dot3(const Vector4_3& v1, const Vector4_3& v2) { return v1.Dot3(v2); }
 	// vector4_2 dot: return float value x1*x2 + y1*y2
@@ -174,9 +173,9 @@ public:
 	static inline float Cross2(const Vector4_2& v1, const Vector4_2& v2) { return v1.Cross2(v2); }
 
 	// size
-	inline float SizeSqr() const
+	inline float SizeSqr4() const
 	{
-		return Dot(*this);
+		return Dot4(*this);
 	}
 	inline float SizeSqr3() const
 	{
@@ -186,9 +185,9 @@ public:
 	{
 		return Dot2(*this);
 	}
-	inline float Size() const
+	inline float Size4() const
 	{
-		return sqrt(Dot(*this));
+		return sqrt(Dot4(*this));
 	}
 	inline float Size3() const
 	{
@@ -200,7 +199,7 @@ public:
 	}
 
 	// normalize
-	// Vector4 version: SSE > normal
+	// Vector4 version time: SSE < normal
 	inline Vector4 GetNormalized() const
 	{
 		// sse method without branch
@@ -212,7 +211,7 @@ public:
 			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)));
 
 #if 0 // normal method, sizeSqr is a float
-		float sizeSqr = Dot(*this);
+		float sizeSqr = Dot4(*this);
 		return (sizeSqr < SMALL_NUMBER) ?
 			VecZero() :
 			VecDiv(mVec, VecSet1(sqrt(sizeSqr)));
@@ -230,7 +229,7 @@ public:
 			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)));
 	}
 
-	// Vector4_3 version: SSE(set1(Dot3)) > SSE(VecDot3V) > normal
+	// Vector4_3 version time: SSE(set1(Dot3)) < SSE(VecDot3V) < normal
 	// only take x,y,z; w will set to 0
 	inline Vector4 GetNormalized3() const
 	{
@@ -246,7 +245,7 @@ public:
 			VecOr(VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)), Vec128Const::VecMaskW));
 	}
 	
-	// Vector4_2 version: SSE(set1(Dot2)) > normal > SSE(VecDot2V)
+	// Vector4_2 version time: SSE(set1(Dot2)) < normal < SSE(VecDot2V)
 	// only take x,y; z,w will set to 0
 	inline Vector4 GetNormalized2() const
 	{

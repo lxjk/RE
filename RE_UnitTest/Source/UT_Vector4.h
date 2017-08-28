@@ -98,12 +98,12 @@ inline Vector4 UT_Vector4_Negate_Glm(const Vector4& v1)
 	return GlmVec4ToVector4(r);
 }
 
-inline float UT_Vector4_Dot(const Vector4& v1, const Vector4& v2)
+inline float UT_Vector4_Dot4(const Vector4& v1, const Vector4& v2)
 {
 	// somehow the parenthese are crucial to get the same value as SSE or glm version
 	return (v1.x * v2.x + v1.y * v2.y) + (v1.z * v2.z + v1.w * v2.w);
 }
-inline float UT_Vector4_Dot_Glm(const Vector4& v1, const Vector4& v2)
+inline float UT_Vector4_Dot4_Glm(const Vector4& v1, const Vector4& v2)
 {
 	return glm::dot(Vector4ToGlmVec4(v1), Vector4ToGlmVec4(v2));
 }
@@ -138,7 +138,7 @@ inline Vector4 UT_Vector4_Cross3_Glm(const Vector4& v1, const Vector4& v2)
 
 inline Vector4 UT_Vector4_GetNormalized(const Vector4& v1)
 {
-	float sizeSqr = UT_Vector4_Dot(v1, v1);
+	float sizeSqr = UT_Vector4_Dot4(v1, v1);
 	if (sizeSqr < SMALL_NUMBER)
 		return Vector4::Zero();
 	return UT_Vector4_Div(v1, sqrt(sizeSqr));

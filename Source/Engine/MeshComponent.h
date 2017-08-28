@@ -26,7 +26,7 @@ public:
 
 	glm::mat4 prevModelMat;
 	glm::mat4 modelMat;
-	glm::mat3 normalMat;
+	//glm::mat3 normalMat;
 
 
 	BoxBounds bounds;

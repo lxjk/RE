@@ -14,7 +14,7 @@ out VS_OUT
 
 uniform mat4 prevModelMat;
 uniform mat4 modelMat;
-uniform mat3 normalMat;
+//uniform mat3 normalMat;
 
 void main()
 {
@@ -27,11 +27,20 @@ void main()
 	// unjitter
 	vs_out.posCS.xy += projMat[2].xy * vs_out.posCS.w;
 	vs_out.prevPosCS.xy += prevProjMat[2].xy * vs_out.prevPosCS.w;
-		
-	// we can do this because mat3(viewMat) is guaranteed to be orthogonal (no scale)
-	mat3 viewNormalMat = mat3(viewMat) * normalMat;	
-	vs_out.normal = viewNormalMat * normal;
+	
+	vec3 normalScalar = vec3(
+		dot(modelMat[0], modelMat[0]), 
+		dot(modelMat[1], modelMat[1]), 
+		dot(modelMat[2], modelMat[2]));		
+	
+	mat3 viewNormalMat = mat3(viewMat * modelMat);	
+	vs_out.normal = viewNormalMat * (normal / normalScalar);
 	vs_out.tangent = vec4(viewNormalMat * tangent.xyz, tangent.w);
+	
+	// we can do this because mat3(viewMat) is guaranteed to be orthogonal (no scale)
+	//viewNormalMat = mat3(viewMat) * normalMat;	
+	//vs_out.normal = viewNormalMat * normal;
+	//vs_out.tangent = vec4(viewNormalMat * tangent.xyz, tangent.w);
 	
 	vs_out.texCoords = texCoords;
 }
