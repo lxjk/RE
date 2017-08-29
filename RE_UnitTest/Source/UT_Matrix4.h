@@ -4,10 +4,10 @@
 #include "UT_Vector4.h"
 
 //#define Matrix4ToGlmMat4(value) glm::mat4(\
-//	Vector4ToGlmVec4(value.mCol[0]),\
-//	Vector4ToGlmVec4(value.mCol[1]),\
-//	Vector4ToGlmVec4(value.mCol[2]),\
-//	Vector4ToGlmVec4(value.mCol[3]))
+//	Vector4ToGlmVec4(value.mLine[0]),\
+//	Vector4ToGlmVec4(value.mLine[1]),\
+//	Vector4ToGlmVec4(value.mLine[2]),\
+//	Vector4ToGlmVec4(value.mLine[3]))
 
 //#define GlmMat4ToMatrix4(value) Matrix4(\
 //	GlmVec4ToVector4(value[0]),\
@@ -42,10 +42,10 @@ inline Vector4 UT_Matrix4_Mul_Vector4_Glm(const Matrix4& m1, const Vector4& v2)
 inline Matrix4 UT_Matrix4_Mul_Matrix4(const Matrix4& m1, const Matrix4& m2)
 {
 	Matrix4 r;
-	r.mCol[0] = UT_Matrix4_Mul_Vector4(m1, m2.mCol[0]);
-	r.mCol[1] = UT_Matrix4_Mul_Vector4(m1, m2.mCol[1]);
-	r.mCol[2] = UT_Matrix4_Mul_Vector4(m1, m2.mCol[2]);
-	r.mCol[3] = UT_Matrix4_Mul_Vector4(m1, m2.mCol[3]);
+	r.mLine[0] = UT_Matrix4_Mul_Vector4(m1, m2.mLine[0]);
+	r.mLine[1] = UT_Matrix4_Mul_Vector4(m1, m2.mLine[1]);
+	r.mLine[2] = UT_Matrix4_Mul_Vector4(m1, m2.mLine[2]);
+	r.mLine[3] = UT_Matrix4_Mul_Vector4(m1, m2.mLine[3]);
 	return r;
 }
 

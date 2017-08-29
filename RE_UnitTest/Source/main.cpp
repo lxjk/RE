@@ -182,7 +182,7 @@ int main(int argc, char **argv)
 {
 	srand(time(0));
 	
-	Bench();
+	//Bench();
 
 	//ExhaustTest();
 
@@ -207,12 +207,12 @@ int main(int argc, char **argv)
 	//	-2, 2, 20000, 3
 	//	);
 
-	//RandomTest<FuncM2M>(
-	//	[](const Matrix4& m1) { return m1.GetInverseTransposed3(); },
-	//	[](const Matrix4& m1) { return UT_Matrix4_GetInverseTransposed3(m1);},
-	//	[](const Matrix4& m1) { return m1.GetInverseTransposed3(); },
-	//	-2, 2, 20000, 3
-	//	);
+	RandomTest<FuncM2M>(
+		[](const Matrix4& m1) { return UT_Matrix4_GetInverse_Intel(m1); },
+		[](const Matrix4& m1) { return m1.GetInverse(); },
+		[](const Matrix4& m1) { return m1.GetInverse(); },
+		-2, 2, 20000, 4
+		);
 
 	//RandomTest<FuncM2M>(
 	//	[](const Matrix4& m1) { return m1.GetInverse(); },

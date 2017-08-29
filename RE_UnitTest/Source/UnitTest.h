@@ -40,7 +40,6 @@ int FloatSpecialNum = _countof(FloatSpecials);
 #define IsNaN(i) (IsFloatSpecial(i) && (i & 0x007FFFFF) > 0)
 #define IsQNaN(i) (IsFloatSpecial(i) && (i & 0x00400000) == 0x00400000)
 #define IsSNaN(i) (IsFloatSpecial(i) && (i & 0x00400000) == 0)
-#define max(a, b) (a > b ? a : b)
 
 
 template<typename T>
@@ -86,7 +85,7 @@ inline void PrintValue(Matrix4 v)
 {
 	for (int i = 0; i < 4; ++i)
 	{
-		PrintValue(v.mCol[i]);
+		PrintValue(v.mLine[i]);
 	}
 }
 
@@ -145,7 +144,7 @@ inline int CheckEquals(float f1, float f2)
 
 	float diff = abs(f1 - f2);
 	float maxValue = max(1, max(abs(f1), abs(f2)));
-	if (diff <= maxValue * 0.0000001)
+	if (diff <= maxValue * 0.00001)
 		return 3;
 
 	if (abs(u1.i - u2.i) < 0x3)
@@ -171,10 +170,10 @@ template<>
 inline int CheckEquals(Matrix4 m1, Matrix4 m2)
 {
 	return 
-		max(CheckEquals(m1.mCol[0], m2.mCol[0]),
-		max(CheckEquals(m1.mCol[1], m2.mCol[1]),
-		max(CheckEquals(m1.mCol[2], m2.mCol[2]),
-			CheckEquals(m1.mCol[3], m2.mCol[3]))));
+		max(CheckEquals(m1.mLine[0], m2.mLine[0]),
+		max(CheckEquals(m1.mLine[1], m2.mLine[1]),
+		max(CheckEquals(m1.mLine[2], m2.mLine[2]),
+			CheckEquals(m1.mLine[3], m2.mLine[3]))));
 }
 
 template<typename T_op1, typename T_op2, typename T_r>
@@ -293,9 +292,9 @@ inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float max
 		{2*q.x*q.y - 2*q.z*q.w,		1 - 2*q.x*q.x - 2*q.z*q.z,	2*q.y*q.z + 2*q.x*q.w,		0},
 		{2*q.x*q.z + 2*q.y*q.w,		2*q.y*q.z - 2*q.x*q.w,		1 - 2*q.x*q.x - 2*q.y*q.y,	0},
 		{RandRangeF(minT, maxT),	RandRangeF(minT, maxT),		RandRangeF(minT, maxT),		1} };
-	r.mCol[0] *= RandRangeF(minS, maxS);
-	r.mCol[1] *= RandRangeF(minS, maxS);
-	r.mCol[2] *= RandRangeF(minS, maxS);
+	r.mLine[0] *= RandRangeF(minS, maxS);
+	r.mLine[1] *= RandRangeF(minS, maxS);
+	r.mLine[2] *= RandRangeF(minS, maxS);
 	return r;
 }
 

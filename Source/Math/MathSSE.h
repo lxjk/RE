@@ -144,7 +144,7 @@ __forceinline float VecDot3(Vec128 vec1, Vec128 vec2)
 	Vec128 v = _mm_mul_ps(vec1, vec2);// 0, 1, 2, 3
 	Vec128 t0 = VecSwizzle_1133(v); // 1, 1, 3, 3
 	Vec128 t1 = _mm_add_ps(v, t0); // 0+1, 1+1, 2+3, 3+3
-	Vec128 t2 = VecSwizzle_2323(v, v); // 2, 3, 2, 3
+	Vec128 t2 = VecSwizzle_2323(v); // 2, 3, 2, 3
 	Vec128 t3 = _mm_add_ps(t1, t2); // 0+1+2, x, x, x
 #if 0
 	Vec128 t0 = _mm_mul_ps(vec1, vec2); // 0, 1, 2, 3
@@ -203,28 +203,57 @@ __forceinline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
 }
 
 // Matrix 2x2 operations
-// we use Vec128 to represent 2x2 column major matrix as A = | A0  A2 |
-//                                                           | A1  A3 |
+//
+// for column major matrix ( specific functions surfix by _CM )
+// we use Vec128 to represent 2x2 matrix as A = | A0  A2 |
+//                                              | A1  A3 |
+//
+// for row major matrix ( specific functions surfix by _RM )
+// we use Vec128 to represent 2x2 matrix as A = | A0  A1 |
+//                                              | A2  A3 |
 
 // 2x2 column major Matrix multiply A*B
-__forceinline Vec128 VecMat2Mul(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 Mat2Mul_CM(Vec128 vec1, Vec128 vec2)
 {
 	return 
 		_mm_add_ps(	_mm_mul_ps(						vec1, VecSwizzle(vec2, 0,0,3,3)),
 					_mm_mul_ps(VecSwizzle(vec1, 2,3,0,1), VecSwizzle(vec2, 1,1,2,2)));
 }
+// 2x2 row major Matrix multiply A*B
+__forceinline Vec128 Mat2Mul_RM(Vec128 vec1, Vec128 vec2)
+{
+	return 
+		_mm_add_ps(	_mm_mul_ps(						vec1, VecSwizzle(vec2, 0,3,0,3)),
+					_mm_mul_ps(VecSwizzle(vec1, 1,0,3,2), VecSwizzle(vec2, 2,1,2,1)));
+}
+
 // 2x2 column major Matrix adjugate multiply adj(A)*B
-__forceinline Vec128 VecMat2AdjMul(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 Mat2AdjMul_CM(Vec128 vec1, Vec128 vec2)
 {
 	return
 		_mm_sub_ps(	_mm_mul_ps(VecSwizzle(vec1, 3,0,3,0), vec2),
 					_mm_mul_ps(VecSwizzle(vec1, 2,1,2,1), VecSwizzle(vec2, 1,0,3,2)));
 
 }
+// 2x2 row major Matrix adjugate multiply adj(A)*B
+__forceinline Vec128 Mat2AdjMul_RM(Vec128 vec1, Vec128 vec2)
+{
+	return
+		_mm_sub_ps(	_mm_mul_ps(VecSwizzle(vec1, 3,3,0,0), vec2),
+					_mm_mul_ps(VecSwizzle(vec1, 1,1,2,2), VecSwizzle(vec2, 2,3,0,1)));
+
+}
 // 2x2 column major Matrix multiply adjugate A*adj(B)
-__forceinline Vec128 VecMat2MulAdj(Vec128 vec1, Vec128 vec2)
+__forceinline Vec128 Mat2MulAdj_CM(Vec128 vec1, Vec128 vec2)
 {
 	return
 		_mm_sub_ps(	_mm_mul_ps(						vec1, VecSwizzle(vec2, 3,3,0,0)),
 					_mm_mul_ps(VecSwizzle(vec1, 2,3,0,1), VecSwizzle(vec2, 1,1,2,2)));
+}
+// 2x2 row major Matrix multiply adjugate A*adj(B)
+__forceinline Vec128 Mat2MulAdj_RM(Vec128 vec1, Vec128 vec2)
+{
+	return
+		_mm_sub_ps(	_mm_mul_ps(						vec1, VecSwizzle(vec2, 3,0,3,0)),
+					_mm_mul_ps(VecSwizzle(vec1, 1,0,3,2), VecSwizzle(vec2, 2,1,2,1)));
 }
