@@ -4,10 +4,12 @@
 
 #include "Vector4.h"
 
+#define MATRIX_COLUMN_MAJOR	1
+
 struct Matrix4;
 
 // matrix 4x4
-// column major by default, can toggle MATRIX_COLUMN_MAJOR in MathUtil.h 
+// column major by default, can toggle MATRIX_COLUMN_MAJOR 
 // comments are mostly based on column major version
 __declspec(align(16)) struct Matrix4
 {
