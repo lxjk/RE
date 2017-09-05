@@ -6,7 +6,6 @@
 #include "../../3rdparty/glm/glm/glm.hpp"
 
 #include "UnitTest.h"
-#include "UT_Vector4.h"
 
 #include "Windows.h"
 
@@ -67,6 +66,8 @@ struct BenchData
 	//Matrix4 m2;
 	//Vector4 v1;
 	//Vector4 v2;
+	//Quat q1;
+	//Quat q2;
 	//float f;
 };
 
@@ -79,7 +80,8 @@ void Bench()
 	const int count = 10000000;
 	//float tmp = 0;
 	//Vector4 tmp;
-	Matrix4 tmp;
+	//Matrix4 tmp;
+	Quat tmp;
 	unsigned __int64 acc_t0 = 0, acc_t1 = 0, acc_t2 = 0, acc_tt = 0;
 	LARGE_INTEGER pc0, pc1, pc2, pc3;
 
@@ -88,11 +90,6 @@ void Bench()
 	//float f = RandF();
 
 	BenchData* d = (BenchData*)_aligned_malloc(sizeof(BenchData) * count, 16);
-	//Matrix4* m1 = (Matrix4*)_aligned_malloc(sizeof(Matrix4) * count, 16);
-	//Matrix4* m2 = (Matrix4*)_aligned_malloc(sizeof(Matrix4) * count, 16);
-	//Vector4* v1 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
-	//Vector4* v2 = (Vector4*)_aligned_malloc(sizeof(Vector4) * count, 16);
-	//float* f = (float*)_aligned_malloc(sizeof(float) * count, 16);
 
 	const float minR = -20.f;
 	const float maxR = 20.f;
@@ -106,13 +103,15 @@ void Bench()
 			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) } };
 		//d[i].v1 = Vector4(RandF(), RandF(), RandF(), RandF());
 		//d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
+		//d[i].q1 = RandQuat();
+		//d[i].q2 = RandQuat();
 		//d[i].f = RandF();
 	}
 
 	// -- warmup
 	for (int i = 0; i < count; ++i)
 	{
-		tmp += *(float*)&d[i];
+		AsVector4(tmp) += *(float*)&d[i];
 	}
 	// -- warmup
 
@@ -123,7 +122,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += d[i].m1.GetInverse();
+			tmp += Matrix4ToQuat2(d[i].m1);
+			//tmp += d[i].m1.GetInverse();
 			//tmp += UT_Matrix4_GetInverse_Intel(d[i].m1);
 			//tmp += d[i].m1.InverseTransformPoint(d[i].v1);
 			//tmp += d[i].m1.GetDeterminant();
@@ -138,7 +138,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += d[i].m1.GetTransformInverseNoScale();
+			tmp += Matrix4ToQuat(d[i].m1);
+			//tmp += d[i].m1.GetTransformInverseNoScale();
 			//tmp += UT_Matrix4_GetInverse_UE4(d[i].m1);
 			//tmp += d[i].m1.InverseTransformPointNoScale(d[i].v1);
 			//tmp += d[i].m1.GetDeterminant();
@@ -153,7 +154,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += d[i].m1.GetTransformInverse();
+			tmp += Matrix4ToQuat3(d[i].m1);
+			//tmp += d[i].m1.GetTransformInverse();
 			//tmp += UT_Matrix4_GetInverse_DirectX(d[i].m1);
 			//tmp += d[i].m1.GetTransformInverse().TransformPoint(d[i].v1);
 			//tmp += GlmMat4ToMatrix4(glm::inverse(Matrix4ToGlmMat4(d[i].m1)));
@@ -182,9 +184,37 @@ int main(int argc, char **argv)
 {
 	srand(time(0));
 	
-	//Bench();
+	Bench();
 
 	//ExhaustTest();
+
+	//TransformRandomTest<FuncM2Q>(
+	//	[](const Matrix4& m1) { return Matrix4ToQuat2(m1);},
+	//	[](const Matrix4& m1) { return Matrix4ToQuat2(m1);},
+	//	[](const Matrix4& m1) { return Matrix4ToQuat3(m1);},
+	//	-10000.f, 10000.f, 1.f, 1.f, 20000, 4
+	//	);
+
+	//RandomTest<FuncQ2M>(
+	//	[](const Quat& q1) { return QuatToMatrix4_2(q1); },
+	//	[](const Quat& q1) { return QuatToMatrix4_3(q1); },
+	//	[](const Quat& q1) { glm::mat4 r = glm::mat4_cast(QuatToGlmQuat(q1)); return GlmMat4ToMatrix4(r); },
+	//	-2, 2, 20000, 3
+	//	);
+
+	//RandomTest<FuncQV2V>(
+	//	[](const Quat& q1, const Vector4& v2) { return UT_Quat_InverseRotate_Glm(q1, v2); },
+	//	[](const Quat& q1, const Vector4& v2) { Vector4 r = q1.InverseRotate(v2); r.w = 0; return r;},
+	//	[](const Quat& q1, const Vector4& v2) { return UT_Quat_InverseRotate_Glm(q1, v2); },
+	//	-2000, 2000, 20000, 4
+	//	);
+
+	//RandomTest<FuncQQ2Q>(
+	//	[](const Quat& q1, const Quat& q2) { return q1 * q2; },
+	//	[](const Quat& q1, const Quat& q2) { return q1.MulUE4(q2); },
+	//	[](const Quat& q1, const Quat& q2) { return UT_Quat_Mul_Glm(q1, q2); },
+	//	-2, 2, 20000, 3
+	//	);
 
 	//TransformRandomTest<FuncM2M>(
 	//	[](const Matrix4& m1) { return UT_Matrix4_GetInverseTransposed3(m1);},
@@ -207,12 +237,12 @@ int main(int argc, char **argv)
 	//	-2, 2, 20000, 3
 	//	);
 
-	RandomTest<FuncM2M>(
-		[](const Matrix4& m1) { return UT_Matrix4_GetInverse_Intel(m1); },
-		[](const Matrix4& m1) { return m1.GetInverse(); },
-		[](const Matrix4& m1) { return m1.GetInverse(); },
-		-2, 2, 20000, 4
-		);
+	//RandomTest<FuncM2M>(
+	//	[](const Matrix4& m1) { return UT_Matrix4_GetInverse_Intel(m1); },
+	//	[](const Matrix4& m1) { return m1.GetInverse(); },
+	//	[](const Matrix4& m1) { return m1.GetInverse(); },
+	//	-2, 2, 20000, 4
+	//	);
 
 	//RandomTest<FuncM2M>(
 	//	[](const Matrix4& m1) { return m1.GetInverse(); },

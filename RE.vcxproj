@@ -66,6 +66,8 @@
     <ClInclude Include="Source\Math\MathSSE.h" />
     <ClInclude Include="Source\Math\MathUtil.h" />
     <ClInclude Include="Source\Math\Matrix4.h" />
+    <ClInclude Include="Source\Math\Quat.h" />
+    <ClInclude Include="Source\Math\REMath.h" />
     <ClInclude Include="Source\Math\Vector4.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

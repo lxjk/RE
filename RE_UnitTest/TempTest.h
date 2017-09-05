@@ -62,7 +62,7 @@ __forceinline Matrix4 GetTransformInverseNoScale(const Matrix4& inM)
 
 	// transpose 3x3, we know m03 = m13 = m23 = 0	
 	__m128 t0 = VecShuffle_0101(inM.mVec[0], inM.mVec[1]); // 00, 01, 10, 11
-	__m128 t1 = VecShuffle_2323(inM.mVec[0], inM.mVec[1]); // 02, 02, 12, 13
+	__m128 t1 = VecShuffle_2323(inM.mVec[0], inM.mVec[1]); // 02, 03, 12, 13
 	r.mVec[0] = VecShuffle(t0, inM.mVec[2], 0,2,0,3); // 00, 10, 20, 23(=0)
 	r.mVec[1] = VecShuffle(t0, inM.mVec[2], 1,3,1,3); // 01, 11, 21, 23(=0)
 	r.mVec[2] = VecShuffle(t1, inM.mVec[2], 0,2,2,3); // 02, 12, 22, 23(=0)
@@ -86,7 +86,7 @@ __forceinline Matrix4 GetTransformInverse(const Matrix4& inM)
 	
 	// transpose 3x3, we know m03 = m13 = m23 = 0	
 	__m128 t0 = VecShuffle_0101(inM.mVec[0], inM.mVec[1]); // 00, 01, 10, 11
-	__m128 t1 = VecShuffle_2323(inM.mVec[0], inM.mVec[1]); // 02, 02, 12, 13
+	__m128 t1 = VecShuffle_2323(inM.mVec[0], inM.mVec[1]); // 02, 03, 12, 13
 	r.mVec[0] = VecShuffle(t0, inM.mVec[2], 0,2,0,3); // 00, 10, 20, 23(=0)
 	r.mVec[1] = VecShuffle(t0, inM.mVec[2], 1,3,1,3); // 01, 11, 21, 23(=0)
 	r.mVec[2] = VecShuffle(t1, inM.mVec[2], 0,2,2,3); // 02, 12, 22, 23(=0)
@@ -153,7 +153,7 @@ __forceinline Matrix4 GetInverse(const Matrix4& inM)
 	// use block matrix method
 	// A is a matrix, then i(A) or iA means inverse of A, A# (or A_ in code) means adjugate of A, |A| is determinant, tr(A) is trace
 	// some properties: iA = A# / |A|, (AB)# = B#A#, (cA)# = c^(n-1)A#, |AB| = |A||B|, |cA| = c^n|A|, tr(AB) = tr(BA)
-	// for 2x2 matrix: (A#)# = A, (cA)# = cA#, |-A| = |A|, |A+B| = |A| + |B| + tr(A#B), tr(A) = A0*A3 - A1*A2
+	// for 2x2 matrix: (A#)# = A, (cA)# = cA#, |-A| = |A|, |A+B| = |A| + |B| + tr(A#B), |A| = A0*A3 - A1*A2
 	// M is 4x4 matrix, we divide into 4 2x2 matrices
 	// let M = | A  B |, then iM = | i(A-BiDC)        -iABi(D-CiAB) | = 1/|M| * | (|D|A - B(D#C))#    (|B|C - D(A#B)#)# |
 	//         | C  D |            | -iDCi(A-BiDC)    i(D-CiAB)     |           | (|C|B - A(D#C)#)#   (|A|D - C(A#B))#  |
@@ -269,7 +269,7 @@ __forceinline Matrix4 GetInverse(const Matrix4& inM)
 	// use block matrix method
 	// A is a matrix, then i(A) or iA means inverse of A, A# (or A_ in code) means adjugate of A, |A| is determinant, tr(A) is trace
 	// some properties: iA = A# / |A|, (AB)# = B#A#, (cA)# = c^(n-1)A#, |AB| = |A||B|, |cA| = c^n|A|, tr(AB) = tr(BA)
-	// for 2x2 matrix: (A#)# = A, (cA)# = cA#, |-A| = |A|, |A+B| = |A| + |B| + tr(A#B), tr(A) = A0*A3 - A1*A2
+	// for 2x2 matrix: (A#)# = A, (cA)# = cA#, |-A| = |A|, |A+B| = |A| + |B| + tr(A#B), |A| = A0*A3 - A1*A2
 	// M is 4x4 matrix, we divide into 4 2x2 matrices
 	// let M = | A  B |, then iM = | i(A-BiDC)        -iABi(D-CiAB) | = 1/|M| * | (|D|A - B(D#C))#    (|B|C - D(A#B)#)# |
 	//         | C  D |            | -iDCi(A-BiDC)    i(D-CiAB)     |           | (|C|B - A(D#C)#)#   (|A|D - C(A#B))#  |

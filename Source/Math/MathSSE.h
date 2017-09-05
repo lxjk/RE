@@ -54,7 +54,8 @@ namespace Vec128Const {
 // mask is Vec128, only highest bit of each f32 component is used
 #define VecBlend(vec1, vec2, mask)			_mm_blendv_ps(vec1, vec2, mask);
 // mask is const int, only lowest 4 bits are used
-#define VecBlendConst(vec1, vec2, mask)		_mm_blend_ps(vec1, vec2, mask);
+#define MakeBlendMask(x,y,z,w)				(x | (y<<1) | (z<<2) | (w<<3))
+#define VecBlendConst(vec1, vec2, x,y,z,w)	_mm_blend_ps(vec1, vec2, MakeBlendMask(x,y,z,w));
 
 #define MakeShuffleMask(x,y,z,w)			(x | (y<<2) | (z<<4) | (w<<6))
 

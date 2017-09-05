@@ -39,6 +39,26 @@ public:
 		mLine[3] = line3;
 	}
 
+	//Matrix4(Vec128 vec0, Vec128 vec1, Vec128 vec2, Vec128 vec3)
+	//{
+	//	mVec[0] = vec0;
+	//	mVec[1] = vec1;
+	//	mVec[2] = vec2;
+	//	mVec[3] = vec3;
+	//}
+	
+	// const getter
+	static __forceinline Matrix4 Identity()
+	{ 
+		static Matrix4 identity(
+			VecSet(1.f, 0.f, 0.f, 0.f),
+			VecSet(0.f, 1.f, 0.f, 0.f),
+			VecSet(0.f, 0.f, 1.f, 0.f),
+			VecSet(0.f, 0.f, 0.f, 1.f)
+			);
+		return identity;
+	}
+
 	// add
 	inline Matrix4 operator+(const Matrix4& m) const
 	{
@@ -277,9 +297,9 @@ public:
 		// |M| = |A|*|D| + |B|*|C| - tr((A#B)(D#C))
 		detM = VecSub(detM, tr);
 
-		const Vec128 adjSignMask = VecSet_i(0x00000000, 0x80000000, 0x80000000, 0x00000000);
+		const Vec128 adjSignMask = VecSet(1.f, -1.f, -1.f, 1.f);
 		// (1/|M|, -1/|M|, -1/|M|, 1/|M|)
-		Vec128 rDetM = VecXor(VecDiv(VecSet1(1.f), detM), adjSignMask);
+		Vec128 rDetM = VecDiv(adjSignMask, detM);
 
 		X_ = VecMul(X_, rDetM);
 		Y_ = VecMul(Y_, rDetM);
@@ -289,7 +309,7 @@ public:
 		Matrix4 r;
 
 		// apply adjugate and store, here we combine adjugate shuffle and store shuffle
-		// btw adjuagate fuction: Adj(Vec) = VecXor(VecSwizzle(Vec, 3,1,2,0), adjSignMask)
+		// btw adjuagate fuction: Adj(Vec) = VecMul(VecSwizzle(Vec, 3,1,2,0), adjSignMask)
 		r.mVec[0] = VecShuffle(X_, Z_, 3,1,3,1);
 		r.mVec[1] = VecShuffle(X_, Z_, 2,0,2,0);
 		r.mVec[2] = VecShuffle(Y_, W_, 3,1,3,1);
@@ -367,9 +387,9 @@ public:
 		// |M| = |A|*|D| + |B|*|C| - tr((A#B)(D#C))
 		detM = VecSub(detM, tr);
 
-		const Vec128 adjSignMask = VecSet_i(0x00000000, 0x80000000, 0x80000000, 0x00000000);
+		const Vec128 adjSignMask = VecSet(1.f, -1.f, -1.f, 1.f);
 		// (1/|M|, -1/|M|, -1/|M|, 1/|M|)
-		Vec128 rDetM = VecXor(VecDiv(VecSet1(1.f), detM), adjSignMask);
+		Vec128 rDetM = VecDiv(adjSignMask, detM);
 
 		X_ = VecMul(X_, rDetM);
 		Y_ = VecMul(Y_, rDetM);
@@ -379,7 +399,7 @@ public:
 		Matrix4 r;
 
 		// apply adjugate and store, here we combine adjugate shuffle and store shuffle
-		// btw adjuagate fuction: Adj(Vec) = VecXor(VecSwizzle(Vec, 3,1,2,0), adjSignMask)
+		// btw adjuagate fuction: Adj(Vec) = VecMul(VecSwizzle(Vec, 3,1,2,0), adjSignMask)
 		r.mVec[0] = VecShuffle(X_, Y_, 3, 1, 3, 1);
 		r.mVec[1] = VecShuffle(X_, Y_, 2, 0, 2, 0);
 		r.mVec[2] = VecShuffle(Z_, W_, 3, 1, 3, 1);
@@ -393,7 +413,7 @@ public:
 	__forceinline void Internal_GetTransposed3(Vec128& outTLine0, Vec128& outTLine1, Vec128& outTLine2) const
 	{
 		Vec128 t0 = VecShuffle_0101(mVec[0], mVec[1]); // 00, 01, 10, 11
-		Vec128 t1 = VecShuffle_2323(mVec[0], mVec[1]); // 02, 02, 12, 13
+		Vec128 t1 = VecShuffle_2323(mVec[0], mVec[1]); // 02, 03, 12, 13
 		outTLine0 = VecShuffle(t0, mVec[2], 0,2,0,3); // 00, 10, 20, 23
 		outTLine1 = VecShuffle(t0, mVec[2], 1,3,1,3); // 01, 11, 21, 23
 		outTLine2 = VecShuffle(t1, mVec[2], 0,2,2,3); // 02, 12, 22, 23

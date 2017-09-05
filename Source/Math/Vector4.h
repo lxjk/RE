@@ -36,7 +36,7 @@ public:
 	}
 
 	// const getter
-	static Vector4 Zero() { return VecZero(); }
+	static __forceinline Vector4 Zero() { return VecZero(); }
 
 
 	// add

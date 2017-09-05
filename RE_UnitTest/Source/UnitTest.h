@@ -5,9 +5,10 @@
 #include <functional>
 #include "Windows.h"
 
-#include "Math/MathUtil.h"
+#include "Math/REMath.h"
 #include "UT_Vector4.h"
 #include "UT_Matrix4.h"
+#include "UT_Quat.h"
 
 // float bit
 // 31 30-23(8) 22-0(23)
@@ -89,6 +90,12 @@ inline void PrintValue(Matrix4 v)
 	}
 }
 
+template<>
+inline void PrintValue(Quat q)
+{
+	PrintValue(AsVector4(q));
+}
+
 template<typename T>
 int CheckEquals(T v1, T v2);
 
@@ -144,7 +151,7 @@ inline int CheckEquals(float f1, float f2)
 
 	float diff = abs(f1 - f2);
 	float maxValue = max(1, max(abs(f1), abs(f2)));
-	if (diff <= maxValue * 0.00001)
+	if (diff <= maxValue * 0.0001)
 		return 3;
 
 	if (abs(u1.i - u2.i) < 0x3)
@@ -174,6 +181,12 @@ inline int CheckEquals(Matrix4 m1, Matrix4 m2)
 		max(CheckEquals(m1.mLine[1], m2.mLine[1]),
 		max(CheckEquals(m1.mLine[2], m2.mLine[2]),
 			CheckEquals(m1.mLine[3], m2.mLine[3]))));
+}
+
+template<>
+inline int CheckEquals(Quat q1, Quat q2)
+{
+	return CheckEquals(AsVector4(q1), AsVector4(q2));
 }
 
 template<typename T_op1, typename T_op2, typename T_r>
@@ -283,6 +296,12 @@ inline float RandRangeF(float minR, float maxR)
 	return minR + rand() / (float)RAND_MAX * (maxR - minR);
 }
 
+inline Quat RandQuat()
+{
+	Quat q(RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f));
+	return q.GetNormalized();
+}
+
 inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float maxS)
 {
 	Vector4 q(RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f));
@@ -309,6 +328,9 @@ inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float max
 	idx + 1 < FloatSpecialNum ? FloatSpecials[idx + 1].f : RandRangeF(minR, maxR),\
 	idx + 2 < FloatSpecialNum ? FloatSpecials[idx + 2].f : RandRangeF(minR, maxR),\
 	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandRangeF(minR, maxR))
+
+#define QuatLoopBegin(idx, count, name) for(int idx = 0; idx < (count); idx += 4)\
+{ Quat name = RandQuat();
 
 #define TransformMatrixLoopBegin(idx, count, name, minT, maxT, minS, maxS) for(int idx = 0; idx < (count); idx += 16)\
 { Matrix4 name = RandTransformMatrix(minT, maxT, minS, maxS);
@@ -341,8 +363,14 @@ inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float max
 
 #define LoopEnd }
 
+
+typedef std::function<Matrix4(const Quat&)> FuncQ2M;
+typedef std::function<Quat(const Quat&)> FuncQ2Q;
+typedef std::function<Vector4(const Quat&, const Vector4&)> FuncQV2V;
+typedef std::function<Quat(const Quat&, const Quat&)> FuncQQ2Q;
 typedef std::function<Matrix4(const Matrix4&, const Matrix4&)> FuncMM2M;
 typedef std::function<Vector4(const Matrix4&, const Vector4&)> FuncMV2V;
+typedef std::function<Quat(const Matrix4&)> FuncM2Q;
 typedef std::function<Matrix4(const Matrix4&)> FuncM2M;
 typedef std::function<float(const Matrix4&)> FuncM2F;
 typedef std::function<Vector4(const Vector4&, const Vector4&)> FuncVV2V;
@@ -352,6 +380,70 @@ typedef std::function<Vector4(const Vector4&)> FuncV2V;
 
 template<typename T>
 void RandomTest(T f1, T f2, T f3, float minR, float maxR, int count = 10000, int level = 0);
+
+template<>
+void RandomTest(FuncQ2M f1, FuncQ2M f2, FuncQ2M f3, float minR, float maxR, int count, int level)
+{
+	QuatLoopBegin(i, count, v1)
+	{
+		Check(v1, f1(v1), f2(v1), f3(v1), level);
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void RandomTest(FuncQ2Q f1, FuncQ2Q f2, FuncQ2Q f3, float minR, float maxR, int count, int level)
+{
+	QuatLoopBegin(i, count, v1)
+	{
+		Check(v1, f1(v1), f2(v1), f3(v1), level);
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void RandomTest(FuncQV2V f1, FuncQV2V f2, FuncQV2V f3, float minR, float maxR, int count, int level)
+{
+	//QuatLoopBegin(i, count, v1)
+	//{
+	//	VectorLoopBegin(j, count, v2)
+	//	{
+	//		Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+	//	}
+	//	LoopEnd
+	//	printf("%d\n", i);
+	//}
+	//LoopEnd
+
+		
+	QuatLoopBegin(i, count, v1)
+	{
+		VectorRangeLoopBegin(j, count, v2, minR, maxR)
+		{
+			Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+		}
+		LoopEnd
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void RandomTest(FuncQQ2Q f1, FuncQQ2Q f2, FuncQQ2Q f3, float minR, float maxR, int count, int level)
+{
+	QuatLoopBegin(i, count, v1)
+	{
+		QuatLoopBegin(j, count, v2)
+		{
+			Check(v1, v2, f1(v1, v2), f2(v1, v2), f3(v1, v2), level);
+		}
+		LoopEnd
+			printf("%d\n", i);
+	}
+	LoopEnd
+}
 
 template<>
 void RandomTest(FuncMM2M f1, FuncMM2M f2, FuncMM2M f3, float minR, float maxR, int count, int level)
@@ -550,6 +642,18 @@ void RandomTest(FuncV2V f1, FuncV2V f2, FuncV2V f3, float minR, float maxR, int 
 template<typename T>
 void TransformRandomTest(T f1, T f2, T f3, float minT, float maxT, float minS, float maxS, int count = 10000, int level = 0);
 
+
+template<>
+void TransformRandomTest(FuncM2Q f1, FuncM2Q f2, FuncM2Q f3, float minT, float maxT, float minS, float maxS, int count, int level)
+{
+	TransformMatrixLoopBegin(i, count, v, minT, maxT, minS, maxS)
+	{
+		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
 
 template<>
 void TransformRandomTest(FuncM2M f1, FuncM2M f2, FuncM2M f3, float minT, float maxT, float minS, float maxS, int count, int level)
