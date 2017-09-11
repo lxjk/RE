@@ -151,7 +151,7 @@ inline int CheckEquals(float f1, float f2)
 
 	float diff = abs(f1 - f2);
 	float maxValue = max(1, max(abs(f1), abs(f2)));
-	if (diff <= maxValue * 0.0001)
+	if (diff <= maxValue * 0.00001)
 		return 3;
 
 	if (abs(u1.i - u2.i) < 0x3)
@@ -186,7 +186,8 @@ inline int CheckEquals(Matrix4 m1, Matrix4 m2)
 template<>
 inline int CheckEquals(Quat q1, Quat q2)
 {
-	return CheckEquals(AsVector4(q1), AsVector4(q2));
+	return min(CheckEquals(AsVector4(q1), AsVector4(q2)), 
+		CheckEquals(AsVector4(q1), -AsVector4(q2)));
 }
 
 template<typename T_op1, typename T_op2, typename T_r>

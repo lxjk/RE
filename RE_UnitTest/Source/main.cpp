@@ -62,9 +62,9 @@ float PostBenchLoop(float r,
 
 struct BenchData
 {
-	Matrix4 m1;
+	//Matrix4 m1;
 	//Matrix4 m2;
-	//Vector4 v1;
+	Vector4 v1;
 	//Vector4 v2;
 	//Quat q1;
 	//Quat q2;
@@ -96,12 +96,12 @@ void Bench()
 
 	for (int i = 0; i < count; ++i)
 	{
-		d[i].m1 = { 
-			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
-			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
-			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
-			{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) } };
-		//d[i].v1 = Vector4(RandF(), RandF(), RandF(), RandF());
+		//d[i].m1 = { 
+		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
+		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
+		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
+		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) } };
+		d[i].v1 = Vector4(RandF(), RandF(), RandF(), RandF());
 		//d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
 		//d[i].q1 = RandQuat();
 		//d[i].q2 = RandQuat();
@@ -122,7 +122,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += Matrix4ToQuat2(d[i].m1);
+			//tmp += Matrix4ToQuat(d[i].m1);
+			tmp += EulerToQuat(d[i].v1);
 			//tmp += d[i].m1.GetInverse();
 			//tmp += UT_Matrix4_GetInverse_Intel(d[i].m1);
 			//tmp += d[i].m1.InverseTransformPoint(d[i].v1);
@@ -138,7 +139,7 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += Matrix4ToQuat(d[i].m1);
+			tmp += GlmQuatToQuat(glm::quat(Vector4ToGlmVec4(d[i].v1)));
 			//tmp += d[i].m1.GetTransformInverseNoScale();
 			//tmp += UT_Matrix4_GetInverse_UE4(d[i].m1);
 			//tmp += d[i].m1.InverseTransformPointNoScale(d[i].v1);
@@ -154,7 +155,7 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += Matrix4ToQuat3(d[i].m1);
+			tmp += EulerToQuat(d[i].v1);
 			//tmp += d[i].m1.GetTransformInverse();
 			//tmp += UT_Matrix4_GetInverse_DirectX(d[i].m1);
 			//tmp += d[i].m1.GetTransformInverse().TransformPoint(d[i].v1);
@@ -180,6 +181,12 @@ void Bench()
 }
 
 
+__declspec(noinline)
+Vector4 TestNoInline(Vector4 v1)
+{
+	return AsVector4(EulerToQuat(v1));
+}
+
 int main(int argc, char **argv)
 {
 	srand(time(0));
@@ -189,9 +196,9 @@ int main(int argc, char **argv)
 	//ExhaustTest();
 
 	//TransformRandomTest<FuncM2Q>(
-	//	[](const Matrix4& m1) { return Matrix4ToQuat2(m1);},
-	//	[](const Matrix4& m1) { return Matrix4ToQuat2(m1);},
-	//	[](const Matrix4& m1) { return Matrix4ToQuat3(m1);},
+	//	[](const Matrix4& m1) { return Matrix4ToQuat(m1);},
+	//	[](const Matrix4& m1) { return Matrix4ToQuat(m1);},
+	//	[](const Matrix4& m1) { return UT_Matrix4ToQuat(m1);},
 	//	-10000.f, 10000.f, 1.f, 1.f, 20000, 4
 	//	);
 
@@ -311,12 +318,18 @@ int main(int argc, char **argv)
 	//v3 = Vector4::Zero();
 	//r += Test_VV2F_SSE(v2, v3);
 
-	//PrintValue(v3);
+	//Vector4 s = TestNoInline(v3);
+
+	//PrintValue(s);
 
 	//Vector4 r1 = Test_SSE(v1, v2);
 	//Vector4 r2 = Test_SSE_M(v1, v2);
 
-	//printf("done %f", v3);
+	//IntFloatUnion u;
+	//u.f = 25165824.0f;
+
+
+	//printf("done %f", u.f);
 
 	printf("done\n");
 

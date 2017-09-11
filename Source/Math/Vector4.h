@@ -208,7 +208,7 @@ public:
 		return VecBlend(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
-			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)));
+			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));
 
 #if 0 // normal method, sizeSqr is a float
 		float sizeSqr = Dot4(*this);
@@ -226,7 +226,7 @@ public:
 		return VecBlend(
 			VecMul(mVec, VecInvSqrtFast(sizeSqr)),
 			VecZero(),
-			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)));
+			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));
 	}
 
 	// Vector4_3 version time: SSE(set1(Dot3)) < SSE(VecDot3V) < normal
@@ -242,7 +242,7 @@ public:
 		return VecBlend(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
-			VecOr(VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)), Vec128Const::VecMaskW));
+			VecOr(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num), VecConst::VecMaskW));
 	}
 	
 	// Vector4_2 version time: SSE(set1(Dot2)) < normal < SSE(VecDot2V)
@@ -258,6 +258,6 @@ public:
 		return VecBlend(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
-			VecOr(VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)), Vec128Const::VecMaskZW));
+			VecOr(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num), VecConst::VecMaskZW));
 	}
 };

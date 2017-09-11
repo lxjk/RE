@@ -14,15 +14,46 @@ typedef __m128	Vec128;
 #define VecSet(x,y,z,w)			_mm_setr_ps(x,y,z,w)
 #define VecSet_i(x,y,z,w)		_mm_castsi128_ps(_mm_setr_epi32(x,y,z,w))
 
-namespace Vec128Const {
+namespace VecConst {
 
-	const Vec128 VecMaskXYZ		= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000);
-	const Vec128 VecMaskXY		= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000);
-	const Vec128 VecMaskZW		= VecSet_i(0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF);
-	const Vec128 VecMaskW		= VecSet_i(0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF);
+	const Vec128 VecMaskXYZ				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000);
+	const Vec128 VecMaskXY				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000);
+	const Vec128 VecMaskZW				= VecSet_i(0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF);
+	const Vec128 VecMaskW				= VecSet_i(0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF);
 
-	const Vec128 SignMask		= VecSet1_i(0x80000000);
-	const Vec128 InvSignMask	= VecSet1_i(0x7FFFFFFF);
+	const Vec128 SignMask				= VecSet1_i(0x80000000);
+	const Vec128 InvSignMask			= VecSet1_i(0x7FFFFFFF);
+	
+	const Vec128 Sign_PNPN				= VecSet(1.f, -1.f, 1.f, -1.f);
+	const Vec128 Sign_PPNN				= VecSet(1.f, 1.f, -1.f, -1.f);
+	const Vec128 Sign_NPPN				= VecSet(-1.f, 1.f, 1.f, -1.f);
+
+	const Vec128 Sign_PNNP				= VecSet(1.f, -1.f, -1.f, 1.f);
+	const Vec128 Sign_NPNP				= VecSet(-1.f, 1.f, -1.f, 1.f);
+	const Vec128 Sign_NNPP				= VecSet(-1.f, -1.f, 1.f, 1.f);
+
+	const Vec128 Vec_One				= VecSet1(1.f);
+	const Vec128 Vec_Half				= VecSet1(0.5f);
+	const Vec128 Vec_Neg_Half			= VecSet1(-0.5f);
+	const Vec128 Vec_One_Half			= VecSet1(1.5f);
+
+	const Vec128 Vec_PI					= VecSet1(PI);
+	const Vec128 Vec_2_PI				= VecSet1(PI*2.f);
+	const Vec128 Vec_Half_PI			= VecSet1(PI*0.5f);
+	const Vec128 Vec_One_Over_2_PI		= VecSet1(0.5f / PI);
+
+	const Vec128 Vec_Small_Num			= VecSet1(SMALL_NUMBER);
+
+	namespace _internal_sin
+	{
+		static const float p = 0.225f;
+		static const float a = 16 * sqrt(p);
+		static const float b = ((1 - p) / sqrt(p));
+	}
+	const Vec128 SinParamA				= VecSet1(_internal_sin::a);
+	const Vec128 SinParamB				= VecSet1(_internal_sin::b);
+
+	const Vec128 QuatInverseSignMask	= VecSet_i(0x80000000, 0x80000000, 0x80000000, 0x00000000);
 };
 
 #define VecLoad1(f_ptr)			_mm_load1_ps(f_ptr)
@@ -37,8 +68,8 @@ namespace Vec128Const {
 #define VecDiv(vec1, vec2)		_mm_div_ps(vec1, vec2)
 
 //#define VecNegate(vec)			_mm_sub_ps(_mm_setzero_ps(), vec)
-#define VecNegate(vec)			_mm_xor_ps(vec, Vec128Const::SignMask)
-#define VecAbs(vec)				_mm_and_ps(vec, Vec128Const::InvSignMask)
+#define VecNegate(vec)			_mm_xor_ps(vec, VecConst::SignMask)
+#define VecAbs(vec)				_mm_and_ps(vec, VecConst::InvSignMask)
 
 #define VecSqrt(vec)			_mm_sqrt_ps(vec)
 #define VecRcp(vec)				_mm_rcp_ps(vec)
@@ -80,9 +111,9 @@ namespace Vec128Const {
 // this is slightly faster at the cost of precision around 2-3 bits of fraction
 __forceinline Vec128 VecInvSqrtFast(Vec128 v)
 {
-	const static Vec128 a = _mm_set1_ps(1.5f);
+	const static Vec128 a = VecSet1(1.5f);
 	Vec128 x = _mm_rsqrt_ps(v);
-	v = _mm_mul_ps(v, _mm_set1_ps(-0.5f));
+	v = _mm_mul_ps(v, VecSet1(-0.5f));
 
 	// one iteration
 	// x1 = x0 * (1.5 - 0.5 * v * x0 * x0)
@@ -95,7 +126,7 @@ __forceinline Vec128 VecInvSqrtFast(Vec128 v)
 // this is slower than sqrt and div, just for reference
 __forceinline Vec128 VecInvSqrtEpic(Vec128 v)
 {
-	const static Vec128 a = _mm_set1_ps(0.5f);
+	const static Vec128 a = VecSet1(0.5f);
 	Vec128 x = _mm_rsqrt_ps(v);
 	v = _mm_mul_ps(v, a);
 
@@ -201,6 +232,24 @@ __forceinline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
 	Vec128 v2_zxy = VecSwizzle(vec2, 2, 0, 1, 3);
 	return _mm_sub_ps(_mm_mul_ps(v1_yzx, v2_zxy), _mm_mul_ps(v1_zxy, v2_zxy));
 #endif
+}
+
+__forceinline Vec128 VecSin(Vec128 vec)
+{
+	// based on http://forum.devmaster.net/t/fast-and-accurate-sine-cosine/9648
+	// based on unreal implementation of constants
+	// y = 8x - 16x|x| = 16 * x * (0.5 - |x|)
+	// sin = p*y|y| + (1-p)*y = p*y*(|y| - (1-p)/p) = sqrt(p)*y*(|sqrt(p)*y| + (1-p)/sqrt(p))
+	
+	Vec128 x = _mm_mul_ps(vec, VecConst::Vec_One_Over_2_PI); // map input period to [0, 1]
+	x = _mm_sub_ps(x, _mm_round_ps(_mm_add_ps(x, VecConst::Vec_Half), _MM_FROUND_FLOOR)); // fix range to [-0.5, 0.5]
+	Vec128 y = _mm_mul_ps(VecConst::SinParamA, _mm_mul_ps(x, _mm_sub_ps(VecConst::Vec_Half, VecAbs(x))));
+	return _mm_mul_ps(y, _mm_add_ps(VecAbs(y), VecConst::SinParamB));
+}
+
+__forceinline Vec128 VecCos(Vec128 vec)
+{
+	return VecSin(_mm_add_ps(vec, VecConst::Vec_Half_PI));
 }
 
 // Matrix 2x2 operations

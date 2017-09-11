@@ -108,20 +108,16 @@ public:
 		return VecBlend(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
-			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER)));
+			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));
 	}
 
 	// mul quat
 	inline Quat operator*(const Quat& q) const
 	{
-		const Vec128 signMask0 = VecSet(1.f, -1.f, 1.f, -1.f);
-		const Vec128 signMask1 = VecSet(1.f, 1.f, -1.f, -1.f);
-		const Vec128 signMask2 = VecSet(-1.f, 1.f, 1.f, -1.f);
-
 		Vec128 r =				VecMul(VecSwizzle1(mVec, 3), q.mVec);
-		r = VecAdd(r, VecMul(	VecMul(VecSwizzle1(mVec, 0), VecSwizzle(q.mVec, 3,2,1,0)), signMask0));
-		r = VecAdd(r, VecMul(	VecMul(VecSwizzle1(mVec, 1), VecSwizzle(q.mVec, 2,3,0,1)), signMask1));
-		r = VecAdd(r, VecMul(	VecMul(VecSwizzle1(mVec, 2), VecSwizzle(q.mVec, 1,0,3,2)), signMask2));
+		r = VecAdd(r, VecMul(	VecMul(VecSwizzle1(mVec, 0), VecSwizzle(q.mVec, 3,2,1,0)), VecConst::Sign_PNPN));
+		r = VecAdd(r, VecMul(	VecMul(VecSwizzle1(mVec, 1), VecSwizzle(q.mVec, 2,3,0,1)), VecConst::Sign_PPNN));
+		r = VecAdd(r, VecMul(	VecMul(VecSwizzle1(mVec, 2), VecSwizzle(q.mVec, 1,0,3,2)), VecConst::Sign_NPPN));
 
 		return r;
 
@@ -139,14 +135,10 @@ public:
 	}
 	inline Quat& operator*=(const Quat& q)
 	{
-		const Vec128 signMask0 = VecSet(1.f, -1.f, 1.f, -1.f);
-		const Vec128 signMask1 = VecSet(1.f, 1.f, -1.f, -1.f);
-		const Vec128 signMask2 = VecSet(-1.f, 1.f, 1.f, -1.f);
-
 		mVec =						VecMul(VecSwizzle1(mVec, 3), q.mVec);
-		mVec = VecAdd(mVec, VecMul(	VecMul(VecSwizzle1(mVec, 0), VecSwizzle(q.mVec, 3,2,1,0)), signMask0));
-		mVec = VecAdd(mVec, VecMul(	VecMul(VecSwizzle1(mVec, 1), VecSwizzle(q.mVec, 2,3,0,1)), signMask1));
-		mVec = VecAdd(mVec, VecMul(	VecMul(VecSwizzle1(mVec, 2), VecSwizzle(q.mVec, 1,0,3,2)), signMask2));
+		mVec = VecAdd(mVec, VecMul(	VecMul(VecSwizzle1(mVec, 0), VecSwizzle(q.mVec, 3,2,1,0)), VecConst::Sign_PNPN));
+		mVec = VecAdd(mVec, VecMul(	VecMul(VecSwizzle1(mVec, 1), VecSwizzle(q.mVec, 2,3,0,1)), VecConst::Sign_PPNN));
+		mVec = VecAdd(mVec, VecMul(	VecMul(VecSwizzle1(mVec, 2), VecSwizzle(q.mVec, 1,0,3,2)), VecConst::Sign_NPPN));
 
 		return *this;
 	}
@@ -154,8 +146,7 @@ public:
 	// inverse assume this quaterion is normalized
 	inline Quat GetInverse() const
 	{
-		const Vec128 signMask = VecSet_i(0x80000000, 0x80000000, 0x80000000, 0x00000000);
-		return VecXor(mVec, signMask);
+		return VecXor(mVec, VecConst::QuatInverseSignMask);
 	}
 
 	//   v + 2(q x (q x v + w*p))

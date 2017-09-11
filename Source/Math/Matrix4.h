@@ -458,12 +458,11 @@ public:
 		sizeSqr = VecAdd(sizeSqr,	VecMul(r.mVec[2], r.mVec[2]));
 
 		// optional test to avoid divide by 0
-		Vec128 one = VecSet1(1.f);
 		// if(sizeSqr < SMALL_NUMBER) sizeSqr = 1;
 		Vec128 rSizeSqr = VecBlend(
-			VecDiv(one, sizeSqr),
-			one,
-			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER))
+			VecDiv(VecConst::Vec_One, sizeSqr),
+			VecConst::Vec_One,
+			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)
 			);
 
 		r.mVec[0] = VecMul(r.mVec[0], rSizeSqr);
@@ -490,7 +489,7 @@ public:
 		r.mVec[1] = VecCross(mVec[2], mVec[0]);
 		r.mVec[2] = VecCross(mVec[0], mVec[1]);
 
-		Vec128 rDet = VecDiv(VecSet1(1.f), det);
+		Vec128 rDet = VecDiv(VecConst::Vec_One, det);
 
 		r.mVec[0] = VecMul(r.mVec[0], rDet);
 		r.mVec[1] = VecMul(r.mVec[1], rDet);
@@ -515,12 +514,11 @@ public:
 		sizeSqr = VecAdd(sizeSqr,	VecMul(tLine2, tLine2));
 		
 		// optional test to avoid divide by 0
-		Vec128 one = VecSet1(1.f);
 		// if(sizeSqr < SMALL_NUMBER) sizeSqr = 1;
 		Vec128 rSizeSqr = VecBlend(
-			VecDiv(one, sizeSqr),
-			one,
-			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER))
+			VecDiv(VecConst::Vec_One, sizeSqr),
+			VecConst::Vec_One,
+			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)
 			);
 
 		r.mVec[0] = VecMul(mVec[0], rSizeSqr);
@@ -591,12 +589,11 @@ public:
 		sizeSqr = VecAdd(sizeSqr,	VecMul(tLine2, tLine2));
 
 		// optional test to avoid divide by 0
-		Vec128 one = VecSet1(1.f);
 		// if(sizeSqr < SMALL_NUMBER) sizeSqr = 1;
 		sizeSqr = VecBlend(
 			sizeSqr,
-			one,
-			VecCmpLT(sizeSqr, VecSet1(SMALL_NUMBER))
+			VecConst::Vec_One,
+			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)
 			);
 
 		// (dot3(v, mLine[0]), dot3(v, mLine[1]), dot3(v, mLine[2]), 0)
