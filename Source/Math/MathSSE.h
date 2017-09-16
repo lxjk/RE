@@ -35,14 +35,19 @@ namespace VecConst {
 	const Vec128 Vec_One				= VecSet1(1.f);
 	const Vec128 Vec_Half				= VecSet1(0.5f);
 	const Vec128 Vec_Neg_Half			= VecSet1(-0.5f);
-	const Vec128 Vec_One_Half			= VecSet1(1.5f);
+	const Vec128 Vec_1p5				= VecSet1(1.5f);
 
 	const Vec128 Vec_PI					= VecSet1(PI);
 	const Vec128 Vec_2_PI				= VecSet1(PI*2.f);
 	const Vec128 Vec_Half_PI			= VecSet1(PI*0.5f);
-	const Vec128 Vec_One_Over_2_PI		= VecSet1(0.5f / PI);
+	const Vec128 Vec_1_Over_2_PI		= VecSet1(0.5f / PI);
 
 	const Vec128 Vec_Small_Num			= VecSet1(SMALL_NUMBER);
+	
+	const Vec128 DegToRad				= VecSet1(PI / 180.f);
+	const Vec128 RadToDeg				= VecSet1(180.f / PI);
+	
+	const Vec128 Half_DegToRad			= VecSet1(0.5f * PI / 180.f);
 
 	namespace _internal_sin
 	{
@@ -83,10 +88,10 @@ namespace VecConst {
 #define VecToFloat(vec)			_mm_cvtss_f32(vec)
 
 // mask is Vec128, only highest bit of each f32 component is used
-#define VecBlend(vec1, vec2, mask)			_mm_blendv_ps(vec1, vec2, mask);
+#define VecBlendVar(vec1, vec2, mask)			_mm_blendv_ps(vec1, vec2, mask);
 // mask is const int, only lowest 4 bits are used
 #define MakeBlendMask(x,y,z,w)				(x | (y<<1) | (z<<2) | (w<<3))
-#define VecBlendConst(vec1, vec2, x,y,z,w)	_mm_blend_ps(vec1, vec2, MakeBlendMask(x,y,z,w));
+#define VecBlend(vec1, vec2, x,y,z,w)		_mm_blend_ps(vec1, vec2, MakeBlendMask(x,y,z,w));
 
 #define MakeShuffleMask(x,y,z,w)			(x | (y<<2) | (z<<4) | (w<<6))
 
@@ -108,17 +113,21 @@ namespace VecConst {
 #define VecShuffle_0101(vec1, vec2)			_mm_movelh_ps(vec1, vec2)
 #define VecShuffle_2323(vec1, vec2)			_mm_movehl_ps(vec2, vec1)
 
+// return (vec1[0], vec2[0], vec1[1], vec2[1])
+#define VecInterleave_0011(vec1, vec2)			_mm_unpacklo_ps(vec1, vec2)
+// return (vec1[2], vec2[2], vec1[3], vec2[3])
+#define VecInterleave_2233(vec1, vec2)			_mm_unpackhi_ps(vec1, vec2)
+
 // this is slightly faster at the cost of precision around 2-3 bits of fraction
 __forceinline Vec128 VecInvSqrtFast(Vec128 v)
 {
-	const static Vec128 a = VecSet1(1.5f);
 	Vec128 x = _mm_rsqrt_ps(v);
-	v = _mm_mul_ps(v, VecSet1(-0.5f));
+	v = _mm_mul_ps(v, VecConst::Vec_Neg_Half);
 
 	// one iteration
 	// x1 = x0 * (1.5 - 0.5 * v * x0 * x0)
 	Vec128 x2 = _mm_mul_ps(x, x);
-	Vec128 t = _mm_add_ps(a, _mm_mul_ps(v, x2));
+	Vec128 t = _mm_add_ps(VecConst::Vec_1p5, _mm_mul_ps(v, x2));
 	return _mm_mul_ps(x, t);
 }
 
@@ -234,6 +243,7 @@ __forceinline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
 #endif
 }
 
+// won't be correct if input gets too big (over 1.0e+6)
 __forceinline Vec128 VecSin(Vec128 vec)
 {
 	// based on http://forum.devmaster.net/t/fast-and-accurate-sine-cosine/9648
@@ -241,7 +251,7 @@ __forceinline Vec128 VecSin(Vec128 vec)
 	// y = 8x - 16x|x| = 16 * x * (0.5 - |x|)
 	// sin = p*y|y| + (1-p)*y = p*y*(|y| - (1-p)/p) = sqrt(p)*y*(|sqrt(p)*y| + (1-p)/sqrt(p))
 	
-	Vec128 x = _mm_mul_ps(vec, VecConst::Vec_One_Over_2_PI); // map input period to [0, 1]
+	Vec128 x = _mm_mul_ps(vec, VecConst::Vec_1_Over_2_PI); // map input period to [0, 1]
 	x = _mm_sub_ps(x, _mm_round_ps(_mm_add_ps(x, VecConst::Vec_Half), _MM_FROUND_FLOOR)); // fix range to [-0.5, 0.5]
 	Vec128 y = _mm_mul_ps(VecConst::SinParamA, _mm_mul_ps(x, _mm_sub_ps(VecConst::Vec_Half, VecAbs(x))));
 	return _mm_mul_ps(y, _mm_add_ps(VecAbs(y), VecConst::SinParamB));

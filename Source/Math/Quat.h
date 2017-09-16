@@ -105,7 +105,7 @@ public:
 		// sse method without branch
 		Vec128 sizeSqr = VecDotV(mVec, mVec);
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
-		return VecBlend(
+		return VecBlendVar(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));

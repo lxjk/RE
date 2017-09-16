@@ -122,8 +122,9 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
+			//tmp += (VecAdd(VecSin(d[i].v1.mVec), VecCos(d[i].v1.mVec)));
 			//tmp += Matrix4ToQuat(d[i].m1);
-			tmp += EulerToQuat(d[i].v1);
+			//tmp += EulerToQuat2(d[i].v1);
 			//tmp += d[i].m1.GetInverse();
 			//tmp += UT_Matrix4_GetInverse_Intel(d[i].m1);
 			//tmp += d[i].m1.InverseTransformPoint(d[i].v1);
@@ -139,7 +140,11 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += GlmQuatToQuat(glm::quat(Vector4ToGlmVec4(d[i].v1)));
+			//Vec128 s, c;
+			//VecSinCos(d[i].v1.mVec, s, c);
+			//tmp += (VecAdd(s, c));
+			tmp += EulerToQuat(d[i].v1);
+			//tmp += GlmQuatToQuat(glm::quat(Vector4ToGlmVec4(d[i].v1)));
 			//tmp += d[i].m1.GetTransformInverseNoScale();
 			//tmp += UT_Matrix4_GetInverse_UE4(d[i].m1);
 			//tmp += d[i].m1.InverseTransformPointNoScale(d[i].v1);
@@ -155,7 +160,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += EulerToQuat(d[i].v1);
+			//tmp += (VecAdd(VecSin(d[i].v1.mVec), VecCos(d[i].v1.mVec)));
+			//tmp += EulerToQuat2(d[i].v1);
 			//tmp += d[i].m1.GetTransformInverse();
 			//tmp += UT_Matrix4_GetInverse_DirectX(d[i].m1);
 			//tmp += d[i].m1.GetTransformInverse().TransformPoint(d[i].v1);
@@ -307,6 +313,13 @@ int main(int argc, char **argv)
 	//	-2, 2, 20000, 3
 	//	);
 
+	//RandomTest<FuncV2Q>(
+	//	[](const Vector4& v1) { return EulerToQuat(v1); },
+	//	[](const Vector4& v1) { return UT_EulerToQuat_Glm(v1); },
+	//	[](const Vector4& v1) { return EulerToQuat(v1); },
+	//	-1000, 1000, 20000, 3
+	//	);
+
 	//Vector4 v3(RandF(), RandF(), RandF(), RandF());
 	//Vector4 v2(5, 6, 7, 8);
 
@@ -320,6 +333,23 @@ int main(int argc, char **argv)
 
 	//Vector4 s = TestNoInline(v3);
 
+	//Vec128 vec = VecSet1(+5.2770612e+07);
+	//Vec128 x = _mm_mul_ps(vec, VecConst::Vec_1_Over_2_PI); // map input period to [0, 1]
+
+	//printf("%.9f\n", VecToFloat(x));
+
+	//x = _mm_sub_ps(x, VecConst::Vec_Half);
+
+	//printf("%.9f\n", VecToFloat(x));
+
+	//x = _mm_round_ps(x, _MM_FROUND_FLOOR);
+	//x = _mm_sub_ps(x, _mm_round_ps(_mm_add_ps(x, VecConst::Vec_Half), _MM_FROUND_FLOOR)); // fix range to [-0.5, 0.5]
+	//Vec128 y = _mm_mul_ps(VecConst::SinParamA, _mm_mul_ps(x, _mm_sub_ps(VecConst::Vec_Half, VecAbs(x))));
+	//y = _mm_mul_ps(y, _mm_add_ps(VecAbs(y), VecConst::SinParamB));
+	
+	//printf("%.9f\n", VecToFloat(x));
+	//s = x;
+
 	//PrintValue(s);
 
 	//Vector4 r1 = Test_SSE(v1, v2);
@@ -328,8 +358,31 @@ int main(int argc, char **argv)
 	//IntFloatUnion u;
 	//u.f = 25165824.0f;
 
+	//__m128 x = _mm_set1_ps(-0.4f);
+	//x = _mm_sub_ps(x, _mm_round_ps(x, _MM_FROUND_TRUNC));
 
-	//printf("done %f", u.f);
+
+	//printf("done %f\n", x);
+
+
+	//union IntFloatUnion256
+	//{
+	//	int i[8];
+	//	float f[8];
+	//	Vec256 v;
+	//};
+
+	//IntFloatUnion256 u1 = { 0, 1, 2, 3, 4, 5, 6, 7 };
+	//IntFloatUnion256 u2 = { 8, 9, 10, 11, 12, 13, 14, 15 };
+
+	//IntFloatUnion256 u3;
+	////u3.v = Vec256Shuffle_1(u1.v, u2.v, 2,3);
+	//u3.v = Vec256Shuffle(u1.v, u2.v, 0, 1, 2, 3);
+
+	//for (int i = 0; i < 8; ++i)
+	//{
+	//	printf("%d ", u3.i[i]);
+	//}
 
 	printf("done\n");
 

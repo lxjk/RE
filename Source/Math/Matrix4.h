@@ -459,7 +459,7 @@ public:
 
 		// optional test to avoid divide by 0
 		// if(sizeSqr < SMALL_NUMBER) sizeSqr = 1;
-		Vec128 rSizeSqr = VecBlend(
+		Vec128 rSizeSqr = VecBlendVar(
 			VecDiv(VecConst::Vec_One, sizeSqr),
 			VecConst::Vec_One,
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)
@@ -515,7 +515,7 @@ public:
 		
 		// optional test to avoid divide by 0
 		// if(sizeSqr < SMALL_NUMBER) sizeSqr = 1;
-		Vec128 rSizeSqr = VecBlend(
+		Vec128 rSizeSqr = VecBlendVar(
 			VecDiv(VecConst::Vec_One, sizeSqr),
 			VecConst::Vec_One,
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)
@@ -590,7 +590,7 @@ public:
 
 		// optional test to avoid divide by 0
 		// if(sizeSqr < SMALL_NUMBER) sizeSqr = 1;
-		sizeSqr = VecBlend(
+		sizeSqr = VecBlendVar(
 			sizeSqr,
 			VecConst::Vec_One,
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)

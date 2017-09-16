@@ -65,7 +65,7 @@ inline void PrintValue(float v)
 {
 	IntFloatUnion u;
 	u.f = v;
-	DebugLog("\t[%08x, %+.04e]", u.i, u.f);
+	DebugLog("\t[%08x, %+.07e]", u.i, u.f);
 	DebugLog("\n");
 }
 
@@ -76,7 +76,7 @@ inline void PrintValue(Vector4 v)
 	{
 		IntFloatUnion u;
 		u.f = v.m[i];
-		DebugLog("\t[%08x, %+.04e]", u.i, u.f);
+		DebugLog("\t[%08x, %+.07e]", u.i, u.f);
 	}
 	DebugLog("\n");
 }
@@ -151,7 +151,7 @@ inline int CheckEquals(float f1, float f2)
 
 	float diff = abs(f1 - f2);
 	float maxValue = max(1, max(abs(f1), abs(f2)));
-	if (diff <= maxValue * 0.00001)
+	if (diff <= maxValue * 0.002)
 		return 3;
 
 	if (abs(u1.i - u2.i) < 0x3)
@@ -243,28 +243,45 @@ void Check(T_op v, T_r r1, T_r r2, T_r r3, int level)
 void ExhaustTest()
 {
 	IntFloatUnion u;
+	IntFloatUnion ue;
 
 	unsigned __int64 i64;
 
 	unsigned int counter = 0;
 
+	double prevError = 0;
+	double error = 0;
+	double maxError = 0;
+	double count = 0;
+
 	i64 = 0;
 	while (i64 <= 0xFFFFFFFF)
+	//for(float t = 0.f; t < 3.15f * 0.5f; t += 0.001f)
 	{
 		u.u = (unsigned int)i64;
+		//u.f = t;
 
-		//Vector4 v1(u.f, u.f, u.f, u.f);
-		//Vector4 v2(u.f, u.f, u.f, u.f);
-		//glm::vec4 gv1(u.f, u.f, u.f, u.f);
-		//glm::vec4 gv2(u.f, u.f, u.f, u.f);
-
-		//Vector4 v3 = v1 + v2;
-		//Vector4 v4 = UT_Vector4_Add(v1, v2);
-		//glm::vec4 gv3 = gv1 + gv2;
-
-		//Check(VectorEquals(v3, v4), u);
-
-		//Check(VectorEquals(v3, gv3), u);
+		if (!IsFloatSpecial(u.i) && abs(u.f) < 10000)
+		{
+			Vec128 s, c;
+			s = VecSin(VecSet1(u.f));
+			float r1 = VecToFloat(s);
+			float r2 = sinf(u.f);
+			float e = abs(r1 - r2);
+			ue.f = e;
+			if (!IsFloatSpecial(ue.i))
+			{
+				error += e;
+				count += 1;
+				if (e > maxError)
+				{
+					maxError = e;
+					if (e > 0.001 && e > prevError)
+						DebugLog("input: %+.07e, r1: %+.07e, r2: %+.07e, e: %+.07e, avg: %+.07e, count %+.07e\n", u.f / PI * 180, r1, r2, e, (error / count), count);
+				}
+				prevError = e;
+			}
+		}
 
 		++i64;
 
@@ -275,6 +292,8 @@ void ExhaustTest()
 		}
 	}
 
+	error /= count;
+	printf("avg error : %f, max error : %f\n", error, maxError);
 
 	printf("done\n");
 }
@@ -378,6 +397,7 @@ typedef std::function<Vector4(const Vector4&, const Vector4&)> FuncVV2V;
 typedef std::function<float(const Vector4&, const Vector4&)> FuncVV2F;
 typedef std::function<Vector4(const Vector4&, float)> FuncVF2V;
 typedef std::function<Vector4(const Vector4&)> FuncV2V;
+typedef std::function<Quat(const Vector4&)> FuncV2Q;
 
 template<typename T>
 void RandomTest(T f1, T f2, T f3, float minR, float maxR, int count = 10000, int level = 0);
@@ -631,6 +651,18 @@ void RandomTest(FuncV2V f1, FuncV2V f2, FuncV2V f3, float minR, float maxR, int 
 	}
 	LoopEnd
 
+	VectorRangeLoopBegin(i, count, v, minR, maxR)
+	{
+		Check(v, f1(v), f2(v), f3(v), level);
+
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
+
+template<>
+void RandomTest(FuncV2Q f1, FuncV2Q f2, FuncV2Q f3, float minR, float maxR, int count, int level)
+{
 	VectorRangeLoopBegin(i, count, v, minR, maxR)
 	{
 		Check(v, f1(v), f2(v), f3(v), level);

@@ -205,7 +205,7 @@ public:
 		// sse method without branch
 		Vec128 sizeSqr = VecDotV(mVec, mVec);
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
-		return VecBlend(
+		return VecBlendVar(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));
@@ -223,7 +223,7 @@ public:
 		// sse method without branch
 		Vec128 sizeSqr = VecDotV(mVec, mVec);
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
-		return VecBlend(
+		return VecBlendVar(
 			VecMul(mVec, VecInvSqrtFast(sizeSqr)),
 			VecZero(),
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));
@@ -239,7 +239,7 @@ public:
 
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		// also mask w value so it's always 0 (w mask value all 1)
-		return VecBlend(
+		return VecBlendVar(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecOr(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num), VecConst::VecMaskW));
@@ -255,7 +255,7 @@ public:
 
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		// also mask z,w value so it's always 0 (zw mask value all 1)
-		return VecBlend(
+		return VecBlendVar(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecOr(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num), VecConst::VecMaskZW));

@@ -13,8 +13,15 @@ __forceinline const Vector4& AsVector4(const Quat& q) { return *(Vector4*)(&q); 
 
 inline Quat EulerToQuat(const Vector4_3& euler)
 {
-	Vec128 s = VecSin(euler.mVec);
-	Vec128 c = VecCos(euler.mVec);
+	Vec128 rad = VecMul(euler.mVec, VecConst::Half_DegToRad);
+#if ENABLE_VEC256
+	Vec128 s, c;
+	VecSinCos(rad, s, c);
+	Vec256ZeroUpper();
+#else
+	Vec128 s = VecSin(rad);
+	Vec128 c = VecCos(rad);
+#endif
 
 	Vec128 t0 = VecShuffle(s, c, 2,2,2,2); // sz, sz, cz, cz
 	Vec128 t1 = VecShuffle(c, t0, 0,1,2,0); // cx, cy, cz, sz
@@ -30,7 +37,7 @@ inline Quat EulerToQuat(const Vector4_3& euler)
 	Vec128 t6 = VecSwizzle(c, 1,2,1,1); // cy, cz, cy, cy
 	A = VecMul(A, t6); // sxcycz, cxsycz, cxcysz, cxcycz
 
-	Vec128 sign = VecConst::Sign_PNPN;
+	Vec128 sign = VecConst::Sign_NPNP;
 	return VecAdd(A, VecMul(B, sign));
 }
 
@@ -54,11 +61,11 @@ inline Quat Matrix4ToQuat(const Matrix4& m)
 	Vec128 t8 = VecShuffle(t4, t6, 2,3,0,3); // xy, ?, yz, yw
 	Vec128 t9 = VecShuffle(t4, t6, 3,2,1,2); // ?, xy, xz, xw
 
-	// throughput: 3 blendconst = 1 shuffle
-	Vec128 basew = VecBlendConst(t5, diag, 0,0,0,1); // xw, yw, zw, dw
-	Vec128 basez = VecBlendConst(t7, diag, 0,0,1,0); // xz, yz, dz, zw
-	Vec128 basey = VecBlendConst(t8, diag, 0,1,0,0); // xy, dy, yz, yw
-	Vec128 basex = VecBlendConst(t9, diag, 1,0,0,0); // dx, xy, xz, xw
+	// throughput: 3 blend = 1 shuffle
+	Vec128 basew = VecBlend(t5, diag, 0,0,0,1); // xw, yw, zw, dw
+	Vec128 basez = VecBlend(t7, diag, 0,0,1,0); // xz, yz, dz, zw
+	Vec128 basey = VecBlend(t8, diag, 0,1,0,0); // xy, dy, yz, yw
+	Vec128 basex = VecBlend(t9, diag, 1,0,0,0); // dx, xy, xz, xw
 
 	Vec128 dx = VecSwizzle1(diag, 0);
 	Vec128 dy = VecSwizzle1(diag, 1);
@@ -67,16 +74,16 @@ inline Quat Matrix4ToQuat(const Matrix4& m)
 
 	// find out which one we want to use, max of (dx, dy, dz, dw)
 	Vec128 cmp1 = VecCmpLT(dx, dy);
-	Vec128 dv1 = VecBlend(dx, dy, cmp1);
-	Vec128 base1 = VecBlend(basex, basey, cmp1);
+	Vec128 dv1 = VecBlendVar(dx, dy, cmp1);
+	Vec128 base1 = VecBlendVar(basex, basey, cmp1);
 
 	Vec128 cmp2 = VecCmpLT(dz, dw);
-	Vec128 dv2 = VecBlend(dz, dw, cmp2);
-	Vec128 base2 = VecBlend(basez, basew, cmp2);
+	Vec128 dv2 = VecBlendVar(dz, dw, cmp2);
+	Vec128 base2 = VecBlendVar(basez, basew, cmp2);
 
 	Vec128 cmp3 = VecCmpLT(dv1, dv2);
-	Vec128 dv = VecBlend(dv1, dv2, cmp3);
-	Vec128 base = VecBlend(base1, base2, cmp3);
+	Vec128 dv = VecBlendVar(dv1, dv2, cmp3);
+	Vec128 base = VecBlendVar(base1, base2, cmp3);
 
 	dv = VecDiv(VecConst::Vec_Half, VecSqrt(dv));
 
@@ -99,7 +106,7 @@ inline Quat Matrix4ToQuat(const Matrix4& m)
 
 	Vec128 tw = VecSub(t2, t3); // xw, yw, zw, 0
 	
-	Vec128 s = VecBlend(VecConst::Vec_Neg_Half, VecConst::Vec_Half, VecCmpGE(tw, VecZero()));
+	Vec128 s = VecBlendVar(VecConst::Vec_Neg_Half, VecConst::Vec_Half, VecCmpGE(tw, VecZero()));
 
 	return VecMul(r, s);
 }
@@ -210,7 +217,7 @@ inline Matrix4 MakeMatrix(const Vector4_3& translation, const Quat& rotation, co
 	r.mVec[0] = VecShuffle(t3, t2, 0,2,0,3);
 	r.mVec[1] = VecShuffle(t4, t5, 2,0,0,3);
 	r.mVec[2] = VecShuffle(t5, t4, 1,2,1,3);
-	r.mVec[3] = VecBlendConst(translation.mVec, VecConst::Vec_One, 0,0,0,1);
+	r.mVec[3] = VecBlend(translation.mVec, VecConst::Vec_One, 0,0,0,1);
 
 	return r;
 }

@@ -92,3 +92,27 @@ inline Quat UT_Matrix4ToQuat(const Matrix4& m)
 	}
 	return r;
 }
+
+
+inline Quat UT_EulerToQuat(const Vector4& v)
+{
+	Vector4 halfAngle = v * (0.5f * PI / 180.f);
+
+	Vector4 s(sinf(halfAngle.x), sinf(halfAngle.y), sinf(halfAngle.z), 0);
+	Vector4 c(cosf(halfAngle.x), cosf(halfAngle.y), cosf(halfAngle.z), 0);
+
+	Quat q;
+	q.w = c.x * c.y * c.z + s.x * s.y * s.z;
+	q.x = s.x * c.y * c.z - c.x * s.y * s.z;
+	q.y = c.x * s.y * c.z + s.x * c.y * s.z;
+	q.z = c.x * c.y * s.z - s.x * s.y * c.z;
+
+	return q;
+}
+
+inline Quat UT_EulerToQuat_Glm(const Vector4& v)
+{
+	glm::quat t = glm::quat(glm::radians(Vector4ToGlmVec3(v)));
+	Quat q(t.x, t.y, t.z, t.w);
+	return q;
+}
