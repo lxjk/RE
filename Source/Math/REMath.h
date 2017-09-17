@@ -4,6 +4,11 @@
 #include "Matrix4.h"
 #include "Quat.h"
 
+#define EULER_ZYX 0 // Z: Yaw, Y: Pitch, X: Roll
+#define EULER_ZXY 1 // Z: Yaw, X: Pitch, Y: Roll
+
+#define EULER_ANGLE EULER_ZYX
+
 
 __forceinline Quat& AsQuat(Vector4& v) { return *(Quat*)(&v); }
 __forceinline const Quat& AsQuat(const Vector4& v) { return *(Quat*)(&v); }
@@ -11,6 +16,7 @@ __forceinline const Quat& AsQuat(const Vector4& v) { return *(Quat*)(&v); }
 __forceinline Vector4& AsVector4(Quat& q) { return *(Vector4*)(&q); }
 __forceinline const Vector4& AsVector4(const Quat& q) { return *(Vector4*)(&q); }
 
+// euler is in degrees
 inline Quat EulerToQuat(const Vector4_3& euler)
 {
 	Vec128 rad = VecMul(euler.mVec, VecConst::Half_DegToRad);
@@ -37,8 +43,75 @@ inline Quat EulerToQuat(const Vector4_3& euler)
 	Vec128 t6 = VecSwizzle(c, 1,2,1,1); // cy, cz, cy, cy
 	A = VecMul(A, t6); // sxcycz, cxsycz, cxcysz, cxcycz
 
+#if EULER_ANGLE==EULER_ZXY
+	Vec128 sign = VecConst::Sign_NPPN;
+#else
+	// default to EULER_ZYX
 	Vec128 sign = VecConst::Sign_NPNP;
+#endif
 	return VecAdd(A, VecMul(B, sign));
+}
+
+// euler is in degrees
+inline Vector4_3 QuatToEuler(const Quat& q)
+{
+	Vec128 r;
+#if EULER_ANGLE==EULER_ZXY
+	const Vec128 const_1001 = VecSet(1.f, 0.f, 0.f, 1.f);
+	
+	Vec128 x = VecSet1(2.f * (q.y*q.z + q.x*q.w));
+	Vec128 absX, signX;
+	VecSignAndAbs(x, signX, absX);
+	// 0 means small number (special case), 1 means normal case
+	Vec128 mask = VecCmpLT(absX, VecConst::Vec_1_Minus_Small_Num);
+	x = VecAsin(x);
+	x = VecBlendVar(VecMul(VecConst::Vec_Half_PI, signX), x, mask);
+
+	Vec128 t0 = VecSwizzle(q.mVec, 1,1,2,2); // y, y, z, z
+	Vec128 t1 = VecSwizzle(q.mVec, 1,3,3,2); // y, w, w, z
+	Vec128 t2 = VecMul(VecMul(t0, t1), VecConst::Sign_NPPN); // -yy, yw, zw, -zz
+	Vec128 t3 = VecSwizzle1(q.mVec, 0); // x, x, x, x
+	Vec128 t4 = VecSwizzle(q.mVec, 0,2,1,0); // x, z, y, x
+	Vec128 t5 = VecSub(t2, VecMul(t3, t4)); // -yy-xx, yw-xz, zw-xy, -zz-xx
+	Vec128 yz1 = VecAdd(t5, VecAdd(t5, const_1001));
+	Vec128 yz0 = VecShuffle(q.mVec, const_1001, 3,1,2,3); // w, y, 0, 1
+	Vec128 atan_y = VecBlendVar(yz0, yz1, mask);
+	Vec128 atan_x = VecSwizzle(atan_y, 0,0,3,3);
+	Vec128 yz = VecAtan2(atan_y, atan_x);
+	yz = VecMul(yz, VecBlendVar(VecConst::Vec_Two, VecConst::Vec_One, mask));
+
+	r = VecBlend(yz, x, 1,0,0,1);
+#else
+	// default to EULER_ZYX
+	const Vec128 const_0101 = VecSet(0.f, 1.f, 0.f, 1.f);
+	const Vec128 const_P2N2P2N2 = VecSet(2.f, -2.f, 2.f, -2.f);
+
+	Vec128 y = VecSet1(2.f * (q.y*q.w - q.x*q.z));
+	Vec128 absY, signY;
+	VecSignAndAbs(y, signY, absY);
+	// 0 means small number (special case), 1 means normal case
+	Vec128 mask = VecCmpLT(absY, VecConst::Vec_1_Minus_Small_Num);
+	y = VecAsin(y);
+	y = VecBlendVar(VecMul(VecConst::Vec_Half_PI, signY), y, mask);
+
+	Vec128 t0 = VecSwizzle_0022(q.mVec); // x, x, z, z
+	Vec128 t1 = VecSwizzle(q.mVec, 3,0,3,2); // w, x, w, z
+	Vec128 t2 = VecMul(t0, t1); // xw, xx, zw, zz
+	Vec128 t3 = VecSwizzle1(q.mVec, 1); // y, y, y, y
+	Vec128 t4 = VecSwizzle(q.mVec, 2,1,0,1); // z, y, x, y
+	Vec128 t5 = VecAdd(t2, VecMul(t3, t4)); // xw+yz, xx+yy, zw+xy, zz+yy
+	Vec128 xz1 = VecAdd(VecMul(t5, const_P2N2P2N2), const_0101);
+	Vec128 xz0 = VecShuffle(q.mVec, const_0101, 0,3,0,1); // x, w, 0, 1
+	Vec128 atan_y = VecBlendVar(xz0, xz1, mask);
+	Vec128 atan_x = VecSwizzle_1133(atan_y);
+	Vec128 xz = VecAtan2(atan_y, atan_x);
+	// we only care about x and z, so we can re-use const_P2N2P2N2
+	xz = VecMul(xz, VecBlendVar(const_P2N2P2N2, VecConst::Vec_One, mask));
+
+	r = VecBlend(xz, y, 0,1,0,1);
+#endif
+
+	return VecMul(r, VecConst::RadToDeg);
 }
 
 inline Quat Matrix4ToQuat(const Matrix4& m)
@@ -111,8 +184,6 @@ inline Quat Matrix4ToQuat(const Matrix4& m)
 	return VecMul(r, s);
 }
 #endif
-
-inline Vector4_3 QuatToEuler(const Quat& q);
 
 inline Matrix4 QuatToMatrix4(const Quat& q)
 {

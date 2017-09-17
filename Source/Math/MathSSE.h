@@ -33,6 +33,7 @@ namespace VecConst {
 	const Vec128 Sign_NNPP				= VecSet(-1.f, -1.f, 1.f, 1.f);
 
 	const Vec128 Vec_One				= VecSet1(1.f);
+	const Vec128 Vec_Two				= VecSet1(2.f);
 	const Vec128 Vec_Half				= VecSet1(0.5f);
 	const Vec128 Vec_Neg_Half			= VecSet1(-0.5f);
 	const Vec128 Vec_1p5				= VecSet1(1.5f);
@@ -40,9 +41,11 @@ namespace VecConst {
 	const Vec128 Vec_PI					= VecSet1(PI);
 	const Vec128 Vec_2_PI				= VecSet1(PI*2.f);
 	const Vec128 Vec_Half_PI			= VecSet1(PI*0.5f);
+	const Vec128 Vec_Quat_PI			= VecSet1(PI*0.25f);
 	const Vec128 Vec_1_Over_2_PI		= VecSet1(0.5f / PI);
 
 	const Vec128 Vec_Small_Num			= VecSet1(SMALL_NUMBER);
+	const Vec128 Vec_1_Minus_Small_Num	= VecSet1(1.f - SMALL_NUMBER);
 	
 	const Vec128 DegToRad				= VecSet1(PI / 180.f);
 	const Vec128 RadToDeg				= VecSet1(180.f / PI);
@@ -57,6 +60,13 @@ namespace VecConst {
 	}
 	const Vec128 SinParamA				= VecSet1(_internal_sin::a);
 	const Vec128 SinParamB				= VecSet1(_internal_sin::b);
+		
+	const Vec128 AsinParamA				= VecSet1(-0.2121144f);
+	const Vec128 AsinParamB				= VecSet1(0.0742610f);
+	const Vec128 AsinParamC				= VecSet1(-0.0187293f);
+
+	const Vec128 AtanParamA				= VecSet1(0.2447f);
+	const Vec128 AtanParamB				= VecSet1(0.0663f);
 
 	const Vec128 QuatInverseSignMask	= VecSet_i(0x80000000, 0x80000000, 0x80000000, 0x00000000);
 };
@@ -88,10 +98,10 @@ namespace VecConst {
 #define VecToFloat(vec)			_mm_cvtss_f32(vec)
 
 // mask is Vec128, only highest bit of each f32 component is used
-#define VecBlendVar(vec1, vec2, mask)			_mm_blendv_ps(vec1, vec2, mask);
+#define VecBlendVar(vec1, vec2, mask)		_mm_blendv_ps(vec1, vec2, mask)
 // mask is const int, only lowest 4 bits are used
 #define MakeBlendMask(x,y,z,w)				(x | (y<<1) | (z<<2) | (w<<3))
-#define VecBlend(vec1, vec2, x,y,z,w)		_mm_blend_ps(vec1, vec2, MakeBlendMask(x,y,z,w));
+#define VecBlend(vec1, vec2, x,y,z,w)		_mm_blend_ps(vec1, vec2, MakeBlendMask(x,y,z,w))
 
 #define MakeShuffleMask(x,y,z,w)			(x | (y<<2) | (z<<4) | (w<<6))
 
@@ -117,6 +127,20 @@ namespace VecConst {
 #define VecInterleave_0011(vec1, vec2)			_mm_unpacklo_ps(vec1, vec2)
 // return (vec1[2], vec2[2], vec1[3], vec2[3])
 #define VecInterleave_2233(vec1, vec2)			_mm_unpackhi_ps(vec1, vec2)
+
+// only return -1 or 1, no 0
+_forceinline Vec128 VecSign(Vec128 vec)
+{
+	return _mm_or_ps(_mm_and_ps(vec, VecConst::SignMask), VecConst::Vec_One);
+}
+
+// sign part is only -1 or 1, no 0
+_forceinline void VecSignAndAbs(Vec128 vec, Vec128& outSign, Vec128& outAbs)
+{
+	Vec128 mask = _mm_and_ps(vec, VecConst::SignMask);
+	outSign = _mm_or_ps(mask, VecConst::Vec_One);
+	outAbs = _mm_xor_ps(mask, vec);
+}
 
 // this is slightly faster at the cost of precision around 2-3 bits of fraction
 __forceinline Vec128 VecInvSqrtFast(Vec128 v)
@@ -243,7 +267,8 @@ __forceinline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
 #endif
 }
 
-// won't be correct if input gets too big (over 1.0e+6)
+// won't be correct if input is too big (over 1.0e+6), mainly due to precision lost when rounding to [-PI/2, PI/2]
+// for range [-PI/2, PI/2] (no rounding), max error: 0.001090, avg error: 0.000034
 __forceinline Vec128 VecSin(Vec128 vec)
 {
 	// based on http://forum.devmaster.net/t/fast-and-accurate-sine-cosine/9648
@@ -260,6 +285,78 @@ __forceinline Vec128 VecSin(Vec128 vec)
 __forceinline Vec128 VecCos(Vec128 vec)
 {
 	return VecSin(_mm_add_ps(vec, VecConst::Vec_Half_PI));
+}
+
+__forceinline Vec128 VecTan(Vec128 vec)
+{
+	return _mm_div_ps(VecSin(vec), VecCos(vec));
+}
+
+// [-PI/2, PI/2], max error: 0.000126 rad, avg error: 0.000004 rad
+__forceinline Vec128 VecAsin(Vec128 vec)
+{
+	// based on https://dsp.stackexchange.com/questions/25770/looking-for-an-arcsin-algorithm
+	// ( PI/2 - sqrt(1-|x|)*((PI/2 + A*|x|) + x*x *(B + C*|x|)) ) * sign(x)
+	Vec128 absX, signX;
+	VecSignAndAbs(vec, signX, absX);
+	Vec128 t0 = _mm_add_ps(VecConst::Vec_Half_PI,	_mm_mul_ps(VecConst::AsinParamA, absX));
+	Vec128 t1 = _mm_add_ps(VecConst::AsinParamB,	_mm_mul_ps(VecConst::AsinParamC, absX));
+	Vec128 t2 = _mm_sqrt_ps(_mm_sub_ps(VecConst::Vec_One, absX));
+	Vec128 t3 = _mm_add_ps(t0, _mm_mul_ps(_mm_mul_ps(absX, absX), t1));
+	Vec128 t4 = _mm_mul_ps(t2, t3);
+	return _mm_mul_ps(_mm_sub_ps(VecConst::Vec_Half_PI, t4), signX);
+}
+
+// [0, PI]
+__forceinline Vec128 VecAcos(Vec128 vec)
+{
+	return _mm_sub_ps(VecConst::Vec_Half_PI, VecAsin(vec));
+}
+
+// input limit to [-1, 1], max error: 0.001509 rad, avg error: 0.000052 rad
+__forceinline Vec128 Internal_VecAtan(Vec128 x, Vec128 absX)
+{
+	// based on http://nghiaho.com/?p=997
+	// x * (PI/4 - (|x|-1)*(A + B*|X|))
+	Vec128 t0 = _mm_sub_ps(absX, VecConst::Vec_One);
+	Vec128 t1 = _mm_add_ps(VecConst::AtanParamA, _mm_mul_ps(VecConst::AtanParamB, absX));
+	return _mm_mul_ps(x, _mm_sub_ps(VecConst::Vec_Quat_PI, _mm_mul_ps(t0, t1)));
+}
+
+// [-PI/2, PI/2]
+__forceinline Vec128 VecAtan(Vec128 vec)
+{
+	// if |x| > 1, Atan(x) = PI/2 * sign(x) - Atan(1/x)
+	Vec128 mask = _mm_cmpgt_ps(VecAbs(vec), VecConst::Vec_One);
+	Vec128 x = _mm_blendv_ps(vec, _mm_div_ps(VecConst::Vec_One, vec), mask);
+	Vec128 signX, absX;
+	VecSignAndAbs(x, signX, absX);
+	Vec128 y = Internal_VecAtan(x, absX);
+	return _mm_blendv_ps(
+		y,
+		_mm_sub_ps(_mm_mul_ps(VecConst::Vec_Half_PI, signX), y),
+		mask);
+}
+
+// [-PI, PI]
+__forceinline Vec128 VecAtan2(Vec128 vecY, Vec128 vecX)
+{
+	// if |x| > |y|
+	//    if x >= 0 : Atan(y/x)
+	//    else : Atan(y/x) + PI * sign(y)
+	// else : -Atan(x/y) + PI/2 * sign(y)
+	Vec128 signY, absY;
+	VecSignAndAbs(vecY, signY, absY);
+	Vec128 mask = _mm_cmpgt_ps(absY, VecAbs(vecX));
+	Vec128 z = _mm_div_ps(_mm_blendv_ps(vecY, vecX, mask), _mm_blendv_ps(vecX, vecY, mask));
+	Vec128 absZ = VecAbs(z);
+	Vec128 r = Internal_VecAtan(z, absZ);
+	Vec128 t0 = _mm_blendv_ps(
+		r,
+		_mm_add_ps(r, _mm_mul_ps(VecConst::Vec_PI, signY)),
+		_mm_cmplt_ps(vecX, VecZero()));
+	Vec128 t1 = _mm_sub_ps(_mm_mul_ps(VecConst::Vec_Half_PI, signY), r);
+	return _mm_blendv_ps(t0, t1, mask);
 }
 
 // Matrix 2x2 operations

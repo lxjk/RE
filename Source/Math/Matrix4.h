@@ -233,7 +233,7 @@ public:
 	// inv(A) = Transpose(inv(Transpose(A)))
 	// Inverse function is the same no matter column major or row major
 	// this version treats it as column major
-	__forceinline Matrix4 GetInverse() const
+	inline Matrix4 GetInverse() const
 	{
 		// use block matrix method
 		// A is a matrix, then i(A) or iA means inverse of A, A# (or A_ in code) means adjugate of A, |A| is determinant, tr(A) is trace
@@ -323,7 +323,7 @@ public:
 	// inv(A) = Transpose(inv(Transpose(A)))
 	// Inverse function is the same no matter column major or row major
 	// this version treats it as row major
-	__forceinline Matrix4 GetInverse() const
+	inline Matrix4 GetInverse() const
 	{
 		// use block matrix method
 		// A is a matrix, then i(A) or iA means inverse of A, A# (or A_ in code) means adjugate of A, |A| is determinant, tr(A) is trace
@@ -428,7 +428,7 @@ public:
 	// | Z/c  -dot(T,Z)/c |
 	// |  0      1        |
 	// Requires this matrix to be transform matrix, NoScale version requires this matrix be of scale 1
-	__forceinline Matrix4 GetTransformInverseNoScale() const
+	inline Matrix4 GetTransformInverseNoScale() const
 	{
 		Matrix4 r;
 
@@ -444,7 +444,7 @@ public:
 		return r;
 	}
 	// Requires this matrix to be transform matrix
-	__forceinline Matrix4 GetTransformInverse() const
+	inline Matrix4 GetTransformInverse() const
 	{
 		Matrix4 r;
 
@@ -479,7 +479,7 @@ public:
 	}
 
 #if 0 // no need for calculating normal matrix	
-	__forceinline Matrix4 GetInverseTransposed3() const
+	inline Matrix4 GetInverseTransposed3() const
 	{
 		Matrix4 r;
 
@@ -499,7 +499,7 @@ public:
 		return r;
 	}
 	// Requires this matrix to be transform matrix
-	__forceinline Matrix4 GetTransformInverseTransposed3() const
+	inline Matrix4 GetTransformInverseTransposed3() const
 	{
 		Matrix4 r;
 
@@ -560,7 +560,7 @@ public:
 
 	// return value W = 0
 	// Requires this matrix to be transform matrix, NoScale version requires this matrix be of scale 1
-	__forceinline Vector4_3 InverseTransformVectorNoScale(const Vector4_3& v) const
+	inline Vector4_3 InverseTransformVectorNoScale(const Vector4_3& v) const
 	{
 		// transpose 3x3, we know m03 = m13 = m23 = 0
 		Vec128 tLine0, tLine1, tLine2;
@@ -576,7 +576,7 @@ public:
 	}
 	// return value W = 0
 	// Requires this matrix to be transform matrix
-	__forceinline Vector4_3 InverseTransformVector(const Vector4_3& v) const
+	inline Vector4_3 InverseTransformVector(const Vector4_3& v) const
 	{
 		// transpose 3x3, we know m03 = m13 = m23 = 0
 		Vec128 tLine0, tLine1, tLine2;

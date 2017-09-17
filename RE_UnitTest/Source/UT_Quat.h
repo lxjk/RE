@@ -116,3 +116,42 @@ inline Quat UT_EulerToQuat_Glm(const Vector4& v)
 	Quat q(t.x, t.y, t.z, t.w);
 	return q;
 }
+
+// euler is in degrees
+inline Vector4_3 UT_QuatToEuler(const Quat& q)
+{
+	float x, y, z;
+
+#if EULER_ANGLE==EULER_ZXY
+	float t0 = 2.f * (q.y*q.z + q.x*q.w);
+	if (abs(t0) > 1.f - SMALL_NUMBER)
+	{
+		x = PI * (t0 > 0.f ? 0.5f : -0.5f);
+		z = 0.f;
+		y = 2.f * atan2f(q.y, q.w);
+	}
+	else
+	{
+		x = asinf(t0);
+		z = atan2f(2.f * (q.z*q.w - q.x*q.y), 1.f - 2.f * (q.x*q.x + q.z*q.z));
+		y = atan2f(2.f * (q.y*q.w - q.x*q.z), 1.f - 2.f * (q.x*q.x + q.y*q.y));
+	}
+#else
+	// default to EULER_ZYX
+	float t0 = 2.f * (q.y*q.w - q.x*q.z);
+	if (abs(t0) > 1.f - SMALL_NUMBER)
+	{
+		y = PI * (t0 > 0.f ? 0.5f : -0.5f);
+		z = 0.f;
+		x = 2.f * atan2f(q.x, q.w);
+	}
+	else
+	{
+		y = asinf(t0);
+		z = atan2f(2.f * (q.x*q.y + q.z*q.w), 1.f - 2.f * (q.y*q.y + q.z*q.z));
+		x = atan2f(2.f * (q.y*q.z + q.x*q.w), 1.f - 2.f * (q.x*q.x + q.y*q.y));
+	}
+#endif
+
+	return VecMul(VecSet(x, y, z, 0), VecConst::RadToDeg);
+}

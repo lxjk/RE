@@ -65,7 +65,7 @@ struct BenchData
 	//Matrix4 m1;
 	//Matrix4 m2;
 	Vector4 v1;
-	//Vector4 v2;
+	Vector4 v2;
 	//Quat q1;
 	//Quat q2;
 	//float f;
@@ -79,9 +79,9 @@ void Bench()
 
 	const int count = 10000000;
 	//float tmp = 0;
-	//Vector4 tmp;
+	Vector4 tmp;
 	//Matrix4 tmp;
-	Quat tmp;
+	//Quat tmp;
 	unsigned __int64 acc_t0 = 0, acc_t1 = 0, acc_t2 = 0, acc_tt = 0;
 	LARGE_INTEGER pc0, pc1, pc2, pc3;
 
@@ -102,7 +102,7 @@ void Bench()
 		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
 		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) } };
 		d[i].v1 = Vector4(RandF(), RandF(), RandF(), RandF());
-		//d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
+		d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
 		//d[i].q1 = RandQuat();
 		//d[i].q2 = RandQuat();
 		//d[i].f = RandF();
@@ -111,7 +111,7 @@ void Bench()
 	// -- warmup
 	for (int i = 0; i < count; ++i)
 	{
-		AsVector4(tmp) += *(float*)&d[i];
+		(tmp) += *(float*)&d[i];
 	}
 	// -- warmup
 
@@ -122,9 +122,9 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			//tmp += (VecAdd(VecSin(d[i].v1.mVec), VecCos(d[i].v1.mVec)));
+			tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
 			//tmp += Matrix4ToQuat(d[i].m1);
-			//tmp += EulerToQuat2(d[i].v1);
+			//tmp += QuatToEuler(d[i].q1);
 			//tmp += d[i].m1.GetInverse();
 			//tmp += UT_Matrix4_GetInverse_Intel(d[i].m1);
 			//tmp += d[i].m1.InverseTransformPoint(d[i].v1);
@@ -143,7 +143,11 @@ void Bench()
 			//Vec128 s, c;
 			//VecSinCos(d[i].v1.mVec, s, c);
 			//tmp += (VecAdd(s, c));
-			tmp += EulerToQuat(d[i].v1);
+			//tmp += EulerToQuat(d[i].v1);
+			tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
+			//tmp += atan2f(d[i].v1.x, d[i].v2.x);
+			//tmp += atan2f(d[i].v1.y, d[i].v2.y);
+			//tmp += QuatToEuler(d[i].q1);
 			//tmp += GlmQuatToQuat(glm::quat(Vector4ToGlmVec4(d[i].v1)));
 			//tmp += d[i].m1.GetTransformInverseNoScale();
 			//tmp += UT_Matrix4_GetInverse_UE4(d[i].m1);
@@ -160,8 +164,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			//tmp += (VecAdd(VecSin(d[i].v1.mVec), VecCos(d[i].v1.mVec)));
-			//tmp += EulerToQuat2(d[i].v1);
+			tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
+			//tmp += QuatToEuler(d[i].q1);
 			//tmp += d[i].m1.GetTransformInverse();
 			//tmp += UT_Matrix4_GetInverse_DirectX(d[i].m1);
 			//tmp += d[i].m1.GetTransformInverse().TransformPoint(d[i].v1);
@@ -197,7 +201,7 @@ int main(int argc, char **argv)
 {
 	srand(time(0));
 	
-	Bench();
+	//Bench();
 
 	//ExhaustTest();
 
@@ -206,6 +210,27 @@ int main(int argc, char **argv)
 	//	[](const Matrix4& m1) { return Matrix4ToQuat(m1);},
 	//	[](const Matrix4& m1) { return UT_Matrix4ToQuat(m1);},
 	//	-10000.f, 10000.f, 1.f, 1.f, 20000, 4
+	//	);
+
+	//RandomTest<FuncQ2V>(
+	//	[](const Quat& q1) { return UT_QuatToEuler(q1); },
+	//	[](const Quat& q1) { Vector4 r = QuatToEuler(q1); r.w = 0; return r;},
+	//	[](const Quat& q1) { return UT_QuatToEuler(q1); },
+	//	-2, 2, 20000, 3
+	//	);
+
+	//Quat q = EulerToQuat(Vector4(90, 20, 0));
+	//Vector4 r1 = UT_QuatToEuler(q);
+	//Vector4 r2 = QuatToEuler(q); r2.w = 0;
+	//glm::quat q_g = QuatToGlmQuat(q); Vector4 r3 = GlmVec3ToVector4(glm::degrees(glm::eulerAngles(q_g)));
+	//Check(q, r1, r2, r3, 3);
+
+
+	//RandomTest<FuncQ2Q>(
+	//	[](const Quat& q1) { return EulerToQuat(QuatToEuler(q1)); },
+	//	[](const Quat& q1) { return q1; },
+	//	[](const Quat& q1) { return q1; },
+	//	-2, 2, 20000, 3
 	//	);
 
 	//RandomTest<FuncQ2M>(
@@ -278,12 +303,12 @@ int main(int argc, char **argv)
 	//	-2, 2, 20000, 0
 	//	);
 
-	//RandomTest<FuncVV2V>(
-	//	[](const Vector4& v1, const Vector4& v2) { return VecDot2V(v1.mVec, v2.mVec);},
-	//	[](const Vector4& v1, const Vector4& v2) { return VecSet1(UT_Vector4_Dot2(v1, v2));},
-	//	[](const Vector4& v1, const Vector4& v2) { return VecSet1(UT_Vector4_Dot2_Glm(v1, v2));},
-	//	-2, 2, 20000, 0
-	//	);
+	RandomTest<FuncVV2V>(
+		[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
+		[](const Vector4& v1, const Vector4& v2) { return VecSet(atan2f(v1.x, v2.x), atan2f(v1.y, v2.y), atan2f(v1.z, v2.z), atan2f(v1.w, v2.w));},
+		[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
+		-2, 2, 20000, 4
+		);
 	
 	//RandomTest<FuncVV2F>(
 	//	[](const Vector4& v1, const Vector4& v2) { return VecDot2(v1.mVec, v2.mVec);},
@@ -356,10 +381,10 @@ int main(int argc, char **argv)
 	//Vector4 r2 = Test_SSE_M(v1, v2);
 
 	//IntFloatUnion u;
-	//u.f = 25165824.0f;
+	//u.f = +5.1331920e-12f;
 
-	//__m128 x = _mm_set1_ps(-0.4f);
-	//x = _mm_sub_ps(x, _mm_round_ps(x, _MM_FROUND_TRUNC));
+	//__m128 x = _mm_set1_ps(u.f);
+	//x = VecAtan(x);
 
 
 	//printf("done %f\n", x);

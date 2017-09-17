@@ -151,7 +151,7 @@ inline int CheckEquals(float f1, float f2)
 
 	float diff = abs(f1 - f2);
 	float maxValue = max(1, max(abs(f1), abs(f2)));
-	if (diff <= maxValue * 0.002)
+	if (diff <= maxValue * 0.0001)
 		return 3;
 
 	if (abs(u1.i - u2.i) < 0x3)
@@ -261,11 +261,13 @@ void ExhaustTest()
 		u.u = (unsigned int)i64;
 		//u.f = t;
 
-		if (!IsFloatSpecial(u.i) && abs(u.f) < 10000)
+		if (!IsFloatSpecial(u.i) && abs(u.f) <= 3.1416f * 0.5f)
 		{
-			Vec128 s, c;
-			s = VecSin(VecSet1(u.f));
-			float r1 = VecToFloat(s);
+			//Vec128 s, c;
+			//s = VecSin(VecSet1(u.f));
+			//float r1 = VecToFloat(s);
+			//float r2 = sinf(u.f);
+			float r1 = VecToFloat(VecSin(VecSet1(u.f)));
 			float r2 = sinf(u.f);
 			float e = abs(r1 - r2);
 			ue.f = e;
@@ -276,7 +278,7 @@ void ExhaustTest()
 				if (e > maxError)
 				{
 					maxError = e;
-					if (e > 0.001 && e > prevError)
+					if (e > 0.01 && e > prevError)
 						DebugLog("input: %+.07e, r1: %+.07e, r2: %+.07e, e: %+.07e, avg: %+.07e, count %+.07e\n", u.f / PI * 180, r1, r2, e, (error / count), count);
 				}
 				prevError = e;
@@ -384,6 +386,7 @@ inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float max
 #define LoopEnd }
 
 
+typedef std::function<Vector4(const Quat&)> FuncQ2V;
 typedef std::function<Matrix4(const Quat&)> FuncQ2M;
 typedef std::function<Quat(const Quat&)> FuncQ2Q;
 typedef std::function<Vector4(const Quat&, const Vector4&)> FuncQV2V;
@@ -401,6 +404,17 @@ typedef std::function<Quat(const Vector4&)> FuncV2Q;
 
 template<typename T>
 void RandomTest(T f1, T f2, T f3, float minR, float maxR, int count = 10000, int level = 0);
+
+template<>
+void RandomTest(FuncQ2V f1, FuncQ2V f2, FuncQ2V f3, float minR, float maxR, int count, int level)
+{
+	QuatLoopBegin(i, count, v1)
+	{
+		Check(v1, f1(v1), f2(v1), f3(v1), level);
+		printf("%d\n", i);
+	}
+	LoopEnd
+}
 
 template<>
 void RandomTest(FuncQ2M f1, FuncQ2M f2, FuncQ2M f3, float minR, float maxR, int count, int level)
