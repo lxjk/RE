@@ -1,15 +1,13 @@
 #pragma once
 
-#include "glm/glm.hpp"
-
 #include "Viewpoint.h"
 
 class Camera
 {
 public:
-	glm::vec3 position;
-	glm::vec3 euler; // degree
-	GLfloat fov; // degree
+	Vector4_3 position;
+	Vector4_3 euler; // degree
+	float fov; // degree
 
 	const Viewpoint& ProcessCamera(float width, float height, float nearPlane, float farPlane, float jitterX = 0, float jitterY = 0)
 	{
@@ -21,8 +19,8 @@ public:
 		viewpoint.jitterY = jitterY;
 
 		viewpoint.position = position;
-		viewpoint.rotation = glm::quat(glm::radians(euler));
-		viewpoint.fov = glm::radians(fov);
+		viewpoint.rotation = EulerToQuat(euler);
+		viewpoint.fov = DegToRad(fov);
 
 		viewpoint.CacheMatrices();
 

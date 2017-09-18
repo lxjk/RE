@@ -55,8 +55,8 @@ namespace VecConst {
 	namespace _internal_sin
 	{
 		static const float p = 0.225f;
-		static const float a = 16 * sqrt(p);
-		static const float b = ((1 - p) / sqrt(p));
+		static const float a = (float)(16.0 * sqrt(p));
+		static const float b = (float)((1.0 - p) / sqrt(p));
 	}
 	const Vec128 SinParamA				= VecSet1(_internal_sin::a);
 	const Vec128 SinParamB				= VecSet1(_internal_sin::b);
@@ -85,6 +85,9 @@ namespace VecConst {
 //#define VecNegate(vec)			_mm_sub_ps(_mm_setzero_ps(), vec)
 #define VecNegate(vec)			_mm_xor_ps(vec, VecConst::SignMask)
 #define VecAbs(vec)				_mm_and_ps(vec, VecConst::InvSignMask)
+
+#define VecMin(vec1, vec2)		_mm_min_ps(vec1, vec2)
+#define VecMax(vec1, vec2)		_mm_max_ps(vec1, vec2)
 
 #define VecSqrt(vec)			_mm_sqrt_ps(vec)
 #define VecRcp(vec)				_mm_rcp_ps(vec)

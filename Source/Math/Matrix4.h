@@ -59,6 +59,17 @@ public:
 		return identity;
 	}
 
+	static __forceinline Matrix4 Zero()
+	{
+		static Matrix4 identity(
+			VecZero(),
+			VecZero(),
+			VecZero(),
+			VecZero()
+			);
+		return identity;
+	}
+
 	// add
 	inline Matrix4 operator+(const Matrix4& m) const
 	{
@@ -228,6 +239,27 @@ public:
 		r.mVec[3] = VecShuffle(t2, t3, 1, 3, 1, 3); // 03, 13, 23, 33
 
 		return r;		
+	}
+
+	// returns (00, 10, 20, 23), (01, 11, 21, 23), (02, 12, 22, 23)
+	__forceinline void Internal_GetTransposed3(Vec128& outTLine0, Vec128& outTLine1, Vec128& outTLine2) const
+	{
+		Vec128 t0 = VecShuffle_0101(mVec[0], mVec[1]); // 00, 01, 10, 11
+		Vec128 t1 = VecShuffle_2323(mVec[0], mVec[1]); // 02, 03, 12, 13
+		outTLine0 = VecShuffle(t0, mVec[2], 0, 2, 0, 3); // 00, 10, 20, 23
+		outTLine1 = VecShuffle(t0, mVec[2], 1, 3, 1, 3); // 01, 11, 21, 23
+		outTLine2 = VecShuffle(t1, mVec[2], 0, 2, 2, 3); // 02, 12, 22, 23
+	}
+
+	inline Matrix4 GetTransposed3() const
+	{
+		Matrix4 r;
+
+		// transpose 3x3, we know m03 = m13 = m23 = 0
+		Internal_GetTransposed3(r.mVec[0], r.mVec[1], r.mVec[2]);
+		r.mVec[3] = mVec[3];
+
+		return r;
 	}
 
 	// inv(A) = Transpose(inv(Transpose(A)))
@@ -408,16 +440,6 @@ public:
 		return r;
 	}
 #endif
-
-	// returns (00, 10, 20, 23), (01, 11, 21, 23), (02, 12, 22, 23)
-	__forceinline void Internal_GetTransposed3(Vec128& outTLine0, Vec128& outTLine1, Vec128& outTLine2) const
-	{
-		Vec128 t0 = VecShuffle_0101(mVec[0], mVec[1]); // 00, 01, 10, 11
-		Vec128 t1 = VecShuffle_2323(mVec[0], mVec[1]); // 02, 03, 12, 13
-		outTLine0 = VecShuffle(t0, mVec[2], 0,2,0,3); // 00, 10, 20, 23
-		outTLine1 = VecShuffle(t0, mVec[2], 1,3,1,3); // 01, 11, 21, 23
-		outTLine2 = VecShuffle(t1, mVec[2], 0,2,2,3); // 02, 12, 22, 23
-	}
 
 	// if this matrix is a tranform matrix as scaled axes and translation
 	// | aX bY cZ T |
@@ -685,6 +707,41 @@ public:
 		return VecToFloat(sums);
 	}
 #endif
+	
+	// set axes, will zero w component
+	void SetAxes(const Vector4& x, const Vector4& y, const Vector4& z)
+	{
+		mVec[0] = VecAnd(x.mVec, VecConst::VecMaskXYZ);
+		mVec[1] = VecAnd(y.mVec, VecConst::VecMaskXYZ);
+		mVec[2] = VecAnd(z.mVec, VecConst::VecMaskXYZ);
+	}
 
+	// set translation, will set w to 1
+	void SetTranslation(const Vector4& t)
+	{
+		mVec[3] = VecBlend(t.mVec, VecConst::Vec_One, 0, 0, 0, 1);
+	}
+
+	void ApplyScale(float x)
+	{
+		Vec128 s = VecSet1(x);
+		mVec[0] = VecMul(mVec[0], s);
+		mVec[1] = VecMul(mVec[1], s);
+		mVec[2] = VecMul(mVec[2], s);
+	}
+
+	void ApplyScale(float x, float y, float z)
+	{
+		mVec[0] = VecMul(mVec[0], VecSet1(x));
+		mVec[1] = VecMul(mVec[1], VecSet1(y));
+		mVec[2] = VecMul(mVec[2], VecSet1(z));
+	}
+
+	void ApplyScale(const Vector4_3& s)
+	{
+		mVec[0] = VecMul(mVec[0], VecSwizzle1(s.mVec, 0));
+		mVec[1] = VecMul(mVec[1], VecSwizzle1(s.mVec, 1));
+		mVec[2] = VecMul(mVec[2], VecSwizzle1(s.mVec, 2));
+	}
 
 };

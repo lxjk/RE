@@ -141,21 +141,14 @@ public:
 		SetParameter(name, (char*)tex, sizeof(Texture*), EMaterialParameterType::TEX);
 	}
 	
-	inline void SetParameter(const char* name, const glm::vec4& value)
+	inline void SetParameter(const char* name, const Vector4& value, int count)
 	{
-		SetParameter(name, (char*)glm::value_ptr(value), 4 * sizeof(GLfloat), EMaterialParameterType::VEC4);
+		assert(count >= 2 && count <= 4);
+		EMaterialParameterType type = (count == 4) ? EMaterialParameterType::VEC4 :
+			((count == 3) ? EMaterialParameterType::VEC3 : EMaterialParameterType::VEC2);
+		SetParameter(name, (char*)(value.m), count * sizeof(GLfloat), type);
 	}
-
-	inline void SetParameter(const char* name, const glm::vec3& value)
-	{
-		SetParameter(name, (char*)glm::value_ptr(value), 3 * sizeof(GLfloat), EMaterialParameterType::VEC3);
-	}
-
-	inline void SetParameter(const char* name, const glm::vec2& value)
-	{
-		SetParameter(name, (char*)glm::value_ptr(value), 2 * sizeof(GLfloat), EMaterialParameterType::VEC2);
-	}
-
+	
 	inline void SetParameter(const char* name, GLfloat value)
 	{
 		SetParameter(name, (char*)(&value), sizeof(GLfloat), EMaterialParameterType::FLOAT);
@@ -166,13 +159,8 @@ public:
 		SetParameter(name, (char*)(&value), sizeof(GLint), EMaterialParameterType::INT);
 	}
 
-	inline void SetParameter(const char* name, const glm::mat4& value)
+	inline void SetParameter(const char* name, const Matrix4& value)
 	{
-		SetParameter(name, (char*)glm::value_ptr(value), 16 * sizeof(GLfloat), EMaterialParameterType::MAT4);
-	}
-
-	inline void SetParameter(const char* name, const glm::mat3& value)
-	{
-		SetParameter(name, (char*)glm::value_ptr(value), 9 * sizeof(GLfloat), EMaterialParameterType::MAT3);
+		SetParameter(name, (char*)(value.m), 16 * sizeof(GLfloat), EMaterialParameterType::MAT4);
 	}
 };

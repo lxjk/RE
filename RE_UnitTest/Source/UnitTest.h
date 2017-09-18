@@ -327,7 +327,7 @@ inline Quat RandQuat()
 inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float maxS)
 {
 	Vector4 q(RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f), RandRangeF(-1.f, 1.f));
-	q = q.GetNormalized();
+	q = q.GetNormalized4();
 	Matrix4 r = {
 		{1 - 2*q.y*q.y - 2*q.z*q.z,	2*q.x*q.y + 2*q.z*q.w,		2*q.x*q.z - 2*q.y*q.w,		0},
 		{2*q.x*q.y - 2*q.z*q.w,		1 - 2*q.x*q.x - 2*q.z*q.z,	2*q.y*q.z + 2*q.x*q.w,		0},

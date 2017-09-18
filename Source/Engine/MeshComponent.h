@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "glm/glm.hpp"
+#include "../Math/REMath.h"
 
 #include "Component.h"
 
@@ -20,13 +20,12 @@ public:
 		return mc;
 	}
 
-	glm::vec3 position;
-	glm::vec3 rotation;
-	glm::vec3 scale;
+	Vector4_3 position;
+	Vector4_3 rotation; // degrees
+	Vector4_3 scale;
 
-	glm::mat4 prevModelMat;
-	glm::mat4 modelMat;
-	//glm::mat3 normalMat;
+	Matrix4 prevModelMat;
+	Matrix4 modelMat;
 
 
 	BoxBounds bounds;
@@ -34,16 +33,16 @@ public:
 	BoxBounds boundsLS;
 
 	MeshComponent()
-	: position(glm::vec3(0))
-	, rotation(glm::vec3(0))
-	, scale(glm::vec3(1))
+	: position(Vector4_3::Zero())
+	, rotation(Vector4_3::Zero())
+	, scale(Vector4_3(1))
 	, bRenderTransformDirty(true)
 	{}
 
 	MeshComponent(const std::vector<Mesh*>& inMeshList,
-		glm::vec3 inPosition = glm::vec3(0),
-		glm::vec3 inRotation = glm::vec3(0),
-		glm::vec3 inScale = glm::vec3(1))
+		Vector4_3 inPosition = Vector4_3::Zero(),
+		Vector4_3 inRotation = Vector4_3::Zero(),
+		Vector4_3 inScale = Vector4_3(1))
 		: position(inPosition)
 		, rotation(inRotation)
 		, scale(inScale)
@@ -53,19 +52,19 @@ public:
 		SetMeshList(inMeshList);
 	}
 
-	inline void SetPosition(const glm::vec3& inPosition)
+	inline void SetPosition(const Vector4_3& inPosition)
 	{
 		position = inPosition;
 		bRenderTransformDirty = true;
 	}
 
-	inline void SetRotation(const glm::vec3& inRotation)
+	inline void SetRotation(const Vector4_3& inRotation)
 	{
 		rotation = inRotation;
 		bRenderTransformDirty = true;
 	}
 
-	inline void SetScale(const glm::vec3& inScale)
+	inline void SetScale(const Vector4_3& inScale)
 	{
 		scale = inScale;
 		bRenderTransformDirty = true;

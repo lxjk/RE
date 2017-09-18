@@ -21,17 +21,17 @@ void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene,
 	bool bHasTexCoord = (mesh->mTextureCoords[0] > 0);
 	for (unsigned int i = 0; i < mesh->mNumVertices; ++i)
 	{
-		glm::vec3 normal(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
-		glm::vec3 tangent(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
-		glm::vec3 bitangent(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z);
-		float handness = glm::dot(glm::cross(normal, tangent), bitangent) > 0 ? 1.f : -1.f;
+		Vector4_3 normal(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+		Vector4_3 tangent(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
+		Vector4_3 bitangent(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z);
+		float handness = (normal.Cross3(tangent)).Dot3(bitangent) > 0 ? 1.f : -1.f;
 
 		vertList.push_back(
 			Vertex(
-				glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
+				Vector4_3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
 				normal,
-				glm::vec4(tangent, handness),
-				bHasTexCoord ? glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) : glm::vec2(0, 0))
+				Vector4(tangent, handness),
+				bHasTexCoord ? Vector4_2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) : Vector4_2(0, 0))
 			);
 	}
 

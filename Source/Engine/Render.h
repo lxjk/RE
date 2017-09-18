@@ -6,10 +6,8 @@
 // opengl
 #include "SDL_opengl.h"
 
-// glm
-#include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
+// math
+#include "../Math/REMath.h"
 
 // std
 #include <functional>
@@ -27,14 +25,14 @@ struct RenderContext
 
 struct RenderInfo
 {
-	glm::mat4 View;			// 16 * 4
-	glm::mat4 Proj;			// 16 * 4
-	glm::mat4 ViewProj;		// 16 * 4
-	glm::mat4 InvView;		// 16 * 4
-	glm::mat4 PrevView;		// 16 * 4
-	glm::mat4 PrevProj;		// 16 * 4
-	glm::mat4 PrevViewProj;	// 16 * 4
-	glm::vec4 Resolution;	// 16
+	Matrix4 View;			// 16 * 4
+	Matrix4 Proj;			// 16 * 4
+	Matrix4 ViewProj;		// 16 * 4
+	Matrix4 InvView;		// 16 * 4
+	Matrix4 PrevView;		// 16 * 4
+	Matrix4 PrevProj;		// 16 * 4
+	Matrix4 PrevViewProj;	// 16 * 4
+	Vector4 Resolution;		// 16
 	float Time;				// 4
 	float Exposure;			// 4
 };

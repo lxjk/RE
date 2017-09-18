@@ -10,10 +10,8 @@
 // opengl
 #include "SDL_opengl.h"
 
-// glm
-#include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
+// math
+#include "Math/REMath.h"
 
 // std
 #include <stdlib.h>
@@ -33,7 +31,6 @@
 #include "Engine/Light.h"
 #include "Engine/Viewpoint.h"
 #include "Engine/Camera.h"
-#include "Engine/Math.h"
 #include "Engine/Profiler.h"
 #include "Engine/Render.h"
 #include "Engine/Bounds.h"
@@ -103,21 +100,21 @@ float* gDebugTexBuffer;
 #endif
 
 // light const
-static glm::mat4 gLightOmniViewMat[6];
+static Matrix4 gLightOmniViewMat[6];
 
 // jitter
 #define JITTER_HALTON 1
 #if JITTER_HALTON
 const static int gJitterCount = 16;
-glm::vec2 gJitter[gJitterCount];
+Vector4_2 gJitter[gJitterCount];
 #else
 const int gJitterCount = 4;
-glm::vec2 gJitter[gJitterCount] =
+Vector4_2 gJitter[gJitterCount] =
 {
-	glm::vec2(-2.f / 16.f, -6.f / 16.f),
-	glm::vec2(6.f / 16.f, -2.f / 16.f),
-	glm::vec2(2.f / 16.f,  6.f / 16.f),
-	glm::vec2(-6.f / 16.f,  2.f / 16.f)
+	Vector4_2(-2.f / 16.f, -6.f / 16.f),
+	Vector4_2(6.f / 16.f, -2.f / 16.f),
+	Vector4_2(2.f / 16.f,  6.f / 16.f),
+	Vector4_2(-6.f / 16.f,  2.f / 16.f)
 };
 #endif
 int gJitterIdx = 0;
@@ -296,11 +293,11 @@ void MakeLights()
 	dlIdx = (int)gDirectionalLights.size() - 1;
 	gDirectionalLights[dlIdx].SetDirectionLight(
 #if LOAD_SCENE_MESH
-		/*dir=*/	glm::vec3(-0.8, -5, -2),
+		/*dir=*/	Vector4_3(-0.8f, -5.f, -2.f),
 #else
-		/*dir=*/	glm::vec3(-0.8, -1, -2),
+		/*dir=*/	Vector4_3(-0.8f, -1.f, -2.f),
 #endif
-		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
+		/*color=*/	Vector4_3(1.f, 1.f, 1.f),
 		/*int=*/	1
 	);
 	gDirectionalLights[dlIdx].bCastShadow = true;
@@ -313,9 +310,9 @@ void MakeLights()
 	//	Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	//plIdx = (int)gPointLights.size() - 1;
 	//gPointLights[plIdx].SetPointLight(
-	//	/*pos=*/	glm::vec3(-5, 20, 0),
+	//	/*pos=*/	Vector4_3(-5, 20, 0),
 	//	/*radius=*/	80.f,
-	//	/*color=*/	glm::vec3(1.f, 1.f, 1.f),
+	//	/*color=*/	Vector4_3(1.f, 1.f, 1.f),
 	//	/*int=*/	40
 	//);
 	//gPointLights[plIdx].bCastShadow = true;
@@ -324,9 +321,9 @@ void MakeLights()
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	glm::vec3(0, 2, 3),
+		/*pos=*/	Vector4_3(0, 2, 3),
 		/*radius=*/	4.f,
-		/*color=*/	glm::vec3(1.f, 1.f, 1.f),
+		/*color=*/	Vector4_3(1.f, 1.f, 1.f),
 		/*int=*/	20
 	);
 	gPointLights[plIdx].bCastShadow = true;
@@ -335,9 +332,9 @@ void MakeLights()
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	glm::vec3(10, 2, 2),
+		/*pos=*/	Vector4_3(10, 2, 2),
 		/*radius=*/	10.f,
-		/*color=*/	glm::vec3(0.f, 1.f, 0.f),
+		/*color=*/	Vector4_3(0.f, 1.f, 0.f),
 		/*int=*/	20
 	);
 	gPointLights[plIdx].bCastShadow = true;
@@ -347,9 +344,9 @@ void MakeLights()
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	glm::vec3(-10, 3, 3),
+		/*pos=*/	Vector4_3(-10, 3, 3),
 		/*radius=*/	10.f,
-		/*color=*/	glm::vec3(1.f, 0.f, 0.f),
+		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
 		/*int=*/	20
 	);
 	gPointLights[plIdx].bCastShadow = true;
@@ -360,9 +357,9 @@ void MakeLights()
 	//		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	//	plIdx = (int)gPointLights.size() - 1;
 	//	gPointLights[plIdx].SetPointLight(
-	//		/*pos=*/	glm::vec3(-10, 3, 3),
+	//		/*pos=*/	Vector4_3(-10, 3, 3),
 	//		/*radius=*/	10.f,
-	//		/*color=*/	glm::vec3(1.f, 0.f, 0.f),
+	//		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
 	//		/*int=*/	20
 	//	);
 
@@ -374,12 +371,12 @@ void MakeLights()
 		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader))));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
-		/*pos=*/	glm::vec3(0, 3, 10),
-		/*dir=*/	glm::vec3(-2, -0.5f, -0.2f),
+		/*pos=*/	Vector4_3(0, 3, 10),
+		/*dir=*/	Vector4_3(-2, -0.5f, -0.2f),
 		/*radius=*/	20.f,
 		/*hOuter=*/	45.f,
 		/*hInner=*/	20.f,
-		/*color=*/	glm::vec3(0.f, 0.f, 1.f),
+		/*color=*/	Vector4_3(0.f, 0.f, 1.f),
 		/*int=*/	1000
 	);
 	gSpotLights[slIdx].bCastShadow = true;
@@ -397,9 +394,9 @@ void MakeMeshComponents()
 	{
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(boxMesh);
-		meshComp->SetPosition(glm::vec3(-10 + i * 10, 0, 0));
-		meshComp->SetRotation(glm::vec3(0, 45, 0));
-		meshComp->SetScale(glm::vec3(1.5f, 1.f, 1.2f));
+		meshComp->SetPosition(Vector4_3(-10.f + i * 10.f, 0.f, 0.f));
+		meshComp->SetRotation(Vector4_3(0.f, 45.f, 0.f));
+		meshComp->SetScale(Vector4_3(1.5f, 1.f, 1.2f));
 	}
 
 	// sphere
@@ -410,7 +407,7 @@ void MakeMeshComponents()
 		sphereMesh->material->SetParameter("roughness", i * 0.9f / 19.f + 0.1f);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(sphereMesh);
-		meshComp->SetPosition(glm::vec3(-20 + i * 2.5, 0, 7.5));
+		meshComp->SetPosition(Vector4_3(-20.f + i * 2.5f, 0.f, 7.5f));
 	}
 
 	for (int i = 0; i < 20; ++i)
@@ -420,15 +417,15 @@ void MakeMeshComponents()
 		sphereMesh->material->SetParameter("roughness", 0.4f);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(sphereMesh);
-		meshComp->SetPosition(glm::vec3(-20 + i * 2.5, 0, 12.5));
+		meshComp->SetPosition(Vector4_3(-20.f + i * 2.5f, 0.f, 12.5f));
 	}
 
 	// nanosuit
 	{
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->SetMeshList(gNanosuitMeshes);
-		meshComp->SetPosition(glm::vec3(5, -1, 5));
-		meshComp->SetScale(glm::vec3(0.3f, 0.3f, 0.3f));
+		meshComp->SetPosition(Vector4_3(5, -1, 5));
+		meshComp->SetScale(Vector4_3(0.3f, 0.3f, 0.3f));
 
 		const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
 		for (int i = 0; i < meshList.size(); ++i)
@@ -445,8 +442,8 @@ void MakeMeshComponents()
 		//{
 		//	MeshComponent* meshComp = MeshComponent::Create();
 		//	meshComp->AddMesh(gNanosuitMeshes[i]);
-		//	meshComp->SetPosition(glm::vec3(5, -1, 5));
-		//	meshComp->SetScale(glm::vec3(0.3f, 0.3f, 0.3f));
+		//	meshComp->SetPosition(Vector4_3(5, -1, 5));
+		//	meshComp->SetScale(Vector4_3(0.3f, 0.3f, 0.3f));
 
 		//	Material* material = gNanosuitMeshes[i]->material;
 		//	if (!material)
@@ -462,8 +459,8 @@ void MakeMeshComponents()
 	{
 		//MeshComponent* meshComp = MeshComponent::Create();
 		//meshComp->SetMeshList(gSceneMeshes);
-		//meshComp->SetPosition(glm::vec3(0, -1, 6));
-		//meshComp->SetScale(glm::vec3(1.f, 1.f, 1.f) * 0.07f);
+		//meshComp->SetPosition(Vector4_3(0, -1, 6));
+		//meshComp->SetScale(Vector4_3(1.f, 1.f, 1.f) * 0.07f);
 
 		//const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
 		//for (int i = 0; i < meshList.size(); ++i)
@@ -480,8 +477,8 @@ void MakeMeshComponents()
 		{
 			MeshComponent* meshComp = MeshComponent::Create();
 			meshComp->AddMesh(gSceneMeshes[i]);
-			meshComp->SetPosition(glm::vec3(0, -1, 6));
-			meshComp->SetScale(glm::vec3(1.f, 1.f, 1.f) * 0.07f);
+			meshComp->SetPosition(Vector4_3(0, -1, 6));
+			meshComp->SetScale(Vector4_3(1.f, 1.f, 1.f) * 0.07f);
 
 			Material* material = gSceneMeshes[i]->material;
 			if (!material)
@@ -498,14 +495,14 @@ void MakeMeshComponents()
 		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
 		floorMesh->material->SetParameter("diffuseTex", gFloorDiffuseMap);
 		floorMesh->material->SetParameter("normalTex", gFloorNormalMap);
-		floorMesh->material->SetParameter("tile", glm::vec4(32, 32, 0, 0));
+		floorMesh->material->SetParameter("tile", Vector4(32, 32, 0, 0), 4);
 		floorMesh->material->SetParameter("metallic", 0.f);
 		floorMesh->material->SetParameter("roughness", 0.3f);
-		floorMesh->material->SetParameter("color", glm::vec3(0.2f));
+		floorMesh->material->SetParameter("color", Vector4_3(0.2f), 3);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(floorMesh);
-		meshComp->SetPosition(glm::vec3(0.f, -1.2f, 0.f));
-		meshComp->SetScale(glm::vec3(32.f, 0.2f, 32.f));
+		meshComp->SetPosition(Vector4_3(0.f, -1.2f, 0.f));
+		meshComp->SetScale(Vector4_3(32.f, 0.2f, 32.f));
 	}
 
 	//{
@@ -514,11 +511,11 @@ void MakeMeshComponents()
 	//	floorMesh->material->SetParameter("hasNormalTex", 0);
 	//	floorMesh->material->SetParameter("metallic", 0.f);
 	//	floorMesh->material->SetParameter("roughness", 0.f);
-	//	floorMesh->material->SetParameter("color", glm::vec3(0.2f));
+	//	floorMesh->material->SetParameter("color", Vector4_3(0.2f));
 	//	MeshComponent* meshComp = MeshComponent::Create();
 	//	meshComp->AddMesh(floorMesh);
-	//	meshComp->SetPosition(glm::vec3(-21.2f, 0.f, 0.f));
-	//	meshComp->SetScale(glm::vec3(0.2f, 5.f, 32.f));
+	//	meshComp->SetPosition(Vector4_3(-21.2f, 0.f, 0.f));
+	//	meshComp->SetScale(Vector4_3(0.2f, 5.f, 32.f));
 	//}
 }
 
@@ -689,18 +686,18 @@ void InitializeHalton_2_3()
 
 void InitializeLightOmniViewMat()
 {
-	const static glm::vec3 omniDirs[6][2] =
+	const static Vector4_3 omniDirs[6][2] =
 	{
-		{ glm::vec3(1, 0, 0),	glm::vec3(0, -1, 0) },
-		{ glm::vec3(-1, 0, 0),	glm::vec3(0, -1, 0) },
-		{ glm::vec3(0, 1, 0),	glm::vec3(0, 0, 1) },
-		{ glm::vec3(0, -1, 0),	glm::vec3(0, 0, -1) },
-		{ glm::vec3(0, 0, 1),	glm::vec3(0, -1, 0) },
-		{ glm::vec3(0, 0, -1),	glm::vec3(0, -1, 0) }
+		{ Vector4_3(1, 0, 0),	Vector4_3(0, -1, 0) },
+		{ Vector4_3(-1, 0, 0),	Vector4_3(0, -1, 0) },
+		{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, 1) },
+		{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },
+		{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },
+		{ Vector4_3(0, 0, -1),	Vector4_3(0, -1, 0) }
 	};
 	for (int i = 0; i < 6; ++i)
 	{
-		gLightOmniViewMat[i] = glm::transpose(Math::MakeMatFromForward(omniDirs[i][0], omniDirs[i][1]));
+		gLightOmniViewMat[i] = MakeMatrixFromForward(omniDirs[i][0], omniDirs[i][1]).GetTransposed3();
 	}
 }
 
@@ -797,7 +794,7 @@ bool InitEngine()
 	gGBufferMaterial->SetParameter("hasNormalTex", 1);
 	gGBufferMaterial->SetParameter("normalTex", gNormalMap);
 	gGBufferMaterial->SetParameter("hasRoughnessTex", 0);
-	gGBufferMaterial->SetParameter("tile", glm::vec4(1, 1, 0, 0));
+	gGBufferMaterial->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
 
 	// light
 	MakeLights();
@@ -807,8 +804,8 @@ bool InitEngine()
 	
 	// camera
 	gCamera.fov = 90.f;
-	gCamera.position = glm::vec3(0.f, 5.f, 20.f);
-	gCamera.euler = glm::vec3(-10.f, 0.f, 0.f);
+	gCamera.position = Vector4_3(0.f, 5.f, 20.f);
+	gCamera.euler = Vector4_3(-10.f, 0.f, 0.f);
 
 	return true;
 }
@@ -859,14 +856,14 @@ void updateMouseInput(float deltaTime)
 	{
 		gCamera.euler.y -= rotSpeed * deltaTime * deltaX;
 		gCamera.euler.x -= rotSpeed * deltaTime * deltaY;
-		gCamera.euler.x = glm::clamp(gCamera.euler.x, -89.f, 89.f);
+		gCamera.euler.x = Clamp(gCamera.euler.x, -89.f, 89.f);
 		bShouldCaptureMouse = true;
 	}
 
-	glm::quat cameraRot(glm::radians(gCamera.euler));
-	glm::vec3 cameraForward = cameraRot * glm::vec3(0, 0, -1);
-	glm::vec3 cameraUp = cameraRot * glm::vec3(0, 1, 0);
-	glm::vec3 cameraRight = cameraRot * glm::vec3(1, 0, 0);
+	Quat cameraRot = EulerToQuat(gCamera.euler);
+	Vector4_3 cameraForward = cameraRot.Rotate(Vector4_3(0, 0, -1));
+	Vector4_3 cameraUp = cameraRot.Rotate(Vector4_3(0, 1, 0));
+	Vector4_3 cameraRight = cameraRot.Rotate(Vector4_3(1, 0, 0));
 
 	if (mouseState & SDL_BUTTON(SDL_BUTTON_MIDDLE))
 	{
@@ -898,11 +895,11 @@ void updateKeyboardInput(float deltaTime)
 	int x = 0, y = 0;
 	Uint32 mouseState = SDL_GetRelativeMouseState(&x, &y);
 
-	glm::quat cameraRot(glm::radians(gCamera.euler));
-	glm::vec3 cameraForward = cameraRot * glm::vec3(0, 0, -1);
-	glm::vec3 cameraRight = cameraRot * glm::vec3(1, 0, 0);
+	Quat cameraRot = EulerToQuat(gCamera.euler);
+	Vector4_3 cameraForward = cameraRot.Rotate(Vector4_3(0, 0, -1));
+	Vector4_3 cameraRight = cameraRot.Rotate(Vector4_3(1, 0, 0));
 
-	glm::vec3 up = glm::vec3(0, 1, 0);
+	Vector4_3 up = Vector4_3(0, 1, 0);
 
 	const static float maxMoveSpeed = 30.f;
 	const static float minMoveSpeed = 0.1f;
@@ -917,7 +914,7 @@ void updateKeyboardInput(float deltaTime)
 		if (gMouseWheel != 0)
 		{
 			moveSpeed *= (gMouseWheel > 0) ? 1.1f : 0.9f;
-			moveSpeed = glm::clamp(moveSpeed, minMoveSpeed, maxMoveSpeed);
+			moveSpeed = Clamp(moveSpeed, minMoveSpeed, maxMoveSpeed);
 			gMouseWheel = 0;
 		}
 		if (gKeyStates[SDL_SCANCODE_W])
@@ -952,7 +949,7 @@ void Update(float deltaTime)
 {
 	CPU_SCOPED_PROFILE("update");
 
-	float smoothDeltaTime = glm::min(0.03f, deltaTime);
+	float smoothDeltaTime = Min(0.03f, deltaTime);
 
 	updateMouseInput(smoothDeltaTime);
 	updateKeyboardInput(smoothDeltaTime);
@@ -970,15 +967,15 @@ void Update(float deltaTime)
 		}
 
 		float ratio = spotLightLocalTime / totalTime;
-		ratio = glm::abs(ratio * 2 - 1); // [0 - 1] -> [1 - 0 - 1]
+		ratio = abs(ratio * 2 - 1); // [0 - 1] -> [1 - 0 - 1]
 
-		const glm::vec3 startPos(-3, 3, 10);
-		const glm::vec3 endPos(3, 3, 10);
-		const glm::vec3 startDir(-2, -0.5f, -0.2f);
-		const glm::vec3 endDir(2, -0.5f, -0.2f);
+		const Vector4_3 startPos(-3, 3, 10);
+		const Vector4_3 endPos(3, 3, 10);
+		const Vector4_3 startDir(-2, -0.5f, -0.2f);
+		const Vector4_3 endDir(2, -0.5f, -0.2f);
 		
-		gSpotLights[0].SetPosition(glm::mix(startPos, endPos, ratio));
-		gSpotLights[0].SetDirection(glm::normalize(glm::mix(startDir, endDir, ratio)));
+		gSpotLights[0].SetPosition(Lerp(startPos, endPos, ratio));
+		gSpotLights[0].SetDirection(Lerp(startDir, endDir, ratio).GetNormalized3());
 	}
 
 	// end of frame
@@ -1065,9 +1062,9 @@ void DirectionalLightPass(RenderContext& renderContext)
 	for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
 	{
 		Light& light = lightPtr[i];
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity);
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams);
+		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
+		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity, 3);
+		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams, 4);
 		// shadow
 		if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
 		{
@@ -1076,7 +1073,7 @@ void DirectionalLightPass(RenderContext& renderContext)
 			for (int j = 0; j < shadowCount; ++j)
 			{
 				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
-				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds);
+				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds, 3);
 				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
 			}
 			shadowIdx += shadowCount;
@@ -1096,8 +1093,8 @@ void SetupLightVolumeMaterial(RenderContext& renderContext, const Light& light)
 {
 	bool bSpot = (light.attenParams.y > 0);
 
-	light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat));
-	light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat));
+	light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat), 4);
+	light.LightMesh->material->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
 	light.LightMesh->material->SetParameter("modelMat", light.modelMat);
 
 	bool bDrawShadow = gRenderSettings.bDrawShadow && light.bCastShadow;
@@ -1126,7 +1123,7 @@ void SetupLightVolumeMaterial(RenderContext& renderContext, const Light& light)
 	}
 }
 
-void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights, const Mesh* lightVolumeMesh)
+void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights)
 {
 	//GPU_SCOPED_PROFILE("light volume");
 
@@ -1218,21 +1215,21 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 			}
 
 			// camera in light volume?
-			glm::vec3 lightToCamera = renderContext.viewPoint.position - light.position;
+			Vector4_3 lightToCamera = renderContext.viewPoint.position - light.position;
 			float radiusFactor = 1.01f;
 			if (bSpot)
 				radiusFactor /= light.outerCosHalfAngle;
 			float adjustedRadius = light.radius * radiusFactor + renderContext.viewPoint.nearRadius;
-			bool isInLightVolume = (Math::SizeSquared(lightToCamera) <	adjustedRadius * adjustedRadius);
+			bool isInLightVolume = (lightToCamera.SizeSqr3() < adjustedRadius * adjustedRadius);
 			if (bSpot && isInLightVolume)
 			{
 				// cone check
-				isInLightVolume = (glm::dot(glm::normalize(lightToCamera), light.direction) > light.outerCosHalfAngle - KINDA_SMALL_NUMBER);
+				isInLightVolume = (lightToCamera.GetNormalized3().Dot3(light.direction) > light.outerCosHalfAngle - KINDA_SMALL_NUMBER);
 				if (!isInLightVolume)
 				{
 					// test near plane clip
-					float dp = glm::dot(lightToCamera, light.direction);
-					isInLightVolume |= (sqrt(Math::SizeSquared(lightToCamera) - dp * dp) - dp * light.outerTanHalfAngle) * light.outerCosHalfAngle <= renderContext.viewPoint.nearRadius;
+					float dp = lightToCamera.Dot3(light.direction);
+					isInLightVolume |= (sqrt(lightToCamera.SizeSqr3() - dp * dp) - dp * light.outerTanHalfAngle) * light.outerCosHalfAngle <= renderContext.viewPoint.nearRadius;
 				}
 			}
 
@@ -1294,13 +1291,13 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 void PointLightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("point light");
-	LightVolumePass(renderContext, gPointLights, gPointLightMesh);
+	LightVolumePass(renderContext, gPointLights);
 }
 
 void SpotLightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("spot light");
-	LightVolumePass(renderContext, gSpotLights, gSpotLightMesh);
+	LightVolumePass(renderContext, gSpotLights);
 }
 
 void LightPass(RenderContext& renderContext)
@@ -1358,11 +1355,11 @@ void ShadowPass(RenderContext& renderContext)
 
 	renderState.Apply();
 
-	const static glm::mat4 remapMat(
-		glm::vec4(0.5f, 0.f, 0.f, 0.0f),
-		glm::vec4(0.f, 0.5f, 0.f, 0.0f),
-		glm::vec4(0.f, 0.f, 0.5f, 0.0f),
-		glm::vec4(0.5f, 0.5f, 0.5f, 1.f)
+	const static Matrix4 remapMat(
+		Vector4(0.5f, 0.f, 0.f, 0.0f),
+		Vector4(0.f, 0.5f, 0.f, 0.0f),
+		Vector4(0.f, 0.f, 0.5f, 0.0f),
+		Vector4(0.5f, 0.5f, 0.5f, 1.f)
 		);
 
 	Viewpoint& viewPoint = renderContext.viewPoint;
@@ -1376,10 +1373,10 @@ void ShadowPass(RenderContext& renderContext)
 			0.12f, 0.36f, 1.f
 		};
 
-		glm::vec3 clipPoints[4];
+		Vector4_3 clipPoints[4];
 
 		float aspectRatio = viewPoint.height / viewPoint.width;
-		float tanHF = glm::tan(viewPoint.fov * 0.5f) * sqrt(1 + aspectRatio * aspectRatio);
+		float tanHF = tanf(viewPoint.fov * 0.5f) * sqrt(1 + aspectRatio * aspectRatio);
 		float tanHF2 = tanHF * tanHF;
 
 		bool bFixedSize = false;
@@ -1396,12 +1393,12 @@ void ShadowPass(RenderContext& renderContext)
 			// calculate light space bounds
 			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 			{
-				const glm::mat4& adjustMat = light.lightViewMat * meshCompListPtr[i]->modelMat;
+				const Matrix4& adjustMat = light.lightViewMat * meshCompListPtr[i]->modelMat;
 				// tranform bounds into light space
 				meshCompListPtr[i]->bounds.TransformBounds(adjustMat, meshCompListPtr[i]->boundsLS);
 			}
 
-			glm::mat4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
+			Matrix4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
 
 			for (int cascadeIdx = 0; cascadeIdx < MAX_CASCADE_COUNT; ++cascadeIdx)
 			{
@@ -1428,10 +1425,10 @@ void ShadowPass(RenderContext& renderContext)
 				BoxBounds frustumBounds;
 				viewPoint.GetClipPoints(-n, clipPoints);
 				for (int i = 0; i < 4; ++i)
-					frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
+					frustumBounds += light.lightViewMat.TransformPoint(clipPoints[i]);
 				viewPoint.GetClipPoints(-f, clipPoints);
 				for (int i = 0; i < 4; ++i)
-					frustumBounds += light.lightViewMat * glm::vec4(clipPoints[i], 1);
+					frustumBounds += light.lightViewMat.TransformPoint(clipPoints[i]);
 
 				// extent test bound max(near plane) a little bit to include geometry behind us
 				// this value need to be increased if we are missing shadow
@@ -1458,7 +1455,7 @@ void ShadowPass(RenderContext& renderContext)
 					continue;
 
 				// only change far plane if scene bounds are closer, don't extend it
-				frustumBounds.min.z = glm::max(sceneBounds.min.z, frustumBounds.min.z);
+				frustumBounds.min.z = Max(sceneBounds.min.z, frustumBounds.min.z);
 				// for near plane simply use what scene bounds has,
 				// since we need to include any mesh behind us (in light space) that will cast shadow
 				frustumBounds.max.z = sceneBounds.max.z;
@@ -1473,22 +1470,22 @@ void ShadowPass(RenderContext& renderContext)
 				}
 				else
 				{
-					frustumBounds.min.x = glm::max(frustumBounds.min.x, sceneBounds.min.x);
-					frustumBounds.min.y = glm::max(frustumBounds.min.y, sceneBounds.min.y);
-					frustumBounds.max.x = glm::min(frustumBounds.max.x, sceneBounds.max.x);
-					frustumBounds.max.y = glm::min(frustumBounds.max.y, sceneBounds.max.y);
+					frustumBounds.min.x = Max(frustumBounds.min.x, sceneBounds.min.x);
+					frustumBounds.min.y = Max(frustumBounds.min.y, sceneBounds.min.y);
+					frustumBounds.max.x = Min(frustumBounds.max.x, sceneBounds.max.x);
+					frustumBounds.max.y = Min(frustumBounds.max.y, sceneBounds.max.y);
 				}
 
 				// the bounds are mapped as (+x, -x, +y, -y, +z, -z) -> (r, l, t, b, -n, -f)
 				// ref: http://www.songho.ca/opengl/gl_projectionmatrix.html
-				glm::mat4 lightProjMat = Math::Ortho(
+				Matrix4 lightProjMat = Ortho(
 					frustumBounds.min.x, frustumBounds.max.x,
 					frustumBounds.min.y, frustumBounds.max.y,
 					-frustumBounds.max.z, -frustumBounds.min.z,
 					(float)shadowMap->width, (float)shadowMap->height,
 					viewPoint.jitterX, viewPoint.jitterY);
 
-				light.shadowData[cascadeIdx].bounds = glm::vec3(
+				light.shadowData[cascadeIdx].bounds = Vector4_3(
 					frustumBounds.max.x - frustumBounds.min.x,
 					frustumBounds.max.y - frustumBounds.min.y,
 					f);
@@ -1522,8 +1519,8 @@ void ShadowPass(RenderContext& renderContext)
 				light.shadowData[0].shadowMap = shadowMap;
 			}
 			
-			glm::mat4 lightProjMat = Math::PerspectiveFov(
-				glm::radians(light.outerHalfAngle) * 2,
+			Matrix4 lightProjMat = PerspectiveFov(
+				DegToRad(light.outerHalfAngle) * 2,
 				(float)shadowMap->width, (float)shadowMap->height, 
 				0.1f, light.radius,
 				viewPoint.jitterX, viewPoint.jitterY);
@@ -1557,8 +1554,8 @@ void ShadowPass(RenderContext& renderContext)
 				light.shadowData[0].shadowMap = shadowMap;
 			}
 
-			glm::mat4 lightProjMat = Math::PerspectiveFov(
-				glm::radians(90.f), 
+			Matrix4 lightProjMat = PerspectiveFov(
+				DegToRad(90.f), 
 				(float)shadowMap->width, (float)shadowMap->height,
 				0.1f, light.radius,
 				viewPoint.jitterX, viewPoint.jitterY);
@@ -1568,7 +1565,7 @@ void ShadowPass(RenderContext& renderContext)
 
 			// update render info, only do view, since we proj in geometry shader
 			shadowRenderInfo.View = light.lightViewMat;
-			shadowRenderInfo.Proj = glm::mat4(1);
+			shadowRenderInfo.Proj = Matrix4::Identity();
 			shadowRenderInfo.ViewProj = light.lightViewMat;
 			
 			for (int i = 0; i < 6; ++i)
@@ -1592,24 +1589,22 @@ void DebugForwardPass(RenderContext& renderContext)
 	// draw debug
 	for (int i = 0; i < gPointLights.size(); ++i)
 	{
-		glm::mat4 modelMat(1);
-		modelMat = glm::translate(modelMat, gPointLights[i].position);
-		modelMat = glm::scale(modelMat, glm::vec3(0.3f, 0.3f, 0.3f));
+		Matrix4 modelMat = Matrix4::Identity();
+		modelMat.SetTranslation(gPointLights[i].position);
+		modelMat.ApplyScale(0.3f);
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
-		gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity);
+		gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
 
 		gPointLightDebugMesh->Draw(renderContext);
 	}
 
 	for (int i = 0; i < gSpotLights.size(); ++i)
 	{
-		glm::mat4 modelMat(1);
-		//modelMat = glm::translate(modelMat, gSpotLights[i].position);
-		modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
-		modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
-		modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius) / gSpotLights[i].radius * 0.6f);
+		Matrix4 modelMat = MakeMatrixFromForward(gSpotLights[i].direction);
+		modelMat.SetTranslation(gSpotLights[i].position);
+		modelMat.ApplyScale(Vector4_3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius) * (0.6f / gSpotLights[i].radius));
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
-		gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity);
+		gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
 
 		gSpotLightDebugMesh->Draw(renderContext);
 	}
@@ -1626,17 +1621,17 @@ void DebugForwardPass(RenderContext& renderContext)
 		{
 			// draw bounds
 			MeshComponent* meshComp = meshCompListPtr[i];
-			glm::vec3 center = meshComp->bounds.GetCenter();
-			glm::vec3 extent = meshComp->bounds.GetExtent();
+			Vector4_3 center = meshComp->bounds.GetCenter();
+			Vector4_3 extent = meshComp->bounds.GetExtent();
 
-			glm::mat4 boundMat(1);
-			boundMat = glm::scale(boundMat, extent);
-			boundMat[3] = glm::vec4(center, 1.f);
+			Matrix4 boundMat = Matrix4::Identity();
+			boundMat.SetTranslation(center);
+			boundMat.ApplyScale(extent);
 
-			glm::mat4 modelMat = meshComp->modelMat * boundMat;
+			Matrix4 modelMat = meshComp->modelMat * boundMat;
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
-			gLightDebugMaterial->SetParameter("color", glm::vec3(1, 0, 0));
+			gLightDebugMaterial->SetParameter("color", Vector4_3(1, 0, 0), 3);
 
 			gCubeMesh->Draw(renderContext, gLightDebugMaterial);
 		}
@@ -1648,12 +1643,12 @@ void DebugForwardPass(RenderContext& renderContext)
 		for (int i = 0; i < gPointLights.size(); ++i)
 		{
 			// model
-			glm::mat4 modelMat(1);
-			modelMat = glm::translate(modelMat, gPointLights[i].position);
-			modelMat = glm::scale(modelMat, glm::vec3(gPointLights[i].radius));
+			Matrix4 modelMat = Matrix4::Identity();
+			modelMat.SetTranslation(gPointLights[i].position);
+			modelMat.ApplyScale(gPointLights[i].radius);
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
-			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity);
+			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
 
 			gPointLightDebugMesh->Draw(renderContext);
 
@@ -1662,13 +1657,12 @@ void DebugForwardPass(RenderContext& renderContext)
 		for (int i = 0; i < gSpotLights.size(); ++i)
 		{
 			// model
-			glm::mat4 modelMat(1);
-			modelMat = Math::MakeMatFromForward(gSpotLights[i].direction);
-			modelMat[3] = glm::vec4(gSpotLights[i].position, 1);
-			modelMat = glm::scale(modelMat, glm::vec3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius));
+			Matrix4 modelMat = MakeMatrixFromForward(gSpotLights[i].direction);
+			modelMat.SetTranslation(gSpotLights[i].position);
+			modelMat.ApplyScale(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius);
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
-			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity);
+			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
 
 			gSpotLightDebugMesh->Draw(renderContext);
 
@@ -1904,7 +1898,7 @@ void UIPass()
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
 			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
-			float timeRatio = (float)glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			float timeRatio = Clamp((float)(it->second / averageFrameTime), 0.0f, 1.0f);
 			ImGui::Text("%s \t %.3f ms %.2f%%", displayName.c_str(), it->second, timeRatio * 100);
 			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
 		}
@@ -1915,7 +1909,7 @@ void UIPass()
 			size_t layer = std::count(it->first.begin(), it->first.end(), '/') - 1;
 			std::string displayName(layer, '\t');
 			displayName.append(it->first.substr(it->first.find_last_of('/') + 1));
-			float timeRatio = (float)glm::clamp(it->second / averageFrameTime, 0.0, 1.0);
+			float timeRatio = Clamp((float)(it->second / averageFrameTime), 0.0f, 1.0f);
 			ImGui::Text("%s \t %.3f ms %.2f%%", displayName.c_str(), it->second, timeRatio * 100);
 			ImGui::ProgressBar(timeRatio, ImVec2(0.f, 5.f));
 		}
@@ -2069,8 +2063,8 @@ void Render()
 
 	// unjitter
 	RenderInfo debugRenderInfo = gRenderInfo;
-	debugRenderInfo.Proj[2][0] = 0;
-	debugRenderInfo.Proj[2][1] = 0;
+	debugRenderInfo.Proj.m[2][0] = 0;
+	debugRenderInfo.Proj.m[2][1] = 0;
 	debugRenderInfo.ViewProj = debugRenderInfo.Proj * debugRenderInfo.View;
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &debugRenderInfo, GL_DYNAMIC_DRAW);

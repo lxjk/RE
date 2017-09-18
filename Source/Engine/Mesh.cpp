@@ -57,7 +57,7 @@ void MeshData::InitResource()
 
 	// calculate bounds
 	for (int i = 0; i < vertCount; ++i)
-		bounds += vertices[i].position;
+		bounds += vertices[i].position.ToVector4();
 }
 
 std::vector<Mesh*> Mesh::gMeshContainer;

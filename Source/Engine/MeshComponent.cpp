@@ -1,8 +1,3 @@
-
-#include "glm/gtc/matrix_transform.hpp"
-#include "glm/gtx/euler_angles.hpp"
-#include "glm/gtc/matrix_inverse.hpp"
-
 #include "Render.h"
 
 #include "Mesh.h"
@@ -15,12 +10,8 @@ void MeshComponent::CacheRenderMatrices()
 {
 	bRenderTransformDirty = false;
 
-	//modelMat = glm::orientate4(rotation);
 	prevModelMat = modelMat;
-	modelMat = glm::mat4_cast(glm::quat(glm::radians(rotation)));
-	modelMat = glm::scale(modelMat, scale);
-	modelMat[3] = glm::vec4(position, 1.f);
-	//normalMat = glm::inverseTranspose(glm::mat3(modelMat));
+	modelMat = MakeMatrix(position, EulerToQuat(rotation), scale);
 
 	if (!bHasCachedRenderTransform)
 	{

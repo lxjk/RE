@@ -96,7 +96,7 @@ public:
 	}
 	inline float Size() const
 	{
-		return sqrt(SizeSqr());
+		return sqrtf(SizeSqr());
 	}
 
 	// normalize

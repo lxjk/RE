@@ -1,13 +1,19 @@
 #pragma once
 
+#include "MathUtil.h"
 #include "Vector4.h"
 #include "Matrix4.h"
 #include "Quat.h"
 
-#define EULER_ZYX 0 // Z: Yaw, Y: Pitch, X: Roll
-#define EULER_ZXY 1 // Z: Yaw, X: Pitch, Y: Roll
+#define RE_EULER_ZYX	1 // Z: Yaw, Y: Pitch, X: Roll
+#define RE_EULER_ZXY	2 // Z: Yaw, X: Pitch, Y: Roll
 
-#define EULER_ANGLE EULER_ZYX
+#define RE_EULER_ANGLE	RE_EULER_ZYX
+
+#define RE_DEPTH_ZERO_TO_ONE		1
+#define RE_DEPTH_NEG_ONE_TO_ONE		2
+
+#define RE_DEPTH_CLIP_SPACE		RE_DEPTH_NEG_ONE_TO_ONE
 
 
 __forceinline Quat& AsQuat(Vector4& v) { return *(Quat*)(&v); }
@@ -43,10 +49,10 @@ inline Quat EulerToQuat(const Vector4_3& euler)
 	Vec128 t6 = VecSwizzle(c, 1,2,1,1); // cy, cz, cy, cy
 	A = VecMul(A, t6); // sxcycz, cxsycz, cxcysz, cxcycz
 
-#if EULER_ANGLE==EULER_ZXY
+#if RE_EULER_ANGLE == RE_EULER_ZXY
 	Vec128 sign = VecConst::Sign_NPPN;
 #else
-	// default to EULER_ZYX
+	// default to RE_EULER_ZYX
 	Vec128 sign = VecConst::Sign_NPNP;
 #endif
 	return VecAdd(A, VecMul(B, sign));
@@ -56,7 +62,7 @@ inline Quat EulerToQuat(const Vector4_3& euler)
 inline Vector4_3 QuatToEuler(const Quat& q)
 {
 	Vec128 r;
-#if EULER_ANGLE==EULER_ZXY
+#if RE_EULER_ANGLE == RE_EULER_ZXY
 	const Vec128 const_1001 = VecSet(1.f, 0.f, 0.f, 1.f);
 	
 	Vec128 x = VecSet1(2.f * (q.y*q.z + q.x*q.w));
@@ -82,7 +88,7 @@ inline Vector4_3 QuatToEuler(const Quat& q)
 
 	r = VecBlend(yz, x, 1,0,0,1);
 #else
-	// default to EULER_ZYX
+	// default to RE_EULER_ZYX
 	const Vec128 const_0101 = VecSet(0.f, 1.f, 0.f, 1.f);
 	const Vec128 const_P2N2P2N2 = VecSet(2.f, -2.f, 2.f, -2.f);
 
@@ -291,4 +297,152 @@ inline Matrix4 MakeMatrix(const Vector4_3& translation, const Quat& rotation, co
 	r.mVec[3] = VecBlend(translation.mVec, VecConst::Vec_One, 0,0,0,1);
 
 	return r;
+}
+
+
+// =================================================================
+// Engine specifics
+
+__forceinline float Min(float a, float b)
+{
+	return (a < b) ? a : b;
+}
+
+__forceinline float Max(float a, float b)
+{
+	return (a > b) ? a : b;
+}
+
+__forceinline float Clamp(float inValue, float inMin, float inMax)
+{
+	return Min(Max(inValue, inMin), inMax);
+}
+
+__forceinline double Lerp(double a, double b, double alpha)
+{
+	return a + (b - a) * alpha;
+}
+
+__forceinline float Lerp(float a, float b, float alpha)
+{
+	return a + (b - a) * alpha;
+}
+
+__forceinline Vector4 Lerp(const Vector4& a, const Vector4& b, float alpha)
+{
+	return a + (b - a) * alpha;
+}
+
+// quat lerp does not maintain length (will return non-unit quat)
+__forceinline Quat Lerp(const Quat& a, const Quat& b, float alpha)
+{
+	return a + (b - a) * alpha;
+}
+
+__forceinline Vector4 DegToRad(const Vector4& angle)
+{
+	return VecMul(angle.mVec, VecConst::DegToRad);
+}
+
+__forceinline Vector4 RadToDeg(const Vector4& angle)
+{
+	return VecMul(angle.mVec, VecConst::RadToDeg);
+}
+
+__forceinline float DegToRad(float angle)
+{
+	return angle * (PI / 180.f);
+}
+
+__forceinline float RadToDeg(float angle)
+{
+	return angle * (180.f / PI);
+}
+
+inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward, const Vector4_3& up)
+{
+#if RE_EULER_ANGLE==RE_EULER_ZYX
+	Vector4_3 z = -forward;
+	Vector4_3 x = up.Cross3(z);
+	if (x.SizeSqr3() <= KINDA_SMALL_NUMBER)
+		x = Vector4_3(1.f, 0.f, 0.f);
+	else
+		x = x.GetNormalized3();
+	Vector4_3 y = z.Cross3(x);
+
+	Matrix4 r = Matrix4::Identity();
+	r.SetAxes(x, y, z);
+	return r;
+#endif
+}
+
+inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward)
+{
+	return MakeMatrixFromForward(forward, Vector4_3(0.f, 1.f, 0.f));
+}
+
+inline Matrix4 PerspectiveFov(float fov, float width, float height, float zNear, float zFar, float jitterX = 0, float jitterY = 0)
+{
+	float w = cosf(0.5f * fov) / sinf(0.5f * fov);
+	float h = w * width / height;
+
+	Matrix4 Result = Matrix4::Zero();
+	Result.m[0][0] = w;
+	Result.m[1][1] = h;
+	Result.m[2][3] = -1;
+
+	// negative since this is going to  * z / -z
+	Result.m[2][0] = -jitterX * 2.f / width;
+	Result.m[2][1] = -jitterY * 2.f / height;
+
+#if RE_DEPTH_CLIP_SPACE == RE_DEPTH_ZERO_TO_ONE
+	Result[2][2] = zFar / (zNear - zFar);
+	Result[3][2] = -(zFar * zNear) / (zFar - zNear);
+#else
+	Result.m[2][2] = -(zFar + zNear) / (zFar - zNear);
+	Result.m[3][2] = -(2 * zFar * zNear) / (zFar - zNear);
+#endif
+
+	return Result;
+}
+
+inline Matrix4 Ortho(float left, float right, float bottom, float top, float zNear, float zFar
+	, float width = 1, float height = 1, float jitterX = 0, float jitterY = 0)
+{
+	Matrix4 Result = Matrix4::Identity();
+	Result.m[0][0] = 2.f / (right - left);
+	Result.m[1][1] = 2.f / (top - bottom);
+	Result.m[3][0] = -(right + left) / (right - left) + 2 * jitterX / width;
+	Result.m[3][1] = -(top + bottom) / (top - bottom) + 2 * jitterY / height;
+
+#if RE_DEPTH_CLIP_SPACE == RE_DEPTH_ZERO_TO_ONE
+	Result.m[2][2] = -1.f / (zFar - zNear);
+	Result.m[3][2] = -zNear / (zFar - zNear);
+#else
+	Result.m[2][2] = -2.f / (zFar - zNear);
+	Result.m[3][2] = -(zFar + zNear) / (zFar - zNear);
+#endif
+
+	return Result;
+}
+
+inline Matrix4 PerspectiveAddJitter(const Matrix4& inMat, float width, float height, float jitterX, float jitterY)
+{
+	Matrix4 Result = inMat;
+
+	// negative since this is going to  * z / -z
+	Result.m[2][0] = -jitterX * 2.f / width;
+	Result.m[2][1] = -jitterY * 2.f / height;
+
+	return Result;
+}
+
+inline Matrix4 OrthoAddJitter(const Matrix4& inMat, float width, float height, float jitterX, float jitterY)
+{
+	Matrix4 Result = inMat;
+
+	Result.m[3][0] += 2 * jitterX / width;
+	Result.m[3][1] += 2 * jitterY / height;
+
+	return Result;
 }

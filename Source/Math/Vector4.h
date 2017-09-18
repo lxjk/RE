@@ -30,6 +30,14 @@ public:
 		x(inX), y(inY), z(inZ), w(inW)
 	{}
 
+	Vector4(float inX) :
+		x(inX), y(inX), z(inX), w(inX)
+	{}
+
+	Vector4(Vector4_3 v, float inW) :
+		x(v.x), y(v.y), z(v.z), w(inW)
+	{}
+
 	Vector4(Vec128 vec128)
 	{
 		mVec = vec128;
@@ -187,20 +195,20 @@ public:
 	}
 	inline float Size4() const
 	{
-		return sqrt(Dot4(*this));
+		return sqrtf(Dot4(*this));
 	}
 	inline float Size3() const
 	{
-		return sqrt(Dot3(*this));
+		return sqrtf(Dot3(*this));
 	}
 	inline float Size2() const
 	{
-		return sqrt(Dot2(*this));
+		return sqrtf(Dot2(*this));
 	}
 
 	// normalize
 	// Vector4 version time: SSE < normal
-	inline Vector4 GetNormalized() const
+	inline Vector4 GetNormalized4() const
 	{
 		// sse method without branch
 		Vec128 sizeSqr = VecDotV(mVec, mVec);
@@ -218,7 +226,7 @@ public:
 #endif
 	}
 	// precision around 0.0003
-	inline Vector4 GetNormalizedFast() const
+	inline Vector4 GetNormalized4Fast() const
 	{
 		// sse method without branch
 		Vec128 sizeSqr = VecDotV(mVec, mVec);
