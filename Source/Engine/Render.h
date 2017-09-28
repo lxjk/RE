@@ -7,7 +7,7 @@
 #include "SDL_opengl.h"
 
 // math
-#include "../Math/REMath.h"
+#include "Math/REMath.h"
 
 // std
 #include <functional>

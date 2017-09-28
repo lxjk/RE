@@ -861,9 +861,9 @@ void updateMouseInput(float deltaTime)
 	}
 
 	Quat cameraRot = EulerToQuat(gCamera.euler);
-	Vector4_3 cameraForward = cameraRot.Rotate(Vector4_3(0, 0, -1));
-	Vector4_3 cameraUp = cameraRot.Rotate(Vector4_3(0, 1, 0));
-	Vector4_3 cameraRight = cameraRot.Rotate(Vector4_3(1, 0, 0));
+	Vector4_3 cameraForward = GetForwardVector(cameraRot);
+	Vector4_3 cameraUp = GetUpVector(cameraRot);
+	Vector4_3 cameraRight = GetRightVector(cameraRot);
 
 	if (mouseState & SDL_BUTTON(SDL_BUTTON_MIDDLE))
 	{
@@ -896,8 +896,8 @@ void updateKeyboardInput(float deltaTime)
 	Uint32 mouseState = SDL_GetRelativeMouseState(&x, &y);
 
 	Quat cameraRot = EulerToQuat(gCamera.euler);
-	Vector4_3 cameraForward = cameraRot.Rotate(Vector4_3(0, 0, -1));
-	Vector4_3 cameraRight = cameraRot.Rotate(Vector4_3(1, 0, 0));
+	Vector4_3 cameraForward = GetForwardVector(cameraRot);
+	Vector4_3 cameraRight = GetRightVector(cameraRot);
 
 	Vector4_3 up = Vector4_3(0, 1, 0);
 
@@ -967,7 +967,7 @@ void Update(float deltaTime)
 		}
 
 		float ratio = spotLightLocalTime / totalTime;
-		ratio = abs(ratio * 2 - 1); // [0 - 1] -> [1 - 0 - 1]
+		ratio = Abs(ratio * 2 - 1); // [0 - 1] -> [1 - 0 - 1]
 
 		const Vector4_3 startPos(-3, 3, 10);
 		const Vector4_3 endPos(3, 3, 10);
@@ -1229,7 +1229,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 				{
 					// test near plane clip
 					float dp = lightToCamera.Dot3(light.direction);
-					isInLightVolume |= (sqrt(lightToCamera.SizeSqr3() - dp * dp) - dp * light.outerTanHalfAngle) * light.outerCosHalfAngle <= renderContext.viewPoint.nearRadius;
+					isInLightVolume |= (Sqrt(lightToCamera.SizeSqr3() - dp * dp) - dp * light.outerTanHalfAngle) * light.outerCosHalfAngle <= renderContext.viewPoint.nearRadius;
 				}
 			}
 
@@ -1376,7 +1376,7 @@ void ShadowPass(RenderContext& renderContext)
 		Vector4_3 clipPoints[4];
 
 		float aspectRatio = viewPoint.height / viewPoint.width;
-		float tanHF = tanf(viewPoint.fov * 0.5f) * sqrt(1 + aspectRatio * aspectRatio);
+		float tanHF = Tan(viewPoint.fov * 0.5f) * Sqrt(1 + aspectRatio * aspectRatio);
 		float tanHF2 = tanHF * tanHF;
 
 		bool bFixedSize = false;
@@ -1417,7 +1417,7 @@ void ShadowPass(RenderContext& renderContext)
 				// minimal bounding sphere diameter
 				float diameter = ((f + n) * tanHF2 >= (f - n)) ?
 					2 * f * tanHF :
-					sqrt((f - n)*(f - n) + 2 * (f*f + n*n) * tanHF2 + (f + n)*(f + n)*tanHF2*tanHF2);
+					Sqrt((f - n)*(f - n) + 2 * (f*f + n*n) * tanHF2 + (f + n)*(f + n)*tanHF2*tanHF2);
 
 				float pixelRate = diameter / shadowMap->width;
 
@@ -1478,7 +1478,7 @@ void ShadowPass(RenderContext& renderContext)
 
 				// the bounds are mapped as (+x, -x, +y, -y, +z, -z) -> (r, l, t, b, -n, -f)
 				// ref: http://www.songho.ca/opengl/gl_projectionmatrix.html
-				Matrix4 lightProjMat = Ortho(
+				Matrix4 lightProjMat = MakeMatrixOrthoProj(
 					frustumBounds.min.x, frustumBounds.max.x,
 					frustumBounds.min.y, frustumBounds.max.y,
 					-frustumBounds.max.z, -frustumBounds.min.z,
@@ -1519,7 +1519,7 @@ void ShadowPass(RenderContext& renderContext)
 				light.shadowData[0].shadowMap = shadowMap;
 			}
 			
-			Matrix4 lightProjMat = PerspectiveFov(
+			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
 				DegToRad(light.outerHalfAngle) * 2,
 				(float)shadowMap->width, (float)shadowMap->height, 
 				0.1f, light.radius,
@@ -1554,7 +1554,7 @@ void ShadowPass(RenderContext& renderContext)
 				light.shadowData[0].shadowMap = shadowMap;
 			}
 
-			Matrix4 lightProjMat = PerspectiveFov(
+			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
 				DegToRad(90.f), 
 				(float)shadowMap->width, (float)shadowMap->height,
 				0.1f, light.radius,

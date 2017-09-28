@@ -35,7 +35,7 @@ public:
 
 	static __forceinline Quat Identity()
 	{
-		static Quat identity(VecSet(0.f, 0.f, 0.f, 1.f));
+		const Quat identity(VecSet(0.f, 0.f, 0.f, 1.f));
 		return identity;
 	}
 
@@ -146,7 +146,8 @@ public:
 	// inverse assume this quaterion is normalized
 	inline Quat GetInverse() const
 	{
-		return VecXor(mVec, VecConst::QuatInverseSignMask);
+		const Vec128 QuatInverseSignMask = VecSet_i(0x80000000, 0x80000000, 0x80000000, 0x00000000);
+		return VecXor(mVec, QuatInverseSignMask);
 	}
 
 	//   v + 2(q x (q x v + w*p))

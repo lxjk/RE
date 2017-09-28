@@ -250,7 +250,7 @@ public:
 		return VecBlendVar(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
-			VecOr(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num), VecConst::VecMaskW));
+			VecZeroW(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)));
 	}
 	
 	// Vector4_2 version time: SSE(set1(Dot2)) < normal < SSE(VecDot2V)
@@ -266,6 +266,6 @@ public:
 		return VecBlendVar(
 			VecDiv(mVec, VecSqrt(sizeSqr)),
 			VecZero(),
-			VecOr(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num), VecConst::VecMaskZW));
+			VecZeroZW(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)));
 	}
 };

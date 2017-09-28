@@ -5,6 +5,7 @@
 
 
 typedef __m128	Vec128;
+typedef __m128i	Vec128i;
 
 #define VecZero()				_mm_setzero_ps()
 
@@ -16,10 +17,10 @@ typedef __m128	Vec128;
 
 namespace VecConst {
 
-	const Vec128 VecMaskXYZ				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000);
-	const Vec128 VecMaskXY				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000);
-	const Vec128 VecMaskZW				= VecSet_i(0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF);
-	const Vec128 VecMaskW				= VecSet_i(0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF);
+	//const Vec128 VecMaskXYZ				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000);
+	//const Vec128 VecMaskXY				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000);
+	//const Vec128 VecMaskZW				= VecSet_i(0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF);
+	//const Vec128 VecMaskW				= VecSet_i(0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF);
 
 	const Vec128 SignMask				= VecSet1_i(0x80000000);
 	const Vec128 InvSignMask			= VecSet1_i(0x7FFFFFFF);
@@ -51,25 +52,17 @@ namespace VecConst {
 	const Vec128 RadToDeg				= VecSet1(180.f / PI);
 	
 	const Vec128 Half_DegToRad			= VecSet1(0.5f * PI / 180.f);
-
-	namespace _internal_sin
-	{
-		static const float p = 0.225f;
-		static const float a = (float)(16.0 * sqrt(p));
-		static const float b = (float)((1.0 - p) / sqrt(p));
-	}
-	const Vec128 SinParamA				= VecSet1(_internal_sin::a);
-	const Vec128 SinParamB				= VecSet1(_internal_sin::b);
-		
-	const Vec128 AsinParamA				= VecSet1(-0.2121144f);
-	const Vec128 AsinParamB				= VecSet1(0.0742610f);
-	const Vec128 AsinParamC				= VecSet1(-0.0187293f);
-
-	const Vec128 AtanParamA				= VecSet1(0.2447f);
-	const Vec128 AtanParamB				= VecSet1(0.0663f);
-
-	const Vec128 QuatInverseSignMask	= VecSet_i(0x80000000, 0x80000000, 0x80000000, 0x00000000);
 };
+
+#define VeciZero()				_mm_setzero_si128()
+
+#define VeciSet1(i)				_mm_set1_epi32(i)
+
+namespace VeciConst
+{
+	const Vec128i ExponentBias			= VeciSet1(0x7F);
+}
+
 
 #define VecLoad1(f_ptr)			_mm_load1_ps(f_ptr)
 
@@ -89,6 +82,11 @@ namespace VecConst {
 #define VecMin(vec1, vec2)		_mm_min_ps(vec1, vec2)
 #define VecMax(vec1, vec2)		_mm_max_ps(vec1, vec2)
 
+#define VecFloor(vec)			_mm_round_ps(vec, _MM_FROUND_FLOOR)
+#define VecCeil(vec)			_mm_round_ps(vec, _MM_FROUND_CEIL)
+#define VecRound(vec)			_mm_round_ps(vec, _MM_FROUND_NINT)
+#define VecTrunc(vec)			_mm_round_ps(vec, _MM_FROUND_TRUNC)
+
 #define VecSqrt(vec)			_mm_sqrt_ps(vec)
 #define VecRcp(vec)				_mm_rcp_ps(vec)
 
@@ -97,6 +95,8 @@ namespace VecConst {
 #define VecCmpLE(vec1, vec2)	_mm_cmple_ps(vec1, vec2)
 #define VecCmpGT(vec1, vec2)	_mm_cmpgt_ps(vec1, vec2)
 #define VecCmpGE(vec1, vec2)	_mm_cmpge_ps(vec1, vec2)
+#define VecCmpEQ(vec1, vec2)	_mm_cmpeq_ps(vec1, vec2)
+#define VecCmpNEQ(vec1, vec2)	_mm_cmpneq_ps(vec1, vec2)
 
 #define VecToFloat(vec)			_mm_cvtss_f32(vec)
 
@@ -105,6 +105,9 @@ namespace VecConst {
 // mask is const int, only lowest 4 bits are used
 #define MakeBlendMask(x,y,z,w)				(x | (y<<1) | (z<<2) | (w<<3))
 #define VecBlend(vec1, vec2, x,y,z,w)		_mm_blend_ps(vec1, vec2, MakeBlendMask(x,y,z,w))
+
+#define VecZeroW(vec)						VecBlend(vec, VecZero(), 0,0,0,1)
+#define VecZeroZW(vec)						VecBlend(vec, VecZero(), 0,0,1,1)
 
 #define MakeShuffleMask(x,y,z,w)			(x | (y<<2) | (z<<4) | (w<<6))
 
@@ -270,7 +273,7 @@ __forceinline Vec128 VecCross(Vec128 vec1, Vec128 vec2)
 #endif
 }
 
-// won't be correct if input is too big (over 1.0e+6), mainly due to precision lost when rounding to [-PI/2, PI/2]
+// won't be correct if input is too big (over 1.0e+6), mainly due to precision lost when rounding to [-0.5, 0.5]
 // for range [-PI/2, PI/2] (no rounding), max error: 0.001090, avg error: 0.000034
 __forceinline Vec128 VecSin(Vec128 vec)
 {
@@ -278,11 +281,17 @@ __forceinline Vec128 VecSin(Vec128 vec)
 	// based on unreal implementation of constants
 	// y = 8x - 16x|x| = 16 * x * (0.5 - |x|)
 	// sin = p*y|y| + (1-p)*y = p*y*(|y| - (1-p)/p) = sqrt(p)*y*(|sqrt(p)*y| + (1-p)/sqrt(p))
+
+	//static const float p = 0.225f;
+	//static const float a = (float)(16.0 * sqrt(p));
+	//static const float b = (float)((1.0 - p) / sqrt(p));
+	const Vec128 SinParamA = VecSet1(7.58946638440411f);
+	const Vec128 SinParamB = VecSet1(1.63384345775366f);
 	
 	Vec128 x = _mm_mul_ps(vec, VecConst::Vec_1_Over_2_PI); // map input period to [0, 1]
 	x = _mm_sub_ps(x, _mm_round_ps(_mm_add_ps(x, VecConst::Vec_Half), _MM_FROUND_FLOOR)); // fix range to [-0.5, 0.5]
-	Vec128 y = _mm_mul_ps(VecConst::SinParamA, _mm_mul_ps(x, _mm_sub_ps(VecConst::Vec_Half, VecAbs(x))));
-	return _mm_mul_ps(y, _mm_add_ps(VecAbs(y), VecConst::SinParamB));
+	Vec128 y = _mm_mul_ps(SinParamA, _mm_mul_ps(x, _mm_sub_ps(VecConst::Vec_Half, VecAbs(x))));
+	return _mm_mul_ps(y, _mm_add_ps(VecAbs(y), SinParamB));
 }
 
 __forceinline Vec128 VecCos(Vec128 vec)
@@ -300,10 +309,15 @@ __forceinline Vec128 VecAsin(Vec128 vec)
 {
 	// based on https://dsp.stackexchange.com/questions/25770/looking-for-an-arcsin-algorithm
 	// ( PI/2 - sqrt(1-|x|)*((PI/2 + A*|x|) + x*x *(B + C*|x|)) ) * sign(x)
+		
+	const Vec128 AsinParamA = VecSet1(-0.2121144f);
+	const Vec128 AsinParamB = VecSet1(0.0742610f);
+	const Vec128 AsinParamC = VecSet1(-0.0187293f);
+
 	Vec128 absX, signX;
 	VecSignAndAbs(vec, signX, absX);
-	Vec128 t0 = _mm_add_ps(VecConst::Vec_Half_PI,	_mm_mul_ps(VecConst::AsinParamA, absX));
-	Vec128 t1 = _mm_add_ps(VecConst::AsinParamB,	_mm_mul_ps(VecConst::AsinParamC, absX));
+	Vec128 t0 = _mm_add_ps(VecConst::Vec_Half_PI,	_mm_mul_ps(AsinParamA, absX));
+	Vec128 t1 = _mm_add_ps(AsinParamB,				_mm_mul_ps(AsinParamC, absX));
 	Vec128 t2 = _mm_sqrt_ps(_mm_sub_ps(VecConst::Vec_One, absX));
 	Vec128 t3 = _mm_add_ps(t0, _mm_mul_ps(_mm_mul_ps(absX, absX), t1));
 	Vec128 t4 = _mm_mul_ps(t2, t3);
@@ -321,8 +335,12 @@ __forceinline Vec128 Internal_VecAtan(Vec128 x, Vec128 absX)
 {
 	// based on http://nghiaho.com/?p=997
 	// x * (PI/4 - (|x|-1)*(A + B*|X|))
+
+	const Vec128 AtanParamA = VecSet1(0.2447f);
+	const Vec128 AtanParamB = VecSet1(0.0663f);
+
 	Vec128 t0 = _mm_sub_ps(absX, VecConst::Vec_One);
-	Vec128 t1 = _mm_add_ps(VecConst::AtanParamA, _mm_mul_ps(VecConst::AtanParamB, absX));
+	Vec128 t1 = _mm_add_ps(AtanParamA, _mm_mul_ps(AtanParamB, absX));
 	return _mm_mul_ps(x, _mm_sub_ps(VecConst::Vec_Quat_PI, _mm_mul_ps(t0, t1)));
 }
 
@@ -361,6 +379,130 @@ __forceinline Vec128 VecAtan2(Vec128 vecY, Vec128 vecX)
 	Vec128 t1 = _mm_sub_ps(_mm_mul_ps(VecConst::Vec_Half_PI, signY), r);
 	return _mm_blendv_ps(t0, t1, mask);
 }
+
+// log base 2
+// do NOT handle input <= 0, clamp to min normal float
+// max error: 0.000008, avg error: 0.000001
+__forceinline Vec128 VecLog2(Vec128 vec)
+{
+	// based on https://dsp.stackexchange.com/questions/20444/books-resources-for-implementing-various-mathematical-functions-in-fixed-point-a/20482#20482
+	// log2(x) = log2(1.mantisa * 2^exp) = log2(1.mantisa) + exp
+
+	const Vec128 exponentMask = VecSet1_i(0x7F800000);
+	const Vec128 mantisaMask = VecSet1_i(0x807FFFFF);
+	const Vec128 minNorm = VecSet1_i(0x00800000);
+
+	const Vec128 LogParam0 = VecSet1(1.44254494359510f);
+	const Vec128 LogParam1 = VecSet1(-0.7181452567504f);
+	const Vec128 LogParam2 = VecSet1(0.45754919692582f);
+	const Vec128 LogParam3 = VecSet1(-0.27790534462866f);
+	const Vec128 LogParam4 = VecSet1(0.121797910687826f);
+	const Vec128 LogParam5 = VecSet1(-0.02584144982967f);
+
+	// clamp to min normal
+	Vec128 x = _mm_max_ps(vec, minNorm);
+
+	// float is 1.mantisa * 2^exp
+	// x = 1.mantisa
+	x = _mm_and_ps(vec, mantisaMask);
+	x = _mm_or_ps(x, VecConst::Vec_One);
+
+	// exp
+	Vec128i expi = _mm_castps_si128(_mm_and_ps(vec, exponentMask));
+	expi = _mm_srli_epi32(expi, 23);
+	expi = _mm_sub_epi32(expi, VeciConst::ExponentBias);
+	Vec128 exp = _mm_cvtepi32_ps(expi);
+
+	x = _mm_sub_ps(x, VecConst::Vec_One);
+
+	Vec128 y = _mm_add_ps(_mm_mul_ps(LogParam5, x), LogParam4);
+	y = _mm_add_ps(_mm_mul_ps(y, x), LogParam3);
+	y = _mm_add_ps(_mm_mul_ps(y, x), LogParam2);
+	y = _mm_add_ps(_mm_mul_ps(y, x), LogParam1);
+	y = _mm_add_ps(_mm_mul_ps(y, x), LogParam0);
+	y = _mm_mul_ps(y, x);
+	
+	return _mm_add_ps(y, exp);
+}
+
+// log base 10
+// do NOT handle input <= 0, clamp to min normal float
+__forceinline Vec128 VecLog10(Vec128 vec)
+{
+	// log10(2)
+	const Vec128 BaseParam = VecSet1(0.30102999566398f);
+	// log10(x) = log2(x) * log10(2)
+	return _mm_mul_ps(VecLog2(vec), BaseParam);
+}
+
+// log base e
+// do NOT handle input <= 0, clamp to min normal float
+__forceinline Vec128 VecLog(Vec128 vec)
+{
+	// log(2) or ln(2)
+	const Vec128 BaseParam = VecSet1(0.69314718055995f);
+	// log(x) = log2(x) * log(2)
+	return _mm_mul_ps(VecLog2(vec), BaseParam);
+}
+
+// log
+// do NOT handle input <= 0, clamp to min normal float
+__forceinline Vec128 VecLog(Vec128 vec, Vec128 vecBase)
+{
+	// log(x, y) = log2(x) / log2(y)
+	return _mm_div_ps(VecLog2(vec), VecLog2(vecBase));
+}
+
+// exp base 2
+// max relative error: 0.000004
+__forceinline Vec128 VecExp2(Vec128 vec)
+{
+	// based on https://dsp.stackexchange.com/questions/20444/books-resources-for-implementing-various-mathematical-functions-in-fixed-point-a/20482#20482
+	// 2^x = 2^floor(x) * 2^frac(x)
+
+	const Vec128 ExpParam1 = VecSet1(0.69303212081966f);
+	const Vec128 ExpParam2 = VecSet1(0.24137976293709f);
+	const Vec128 ExpParam3 = VecSet1(0.05203236900844f);
+	const Vec128 ExpParam4 = VecSet1(0.01355574723481f);
+	const Vec128i ExpMax = VeciSet1(0xFF);
+	
+	Vec128 floor = _mm_round_ps(vec, _MM_FROUND_FLOOR);
+	Vec128 x = _mm_sub_ps(vec, floor);
+
+	Vec128 y = _mm_add_ps(_mm_mul_ps(ExpParam4, x), ExpParam3);
+	y = _mm_add_ps(_mm_mul_ps(y, x), ExpParam2);
+	y = _mm_add_ps(_mm_mul_ps(y, x), ExpParam1);
+	y = _mm_add_ps(_mm_mul_ps(y, x), VecConst::Vec_One);
+
+	Vec128i ifloor = _mm_cvtps_epi32(floor);
+	ifloor = _mm_add_epi32(ifloor, VeciConst::ExponentBias);
+	ifloor = _mm_max_epi32(_mm_min_epi32(ifloor, ExpMax), VeciZero()); // clamp to 0 - 0xFF
+	ifloor = _mm_slli_epi32(ifloor, 23); // shift to exponent part
+	Vec128 z = _mm_castsi128_ps(ifloor);
+
+	return _mm_mul_ps(y, z);
+}
+
+// exp base e
+__forceinline Vec128 VecExp(Vec128 vec)
+{
+	// log2(e)
+	const Vec128 BaseParam = VecSet1(1.44269504088896f);
+	// e^x = 2^(log2(e)*x)
+	return VecExp2(_mm_mul_ps(vec, BaseParam));
+}
+
+// pow
+// do NOT handle negative base
+__forceinline Vec128 VecPow(Vec128 vec, Vec128 vecExp)
+{
+	// x^y = 2^(log2(x)*y)
+	return VecExp2(_mm_mul_ps(vecExp, VecLog2(vec)));
+}
+
+
+
+
 
 // Matrix 2x2 operations
 //

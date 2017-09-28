@@ -3,7 +3,7 @@
 // opengl
 #include "SDL_opengl.h"
 
-#include "../Math/REMath.h"
+#include "Math/REMath.h"
 
 class Viewpoint
 {
@@ -36,12 +36,12 @@ public:
 		viewMat = invViewMat.GetTransformInverseNoScale();
 		// proj
 		//projMat = PerspectiveFov(fov / width * height, width, height, nearPlane, farPlane);
-		projMat = PerspectiveFov(fov, width, height, nearPlane, farPlane, jitterX, jitterY);
+		projMat = MakeMatrixPerspectiveProj(fov, width, height, nearPlane, farPlane, jitterX, jitterY);
 
 		viewProjMat = projMat * viewMat;
 
-		float tanHalfFOV = tanf(fov * 0.5f);
-		nearRadius = nearPlane * sqrt(1 + tanHalfFOV * tanHalfFOV * (1 + height * height / width / width));
+		float tanHalfFOV = Tan(fov * 0.5f);
+		nearRadius = nearPlane * Sqrt(1 + tanHalfFOV * tanHalfFOV * (1 + height * height / width / width));
 	}
 
 	// we don't do bound check here, expect an array of at least 4 elements

@@ -168,10 +168,10 @@ public:
 		colorIntensity = color * intensity;
 		float outerRad = DegToRad(outerHalfAngle);
 		float innerRad = DegToRad(innerHalfAngle);
-		outerCosHalfAngle = cosf(outerRad);
-		outerTanHalfAngle = tanf(outerRad);
+		outerCosHalfAngle = Cos(outerRad);
+		outerTanHalfAngle = Tan(outerRad);
 		invDiffCosHalfAngle = 1.f / (cosf(innerRad) - outerCosHalfAngle);
-		endRadius = radius * tanf(outerRad);
+		endRadius = radius * outerTanHalfAngle;
 
 		attenParams.x = 1;
 		attenParams.y = 1;

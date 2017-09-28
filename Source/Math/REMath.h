@@ -5,10 +5,19 @@
 #include "Matrix4.h"
 #include "Quat.h"
 
+#define RE_Y_UP 1
+#define RE_Z_UP 2
+
+#define RE_UP_AXIS RE_Y_UP
+
 #define RE_EULER_ZYX	1 // Z: Yaw, Y: Pitch, X: Roll
 #define RE_EULER_ZXY	2 // Z: Yaw, X: Pitch, Y: Roll
 
+#if RE_UP_AXIS == RE_Z_UP
+#define RE_EULER_ANGLE	RE_EULER_ZXY
+#else
 #define RE_EULER_ANGLE	RE_EULER_ZYX
+#endif
 
 #define RE_DEPTH_ZERO_TO_ONE		1
 #define RE_DEPTH_NEG_ONE_TO_ONE		2
@@ -303,77 +312,145 @@ inline Matrix4 MakeMatrix(const Vector4_3& translation, const Quat& rotation, co
 // =================================================================
 // Engine specifics
 
-__forceinline float Min(float a, float b)
-{
-	return (a < b) ? a : b;
-}
+__forceinline float		Abs(float a) { return fabsf(a); }
+__forceinline float		Floor(float a) { return floorf(a); }
+__forceinline float		Ceil(float a) { return ceilf(a); }
+__forceinline float		Round(float a) { return roundf(a); }
+__forceinline float		Trunc(float a) { return truncf(a); }
+__forceinline Vector4	Abs(Vector4 a) { return VecAbs(a.mVec); }
+__forceinline Vector4	Floor(Vector4 a) { return VecFloor(a.mVec); }
+__forceinline Vector4	Ceil(Vector4 a) { return VecCeil(a.mVec); }
+__forceinline Vector4	Round(Vector4 a) { return VecRound(a.mVec); }
+__forceinline Vector4	Trunc(Vector4 a) { return VecTrunc(a.mVec); }
 
-__forceinline float Max(float a, float b)
-{
-	return (a > b) ? a : b;
-}
+__forceinline float		Min(float a, float b) {	return (a < b) ? a : b; }
+__forceinline float		Max(float a, float b) { return (a > b) ? a : b; }
+// per component min
+__forceinline Vector4	Min(Vector4 a, Vector4 b) { return VecMin(a.mVec, b.mVec); }
+// per component max
+__forceinline Vector4	Max(Vector4 a, Vector4 b) { return VecMax(a.mVec, b.mVec); }
 
-__forceinline float Clamp(float inValue, float inMin, float inMax)
-{
-	return Min(Max(inValue, inMin), inMax);
-}
+__forceinline float		Clamp(float inValue, float inMin, float inMax) { return Min(Max(inValue, inMin), inMax); }
 
-__forceinline double Lerp(double a, double b, double alpha)
-{
-	return a + (b - a) * alpha;
-}
-
-__forceinline float Lerp(float a, float b, float alpha)
-{
-	return a + (b - a) * alpha;
-}
-
-__forceinline Vector4 Lerp(const Vector4& a, const Vector4& b, float alpha)
-{
-	return a + (b - a) * alpha;
-}
-
+__forceinline double	Lerp(double a, double b, double alpha) { return a + (b - a) * alpha; }
+__forceinline float		Lerp(float a, float b, float alpha) { return a + (b - a) * alpha; }
+__forceinline Vector4	Lerp(const Vector4& a, const Vector4& b, float alpha) { return a + (b - a) * alpha; }
 // quat lerp does not maintain length (will return non-unit quat)
-__forceinline Quat Lerp(const Quat& a, const Quat& b, float alpha)
+__forceinline Quat		Lerp(const Quat& a, const Quat& b, float alpha) { return a + (b - a) * alpha; }
+
+__forceinline float		DegToRad(float angle) {	return angle * (PI / 180.f); }
+__forceinline float		RadToDeg(float angle) {	return angle * (180.f / PI); }
+__forceinline Vector4	DegToRad(const Vector4& angle) { return VecMul(angle.mVec, VecConst::DegToRad); }
+__forceinline Vector4	RadToDeg(const Vector4& angle) { return VecMul(angle.mVec, VecConst::RadToDeg); }
+
+__forceinline float		Sin(float a) { return sinf(a); }
+__forceinline float		Cos(float a) { return cosf(a); }
+__forceinline float		Tan(float a) { return tanf(a); }
+__forceinline float		Asin(float a) { return asinf(a); }
+__forceinline float		Acos(float a) { return acosf(a); }
+__forceinline float		Atan(float a) { return atanf(a); }
+__forceinline float		Atan2(float y, float x) { return atan2f(y, x); }
+__forceinline Vector4	Sin(Vector4 a) { return VecSin(a.mVec); }
+__forceinline Vector4	Cos(Vector4 a) { return VecCos(a.mVec); }
+__forceinline Vector4	Tan(Vector4 a) { return VecTan(a.mVec); }
+__forceinline Vector4	Asin(Vector4 a) { return VecAsin(a.mVec); }
+__forceinline Vector4	Acos(Vector4 a) { return VecAcos(a.mVec); }
+__forceinline Vector4	Atan(Vector4 a) { return VecAtan(a.mVec); }
+__forceinline Vector4	Atan2(Vector4 y, Vector4 x) { return VecAtan2(y.mVec, x.mVec); }
+
+__forceinline float		Sqrt(float a) { return sqrtf(a); }
+__forceinline float		Exp2(float a) { return exp2f(a); }
+__forceinline float		Exp(float a) { return expf(a); }
+__forceinline float		Pow(float base, float exp) { return powf(base, exp); }
+__forceinline Vector4	Sqrt(Vector4 a) { return VecSqrt(a.mVec); }
+__forceinline Vector4	Exp2(Vector4 a) { return VecExp2(a.mVec); }
+__forceinline Vector4	Exp(Vector4 a) { return VecExp(a.mVec); }
+__forceinline Vector4	Pow(Vector4 base, Vector4 exp) { return VecPow(base.mVec, exp.mVec); }
+
+__forceinline float		Log2(float a) { return log2f(a); }
+__forceinline float		Log10(float a) { return log10f(a); }
+__forceinline float		Log(float a) { return logf(a); }
+__forceinline float		Log(float a, float base) { return log2f(a) / log2f(base); }
+__forceinline Vector4	Log2(Vector4 a) { return VecLog2(a.mVec); }
+__forceinline Vector4	Log10(Vector4 a) { return VecLog10(a.mVec); }
+__forceinline Vector4	Log(Vector4 a) { return VecLog(a.mVec); }
+__forceinline Vector4	Log(Vector4 a, Vector4 base) { return VecLog(a.mVec, base.mVec); }
+
+__forceinline Vector4 VectorSelect(bool condition, const Vector4& T, const Vector4& F)
 {
-	return a + (b - a) * alpha;
+	return VecBlendVar(F.mVec, T.mVec, VecCmpNEQ(VecSet1(condition), VecZero()));
+}
+__forceinline Vector4 VectorSelectLE(float a, float b, const Vector4& T, const Vector4& F)
+{
+	return VecBlendVar(F.mVec, T.mVec, VecCmpLE(VecSet1(a), VecSet1(b)));
+}
+__forceinline Vector4 VectorSelectLT(float a, float b, const Vector4& T, const Vector4& F)
+{
+	return VecBlendVar(F.mVec, T.mVec, VecCmpLT(VecSet1(a), VecSet1(b)));
+}
+__forceinline Vector4 VectorSelectGE(float a, float b, const Vector4& T, const Vector4& F)
+{
+	return VecBlendVar(F.mVec, T.mVec, VecCmpGE(VecSet1(a), VecSet1(b)));
+}
+__forceinline Vector4 VectorSelectGT(float a, float b, const Vector4& T, const Vector4& F)
+{
+	return VecBlendVar(F.mVec, T.mVec, VecCmpGT(VecSet1(a), VecSet1(b)));
 }
 
-__forceinline Vector4 DegToRad(const Vector4& angle)
+
+
+inline Vector4_3 GetUpVector(const Quat& q)
 {
-	return VecMul(angle.mVec, VecConst::DegToRad);
+#if RE_UP_AXIS == RE_Z_UP
+	return q.Rotate(Vector4(0.f, 0.f, 1.f));
+#else
+	return q.Rotate(Vector4(0.f, 1.f, 0.f));
+#endif
 }
 
-__forceinline Vector4 RadToDeg(const Vector4& angle)
+inline Vector4_3 GetForwardVector(const Quat& q)
 {
-	return VecMul(angle.mVec, VecConst::RadToDeg);
+#if RE_UP_AXIS == RE_Z_UP
+	return q.Rotate(Vector4(0.f, 1.f, 0.f));
+#else
+	return q.Rotate(Vector4(0.f, 0.f, -1.f));
+#endif
 }
 
-__forceinline float DegToRad(float angle)
+inline Vector4_3 GetRightVector(const Quat& q)
 {
-	return angle * (PI / 180.f);
-}
-
-__forceinline float RadToDeg(float angle)
-{
-	return angle * (180.f / PI);
+#if RE_UP_AXIS == RE_Z_UP
+	return q.Rotate(Vector4(1.f, 0.f, 0.f));
+#else
+	return q.Rotate(Vector4(1.f, 0.f, 0.f));
+#endif
 }
 
 inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward, const Vector4_3& up)
 {
-#if RE_EULER_ANGLE==RE_EULER_ZYX
+#if RE_UP_AXIS == RE_Z_UP
+	Vector4_3 y = forward;
+	Vector4_3 x = y.Cross3(up);
+	VectorSelectLE(x.SizeSqr3(), KINDA_SMALL_NUMBER,
+		Vector4_3(1.f, 0.f, 0.f),
+		x.GetNormalized3());
+	Vector4_3 z = x.Cross3(y);
+#else
 	Vector4_3 z = -forward;
 	Vector4_3 x = up.Cross3(z);
-	if (x.SizeSqr3() <= KINDA_SMALL_NUMBER)
-		x = Vector4_3(1.f, 0.f, 0.f);
-	else
-		x = x.GetNormalized3();
+	//if (x.SizeSqr3() <= KINDA_SMALL_NUMBER)
+	//	x = Vector4_3(1.f, 0.f, 0.f);
+	//else
+	//	x = x.GetNormalized3();
+	VectorSelectLE(x.SizeSqr3(), KINDA_SMALL_NUMBER, 
+		Vector4_3(1.f, 0.f, 0.f), 
+		x.GetNormalized3());
 	Vector4_3 y = z.Cross3(x);
+#endif
 
 	Matrix4 r = Matrix4::Identity();
 	r.SetAxes(x, y, z);
 	return r;
-#endif
 }
 
 inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward)
@@ -381,9 +458,9 @@ inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward)
 	return MakeMatrixFromForward(forward, Vector4_3(0.f, 1.f, 0.f));
 }
 
-inline Matrix4 PerspectiveFov(float fov, float width, float height, float zNear, float zFar, float jitterX = 0, float jitterY = 0)
+inline Matrix4 MakeMatrixPerspectiveProj(float fov, float width, float height, float zNear, float zFar, float jitterX = 0, float jitterY = 0)
 {
-	float w = cosf(0.5f * fov) / sinf(0.5f * fov);
+	float w = Cos(0.5f * fov) / Sin(0.5f * fov);
 	float h = w * width / height;
 
 	Matrix4 Result = Matrix4::Zero();
@@ -406,7 +483,7 @@ inline Matrix4 PerspectiveFov(float fov, float width, float height, float zNear,
 	return Result;
 }
 
-inline Matrix4 Ortho(float left, float right, float bottom, float top, float zNear, float zFar
+inline Matrix4 MakeMatrixOrthoProj(float left, float right, float bottom, float top, float zNear, float zFar
 	, float width = 1, float height = 1, float jitterX = 0, float jitterY = 0)
 {
 	Matrix4 Result = Matrix4::Identity();

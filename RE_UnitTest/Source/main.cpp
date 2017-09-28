@@ -65,7 +65,7 @@ struct BenchData
 	//Matrix4 m1;
 	//Matrix4 m2;
 	Vector4 v1;
-	Vector4 v2;
+	//Vector4 v2;
 	//Quat q1;
 	//Quat q2;
 	//float f;
@@ -102,7 +102,7 @@ void Bench()
 		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
 		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) } };
 		d[i].v1 = Vector4(RandF(), RandF(), RandF(), RandF());
-		d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
+		//d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
 		//d[i].q1 = RandQuat();
 		//d[i].q2 = RandQuat();
 		//d[i].f = RandF();
@@ -122,7 +122,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
+			//tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
+			tmp += VecExp(d[i].v1.mVec);
 			//tmp += Matrix4ToQuat(d[i].m1);
 			//tmp += QuatToEuler(d[i].q1);
 			//tmp += d[i].m1.GetInverse();
@@ -144,7 +145,7 @@ void Bench()
 			//VecSinCos(d[i].v1.mVec, s, c);
 			//tmp += (VecAdd(s, c));
 			//tmp += EulerToQuat(d[i].v1);
-			tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
+			tmp += expf(d[i].v1.x);
 			//tmp += atan2f(d[i].v1.x, d[i].v2.x);
 			//tmp += atan2f(d[i].v1.y, d[i].v2.y);
 			//tmp += QuatToEuler(d[i].q1);
@@ -164,7 +165,7 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
+			tmp += VecExp(d[i].v1.mVec);
 			//tmp += QuatToEuler(d[i].q1);
 			//tmp += d[i].m1.GetTransformInverse();
 			//tmp += UT_Matrix4_GetInverse_DirectX(d[i].m1);
@@ -303,12 +304,12 @@ int main(int argc, char **argv)
 	//	-2, 2, 20000, 0
 	//	);
 
-	RandomTest<FuncVV2V>(
-		[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
-		[](const Vector4& v1, const Vector4& v2) { return VecSet(atan2f(v1.x, v2.x), atan2f(v1.y, v2.y), atan2f(v1.z, v2.z), atan2f(v1.w, v2.w));},
-		[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
-		-2, 2, 20000, 4
-		);
+	//RandomTest<FuncVV2V>(
+	//	[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecSet(atan2f(v1.x, v2.x), atan2f(v1.y, v2.y), atan2f(v1.z, v2.z), atan2f(v1.w, v2.w));},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
+	//	-2, 2, 20000, 4
+	//	);
 	
 	//RandomTest<FuncVV2F>(
 	//	[](const Vector4& v1, const Vector4& v2) { return VecDot2(v1.mVec, v2.mVec);},
@@ -408,6 +409,15 @@ int main(int argc, char **argv)
 	//{
 	//	printf("%d ", u3.i[i]);
 	//}
+
+	//Vec128 test = VecSet1(4.5f);
+	//Vec128 mantisa = VecLog2(test);
+	//PrintValue(Vector4(mantisa));
+
+	Matrix4 mat = MakeMatrixFromForward(Vector4(1.f, 0.f, 0.f));
+	PrintValue(mat);
+
+	//printf("log: %f", log2(4.5f));
 
 	printf("done\n");
 

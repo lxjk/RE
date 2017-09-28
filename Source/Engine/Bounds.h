@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Math/REMath.h"
+#include "Math/REMath.h"
 
 class BoxBounds
 {

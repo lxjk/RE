@@ -25,9 +25,6 @@ namespace Vec256Const {
 	const Vec256 Vec_2_PI				= Vec256Set1(PI*2.f);
 	const Vec256 Vec_Half_PI			= Vec256Set1(PI*0.5f);
 	const Vec256 Vec_1_Over_2_PI		= Vec256Set1(0.5f / PI);
-
-	const Vec256 SinParamA				= Vec256Set1_Vec128(VecConst::SinParamA);
-	const Vec256 SinParamB				= Vec256Set1_Vec128(VecConst::SinParamB);
 };
 
 // zero upper for ALL ymm registers
@@ -55,12 +52,15 @@ namespace Vec256Const {
 // same method as VecSin in MathSSE.h
 __forceinline void VecSinCos(Vec128 vec, Vec128& outSin, Vec128& outCos)
 {
+	const Vec256 SinParamA = Vec256Set1(7.58946638440411f);
+	const Vec256 SinParamB = Vec256Set1(1.63384345775366f);
+
 	Vec256 x = Vec256Set_Vec128(vec, _mm_add_ps(vec, VecConst::Vec_Half_PI));
 
 	x = _mm256_mul_ps(x, Vec256Const::Vec_1_Over_2_PI); // map input period to [0, 1]
 	x = _mm256_sub_ps(x, _mm256_round_ps(_mm256_add_ps(x, Vec256Const::Vec_Half), _MM_FROUND_FLOOR)); // fix range to [-0.5, 0.5]
-	Vec256 y = _mm256_mul_ps(Vec256Const::SinParamA, _mm256_mul_ps(x, _mm256_sub_ps(Vec256Const::Vec_Half, Vec256Abs(x))));
-	y = _mm256_mul_ps(y, _mm256_add_ps(Vec256Abs(y), Vec256Const::SinParamB));
+	Vec256 y = _mm256_mul_ps(SinParamA, _mm256_mul_ps(x, _mm256_sub_ps(Vec256Const::Vec_Half, Vec256Abs(x))));
+	y = _mm256_mul_ps(y, _mm256_add_ps(Vec256Abs(y), SinParamB));
 	outCos = _mm256_extractf128_ps(y, 1);
 	outSin = _mm256_castps256_ps128(y);
 }

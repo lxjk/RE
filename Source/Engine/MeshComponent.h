@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "../Math/REMath.h"
+#include "Math/REMath.h"
 
 #include "Component.h"
 

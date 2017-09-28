@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "../Math/REMath.h"
-#include "../Math/UVector.h"
+#include "Math/REMath.h"
+#include "Math/UVector.h"
 #include "Material.h"
 #include "Bounds.h"
 
@@ -172,15 +172,15 @@ static void MakeSphere(MeshData& meshData, int div)
 		// (-1, 1)
 		float latRatio = (float)iLat / (float)(latDiv - 1);
 		float latAngle = (1 - latRatio * 2) * 0.5f * PI;
-		float cosLat = cosf(latAngle);
-		float sinLat = sinf(latAngle);
+		float cosLat = Cos(latAngle);
+		float sinLat = Sin(latAngle);
 		// add vert on a ring
 		for (int iLon = 0; iLon < div + 1; ++iLon)
 		{
 			float lonRatio = (float)iLon / (float)div;
 			float lonAngle = lonRatio * 2 * PI;
-			float cosLon = cosf(lonAngle);
-			float sinLon = sinf(lonAngle);
+			float cosLon = Cos(lonAngle);
+			float sinLon = Sin(lonAngle);
 			Vector4_3 pos(cosLon * cosLat, sinLat, sinLon * cosLat);
 			Vector4 tangent(sinLon, 0, -cosLon, 1);
 			vertList.push_back(Vertex(pos, pos, tangent, Vector4_2(lonRatio, latRatio)));
@@ -243,7 +243,7 @@ static void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 	Vector4_3 secAxis(0, 1, 0);
 	Vector4_3 thrAxis = mainAxis.Cross3(secAxis);
 
-	static const float normScaler = 1.f / sqrt(2.f);
+	static const float normScaler = 1.f / Sqrt(2.f);
 
 	// first vert = level 0
 	vertList.push_back(Vertex(Vector4_3(0, 0, 0), -mainAxis, Vector4(thrAxis, 1), Vector4_2(0, 0)));
@@ -259,8 +259,8 @@ static void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 		{
 			float ratio = (float)ringIdx / (float)ringVertCount;
 			float angle = ratio * 2 * PI;
-			float cosA = cosf(angle);
-			float sinA = sinf(angle);
+			float cosA = Cos(angle);
+			float sinA = Sin(angle);
 			Vector4_3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA) * mainAxisValue;
 			Vector4_3 normal = (-mainAxis + secAxis * cosA + thrAxis * sinA) * normScaler;
 			Vector4_3 tangent = secAxis * sinA + thrAxis * -cosA;
@@ -307,8 +307,8 @@ static void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 	{
 		float ratio = (float)ringIdx / (float)ringVertCount;
 		float angle = ratio * 2 * PI;
-		float cosA = cosf(angle);
-		float sinA = sinf(angle);
+		float cosA = Cos(angle);
+		float sinA = Sin(angle);
 		Vector4_3 pos = (mainAxis + secAxis * cosA + thrAxis * sinA);
 		Vector4_3 tangent = secAxis * sinA + thrAxis * -cosA;
 
@@ -355,8 +355,8 @@ static void MakeIcosahedron(MeshData& meshData, int tesLevel)
 	vertList.reserve(10 * tesPower + 2); // 12 + 30 + 30 * 4 + ... + 30 * 4 ^ (tes-1) = 12 + 30 * (4 ^ tes - 1) / (4 - 1) = 10 * 4 ^ tes + 2
 	idxList.reserve(60 * tesPower);
 
-	static const float t = (1.f + sqrt(5.f)) * 0.5f;
-	static const float s = 1.f / sqrt(1.f + t*t);
+	static const float t = (1.f + Sqrt(5.f)) * 0.5f;
+	static const float s = 1.f / Sqrt(1.f + t*t);
 
 	static const Vector4_3 originVert[12] =
 	{

@@ -254,6 +254,9 @@ void ExhaustTest()
 	double maxError = 0;
 	double count = 0;
 
+	IntFloatUnion min_norm;
+	min_norm.u = 0x00800000;
+
 	i64 = 0;
 	while (i64 <= 0xFFFFFFFF)
 	//for(float t = 0.f; t < 3.15f * 0.5f; t += 0.001f)
@@ -261,7 +264,7 @@ void ExhaustTest()
 		u.u = (unsigned int)i64;
 		//u.f = t;
 
-		if (!IsFloatSpecial(u.i) && abs(u.f) <= 3.1416f * 0.5f)
+		if (!IsFloatSpecial(u.i))
 		{
 			//Vec128 s, c;
 			//s = VecSin(VecSet1(u.f));
@@ -269,10 +272,14 @@ void ExhaustTest()
 			//float r2 = sinf(u.f);
 			float r1 = VecToFloat(VecSin(VecSet1(u.f)));
 			float r2 = sinf(u.f);
+			//float r1 = VecToFloat(VecPow(VecSet1(PI), VecSet1(u.f)));
+			//float r2 = powf(PI, u.f);
 			float e = abs(r1 - r2);
 			ue.f = e;
-			if (!IsFloatSpecial(ue.i))
+			if (!IsFloatSpecial(ue.i) && abs(u.f) < 3.15f)
 			{
+				//if (abs(r2) >= 1.f)
+				//	e /= abs(r2);
 				error += e;
 				count += 1;
 				if (e > maxError)

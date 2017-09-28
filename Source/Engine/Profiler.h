@@ -7,7 +7,7 @@
 
 #include "gl/glew.h"
 
-#include "../Math/REMath.h"
+#include "Math/REMath.h"
 
 #include "SDL.h"
 #include "SDL_opengl.h"

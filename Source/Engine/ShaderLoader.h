@@ -246,7 +246,7 @@ public:
 				// set processing num
 				bProcessingNum = true;
 				sign = result >= 0 ? 1 : -1;
-				absNum = abs(result);
+				absNum = result >= 0 ? result : -result;
 			}
 		}
 

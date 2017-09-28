@@ -50,7 +50,7 @@ public:
 	// const getter
 	static __forceinline Matrix4 Identity()
 	{ 
-		static Matrix4 identity(
+		const Matrix4 identity(
 			VecSet(1.f, 0.f, 0.f, 0.f),
 			VecSet(0.f, 1.f, 0.f, 0.f),
 			VecSet(0.f, 0.f, 1.f, 0.f),
@@ -61,13 +61,13 @@ public:
 
 	static __forceinline Matrix4 Zero()
 	{
-		static Matrix4 identity(
+		const Matrix4 zero(
 			VecZero(),
 			VecZero(),
 			VecZero(),
 			VecZero()
 			);
-		return identity;
+		return zero;
 	}
 
 	// add
@@ -711,15 +711,15 @@ public:
 	// set axes, will zero w component
 	void SetAxes(const Vector4& x, const Vector4& y, const Vector4& z)
 	{
-		mVec[0] = VecAnd(x.mVec, VecConst::VecMaskXYZ);
-		mVec[1] = VecAnd(y.mVec, VecConst::VecMaskXYZ);
-		mVec[2] = VecAnd(z.mVec, VecConst::VecMaskXYZ);
+		mVec[0] = VecZeroW(x.mVec);
+		mVec[1] = VecZeroW(y.mVec);
+		mVec[2] = VecZeroW(z.mVec);
 	}
 
 	// set translation, will set w to 1
 	void SetTranslation(const Vector4& t)
 	{
-		mVec[3] = VecBlend(t.mVec, VecConst::Vec_One, 0, 0, 0, 1);
+		mVec[3] = VecBlend(t.mVec, VecConst::Vec_One, 0,0,0,1);
 	}
 
 	void ApplyScale(float x)
