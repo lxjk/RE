@@ -160,7 +160,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>..\3rdparty\sdl_image\include;..\3rdparty\sdl\include;..\3rdparty\glm;..\3rdparty\glew\include;..\3rdparty\assimp\include;C:\Program Files (x86)\Visual Leak Detector\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\Source;..\3rdparty\sdl_image\include;..\3rdparty\sdl\include;..\3rdparty\glm;..\3rdparty\glew\include;..\3rdparty\assimp\include;C:\Program Files (x86)\Visual Leak Detector\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

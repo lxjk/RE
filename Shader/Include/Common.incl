@@ -1,6 +1,8 @@
 #ifndef COMMON_INCL
 #define COMMON_INCL
 
+#define RE_Z_UP 1
+
 const float PI = 3.14159265359;
 
 const vec2 PoissonDisk4[4] = vec2[](
@@ -100,6 +102,15 @@ vec4 YCoCgToRGB(vec4 c)
 float Luminance(vec4 c)
 {
 	return dot(c.xyz, vec3(0.3, 0.59, 0.11));
+}
+
+vec3 GetCubeMapCoord(vec3 inCoord)
+{
+#if RE_Z_UP
+	return vec3(inCoord.x, inCoord.z, -inCoord.y);
+#else
+	return inCoord;
+#endif
 }
 
 #endif

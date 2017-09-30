@@ -293,9 +293,9 @@ void MakeLights()
 	dlIdx = (int)gDirectionalLights.size() - 1;
 	gDirectionalLights[dlIdx].SetDirectionLight(
 #if LOAD_SCENE_MESH
-		/*dir=*/	Vector4_3(-0.8f, -5.f, -2.f),
+		/*dir=*/	Vector4_3(-0.8f, 2.f, -5.f),
 #else
-		/*dir=*/	Vector4_3(-0.8f, -1.f, -2.f),
+		/*dir=*/	Vector4_3(-0.8f, 2.f, -1.f),
 #endif
 		/*color=*/	Vector4_3(1.f, 1.f, 1.f),
 		/*int=*/	1
@@ -321,7 +321,7 @@ void MakeLights()
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	Vector4_3(0, 2, 3),
+		/*pos=*/	Vector4_3(0, -3, 2),
 		/*radius=*/	4.f,
 		/*color=*/	Vector4_3(1.f, 1.f, 1.f),
 		/*int=*/	20
@@ -332,7 +332,7 @@ void MakeLights()
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	Vector4_3(10, 2, 2),
+		/*pos=*/	Vector4_3(10, -2, 2),
 		/*radius=*/	10.f,
 		/*color=*/	Vector4_3(0.f, 1.f, 0.f),
 		/*int=*/	20
@@ -344,7 +344,7 @@ void MakeLights()
 		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	Vector4_3(-10, 3, 3),
+		/*pos=*/	Vector4_3(-10, -3, 3),
 		/*radius=*/	10.f,
 		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
 		/*int=*/	20
@@ -357,7 +357,7 @@ void MakeLights()
 	//		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	//	plIdx = (int)gPointLights.size() - 1;
 	//	gPointLights[plIdx].SetPointLight(
-	//		/*pos=*/	Vector4_3(-10, 3, 3),
+	//		/*pos=*/	Vector4_3(-10, -3, 3),
 	//		/*radius=*/	10.f,
 	//		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
 	//		/*int=*/	20
@@ -371,8 +371,8 @@ void MakeLights()
 		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader))));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
-		/*pos=*/	Vector4_3(0, 3, 10),
-		/*dir=*/	Vector4_3(-2, -0.5f, -0.2f),
+		/*pos=*/	Vector4_3(0, -10, 3),
+		/*dir=*/	Vector4_3(-2, 0.2f, -0.5f),
 		/*radius=*/	20.f,
 		/*hOuter=*/	45.f,
 		/*hInner=*/	20.f,
@@ -395,8 +395,8 @@ void MakeMeshComponents()
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(boxMesh);
 		meshComp->SetPosition(Vector4_3(-10.f + i * 10.f, 0.f, 0.f));
-		meshComp->SetRotation(Vector4_3(0.f, 45.f, 0.f));
-		meshComp->SetScale(Vector4_3(1.5f, 1.f, 1.2f));
+		meshComp->SetRotation(Vector4_3(0.f, 0.f, 45.f));
+		meshComp->SetScale(Vector4_3(1.5f, 1.2f, 1.f));
 	}
 
 	// sphere
@@ -407,7 +407,7 @@ void MakeMeshComponents()
 		sphereMesh->material->SetParameter("roughness", i * 0.9f / 19.f + 0.1f);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(sphereMesh);
-		meshComp->SetPosition(Vector4_3(-20.f + i * 2.5f, 0.f, 7.5f));
+		meshComp->SetPosition(Vector4_3(-20.f + i * 2.5f, -7.5f, 0.f));
 	}
 
 	for (int i = 0; i < 20; ++i)
@@ -417,14 +417,14 @@ void MakeMeshComponents()
 		sphereMesh->material->SetParameter("roughness", 0.4f);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(sphereMesh);
-		meshComp->SetPosition(Vector4_3(-20.f + i * 2.5f, 0.f, 12.5f));
+		meshComp->SetPosition(Vector4_3(-20.f + i * 2.5f, -12.5f, 0.f));
 	}
 
 	// nanosuit
 	{
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->SetMeshList(gNanosuitMeshes);
-		meshComp->SetPosition(Vector4_3(5, -1, 5));
+		meshComp->SetPosition(Vector4_3(5, -5, -1));
 		meshComp->SetScale(Vector4_3(0.3f, 0.3f, 0.3f));
 
 		const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
@@ -442,7 +442,7 @@ void MakeMeshComponents()
 		//{
 		//	MeshComponent* meshComp = MeshComponent::Create();
 		//	meshComp->AddMesh(gNanosuitMeshes[i]);
-		//	meshComp->SetPosition(Vector4_3(5, -1, 5));
+		//	meshComp->SetPosition(Vector4_3(5, -5, -1));
 		//	meshComp->SetScale(Vector4_3(0.3f, 0.3f, 0.3f));
 
 		//	Material* material = gNanosuitMeshes[i]->material;
@@ -459,7 +459,7 @@ void MakeMeshComponents()
 	{
 		//MeshComponent* meshComp = MeshComponent::Create();
 		//meshComp->SetMeshList(gSceneMeshes);
-		//meshComp->SetPosition(Vector4_3(0, -1, 6));
+		//meshComp->SetPosition(Vector4_3(0, -6, -1));
 		//meshComp->SetScale(Vector4_3(1.f, 1.f, 1.f) * 0.07f);
 
 		//const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
@@ -477,7 +477,7 @@ void MakeMeshComponents()
 		{
 			MeshComponent* meshComp = MeshComponent::Create();
 			meshComp->AddMesh(gSceneMeshes[i]);
-			meshComp->SetPosition(Vector4_3(0, -1, 6));
+			meshComp->SetPosition(Vector4_3(0, -6, -1));
 			meshComp->SetScale(Vector4_3(1.f, 1.f, 1.f) * 0.07f);
 
 			Material* material = gSceneMeshes[i]->material;
@@ -501,8 +501,8 @@ void MakeMeshComponents()
 		floorMesh->material->SetParameter("color", Vector4_3(0.2f), 3);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(floorMesh);
-		meshComp->SetPosition(Vector4_3(0.f, -1.2f, 0.f));
-		meshComp->SetScale(Vector4_3(32.f, 0.2f, 32.f));
+		meshComp->SetPosition(Vector4_3(0.f, 0.f, -1.2f));
+		meshComp->SetScale(Vector4_3(32.f, 32.f, 0.2f));
 	}
 
 	//{
@@ -515,7 +515,7 @@ void MakeMeshComponents()
 	//	MeshComponent* meshComp = MeshComponent::Create();
 	//	meshComp->AddMesh(floorMesh);
 	//	meshComp->SetPosition(Vector4_3(-21.2f, 0.f, 0.f));
-	//	meshComp->SetScale(Vector4_3(0.2f, 5.f, 32.f));
+	//	meshComp->SetScale(Vector4_3(0.2f, 32.f, 5.f));
 	//}
 }
 
@@ -688,16 +688,25 @@ void InitializeLightOmniViewMat()
 {
 	const static Vector4_3 omniDirs[6][2] =
 	{
+#if RE_UP_AXIS == RE_Z_UP
+		{ Vector4_3(1, 0, 0),	Vector4_3(0, 0, -1) },
+		{ Vector4_3(-1, 0, 0),	Vector4_3(0, 0, -1) },
+		{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },
+		{ Vector4_3(0, 0, -1),	Vector4_3(0, 1, 0) },
+		{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },
+		{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, -1) }
+#else
 		{ Vector4_3(1, 0, 0),	Vector4_3(0, -1, 0) },
 		{ Vector4_3(-1, 0, 0),	Vector4_3(0, -1, 0) },
 		{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, 1) },
 		{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },
 		{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },
 		{ Vector4_3(0, 0, -1),	Vector4_3(0, -1, 0) }
+#endif
 	};
 	for (int i = 0; i < 6; ++i)
 	{
-		gLightOmniViewMat[i] = MakeMatrixFromForward(omniDirs[i][0], omniDirs[i][1]).GetTransposed3();
+		gLightOmniViewMat[i] = ToInvViewMatrix(MakeMatrixFromForward(omniDirs[i][0], omniDirs[i][1])).GetTransposed3();
 	}
 }
 
@@ -752,17 +761,17 @@ bool InitEngine()
 	MakeSphere(gSphereMeshData, 32);
 	MakeIcosahedron(gIcosahedronMeshData, 2);
 	MakeCone(gConeMeshData, 16, 2);
-	MakeQuad(gQuadMeshData);
+	MakeQuadVS(gQuadMeshData);
 
 	// mesh
 	gCubeMesh = Mesh::Create(&gCubeMeshData, gGBufferMaterial);
 	gSphereMesh = Mesh::Create(&gSphereMeshData, gGBufferMaterial);
 	gFSQuadMesh = Mesh::Create(&gQuadMeshData, gGBufferMaterial);
 
-	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader);
-	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader);
+	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
+	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
 #if LOAD_SCENE_MESH
-	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", &gGBufferShader);
+	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
 #endif
 
 	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, gDirectionalLightMaterial);
@@ -804,7 +813,7 @@ bool InitEngine()
 	
 	// camera
 	gCamera.fov = 90.f;
-	gCamera.position = Vector4_3(0.f, 5.f, 20.f);
+	gCamera.position = Vector4_3(0.f, -20.f, 5.f);
 	gCamera.euler = Vector4_3(-10.f, 0.f, 0.f);
 
 	return true;
@@ -854,7 +863,7 @@ void updateMouseInput(float deltaTime)
 	
 	if (mouseState & (/*SDL_BUTTON(SDL_BUTTON_LEFT) | */SDL_BUTTON(SDL_BUTTON_RIGHT)))
 	{
-		gCamera.euler.y -= rotSpeed * deltaTime * deltaX;
+		gCamera.euler.z -= rotSpeed * deltaTime * deltaX;
 		gCamera.euler.x -= rotSpeed * deltaTime * deltaY;
 		gCamera.euler.x = Clamp(gCamera.euler.x, -89.f, 89.f);
 		bShouldCaptureMouse = true;
@@ -899,7 +908,7 @@ void updateKeyboardInput(float deltaTime)
 	Vector4_3 cameraForward = GetForwardVector(cameraRot);
 	Vector4_3 cameraRight = GetRightVector(cameraRot);
 
-	Vector4_3 up = Vector4_3(0, 1, 0);
+	Vector4_3 up = Vector4_3(0, 0, 1);
 
 	const static float maxMoveSpeed = 30.f;
 	const static float minMoveSpeed = 0.1f;
@@ -969,10 +978,10 @@ void Update(float deltaTime)
 		float ratio = spotLightLocalTime / totalTime;
 		ratio = Abs(ratio * 2 - 1); // [0 - 1] -> [1 - 0 - 1]
 
-		const Vector4_3 startPos(-3, 3, 10);
-		const Vector4_3 endPos(3, 3, 10);
-		const Vector4_3 startDir(-2, -0.5f, -0.2f);
-		const Vector4_3 endDir(2, -0.5f, -0.2f);
+		const Vector4_3 startPos(-3, -10, 3);
+		const Vector4_3 endPos(3, -10, 3);
+		const Vector4_3 startDir(-2, 0.2f, -0.5f);
+		const Vector4_3 endDir(2, 0.2f, -0.5f);
 		
 		gSpotLights[0].SetPosition(Lerp(startPos, endPos, ratio));
 		gSpotLights[0].SetDirection(Lerp(startDir, endDir, ratio).GetNormalized3());
@@ -1602,7 +1611,7 @@ void DebugForwardPass(RenderContext& renderContext)
 	{
 		Matrix4 modelMat = MakeMatrixFromForward(gSpotLights[i].direction);
 		modelMat.SetTranslation(gSpotLights[i].position);
-		modelMat.ApplyScale(Vector4_3(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius) * (0.6f / gSpotLights[i].radius));
+		modelMat.ApplyScale(Vector4_3(gSpotLights[i].endRadius, gSpotLights[i].radius, gSpotLights[i].endRadius) * (0.6f / gSpotLights[i].radius));
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
 		gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
 
@@ -1659,7 +1668,7 @@ void DebugForwardPass(RenderContext& renderContext)
 			// model
 			Matrix4 modelMat = MakeMatrixFromForward(gSpotLights[i].direction);
 			modelMat.SetTranslation(gSpotLights[i].position);
-			modelMat.ApplyScale(gSpotLights[i].endRadius, gSpotLights[i].endRadius, gSpotLights[i].radius);
+			modelMat.ApplyScale(gSpotLights[i].endRadius, gSpotLights[i].radius, gSpotLights[i].endRadius);
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
 			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);

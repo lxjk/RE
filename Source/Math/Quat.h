@@ -146,7 +146,7 @@ public:
 	// inverse assume this quaterion is normalized
 	inline Quat GetInverse() const
 	{
-		const Vec128 QuatInverseSignMask = VecSet_i(0x80000000, 0x80000000, 0x80000000, 0x00000000);
+		const Vec128 QuatInverseSignMask = CastVeciToVec(VeciSet(0x80000000, 0x80000000, 0x80000000, 0x00000000));
 		return VecXor(mVec, QuatInverseSignMask);
 	}
 

@@ -6,7 +6,13 @@
 
 #include "Mesh.h"
 
-void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene, std::vector<Material*>& materials)
+enum class EMeshConversion
+{
+	None,
+	YUpToZUP,
+};
+
+void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene, std::vector<Material*>& materials, EMeshConversion conversion)
 {
 	// add mesh
 	int idx = (int)output.size();
@@ -26,13 +32,16 @@ void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene,
 		Vector4_3 bitangent(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z);
 		float handness = (normal.Cross3(tangent)).Dot3(bitangent) > 0 ? 1.f : -1.f;
 
-		vertList.push_back(
-			Vertex(
-				Vector4_3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
-				normal,
-				Vector4(tangent, handness),
-				bHasTexCoord ? Vector4_2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) : Vector4_2(0, 0))
-			);
+		Vertex v(
+			Vector4_3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z),
+			normal,
+			Vector4(tangent, handness),
+			bHasTexCoord ? Vector4_2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) : Vector4_2(0, 0));
+
+		if (conversion == EMeshConversion::YUpToZUP)
+			v.YUpToZUp();
+
+		vertList.push_back(v);
 	}
 
 	for (unsigned int i = 0; i < mesh->mNumFaces; ++i)
@@ -52,20 +61,20 @@ void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene,
 	}
 }
 
-void ProcessNode(std::vector<Mesh*>& output, aiNode* node, const aiScene* scene, std::vector<Material*>& materials)
+void ProcessNode(std::vector<Mesh*>& output, aiNode* node, const aiScene* scene, std::vector<Material*>& materials, EMeshConversion conversion)
 {
 	for (unsigned int i = 0; i < node->mNumMeshes; ++i)
 	{
 		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		ProcessMesh(output, mesh, scene, materials);
+		ProcessMesh(output, mesh, scene, materials, conversion);
 	}
 	for (unsigned int i = 0; i < node->mNumChildren; ++i)
 	{
-		ProcessNode(output, node->mChildren[i], scene, materials);
+		ProcessNode(output, node->mChildren[i], scene, materials, conversion);
 	}
 
 }
-void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShader)
+void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShader, EMeshConversion conversion = EMeshConversion::None)
 {
 	Assimp::Importer import;
 	const aiScene* scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
@@ -140,6 +149,6 @@ void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShade
 		}
 	}
 
-	ProcessNode(output, scene->mRootNode, scene, materials);
+	ProcessNode(output, scene->mRootNode, scene, materials, conversion);
 }
 

@@ -40,7 +40,8 @@ float CalcShadowBasicCube(vec3 viewPos, mat4 lightProjRemapMat, mat4 shadowMat, 
 	vec4 posLCS = lightProjRemapMat * vec4(0, 0, -viewZ, 1);	
 	posLCS.z -= posLCS.w * bias;
 	posLCS /= posLCS.w;
-	return posLCS.z <= texture(shadowMap, posLVS.xyz).r ? 1 : 0;
+	vec3 uv = GetCubeMapCoord(posLVS.xyz);
+	return posLCS.z <= texture(shadowMap, uv).r ? 1 : 0;
 } 
 
 float CalcShadowPoissonCube(vec3 viewPos, mat4 lightProjRemapMat, mat4 shadowMat, samplerCube shadowMap, float bias)
@@ -52,7 +53,8 @@ float CalcShadowPoissonCube(vec3 viewPos, mat4 lightProjRemapMat, mat4 shadowMat
 	posLCS.z -= posLCS.w * bias;
 	posLCS /= posLCS.w;
 	vec3 forward = normalize(posLVS.xyz);
-	vec3 up = forward.z > 0.5 ? vec3(1, 0, 0) : vec3(0, 1, 0);
+	//vec3 up = forward.z > 0.5 ? vec3(1, 0, 0) : vec3(0, 1, 0);
+	vec3 up = forward.z > 0.5 ? vec3(1, 0, 0) : vec3(0, 0, 1);
 	vec3 right = cross(forward, up);
 	up = cross(right, forward);	
 	vec2 mapSize = textureSize(shadowMap, 0);
@@ -72,6 +74,7 @@ float CalcShadowPoissonCube(vec3 viewPos, mat4 lightProjRemapMat, mat4 shadowMat
 			offset.x * randSin + offset.y * randCos
 		) * sampleScale;
 		vec3 uv = forward + offset.x * right + offset.y * up;
+		uv = GetCubeMapCoord(uv);
 		//depthDiff += (texture(shadowMap, uv).r - posLCS.z);
 		depthDiff += clamp(texture(shadowMap, uv).r - posLCS.z, -depthRange, depthRange);
 	}

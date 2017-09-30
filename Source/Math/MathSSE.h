@@ -7,23 +7,23 @@
 typedef __m128	Vec128;
 typedef __m128i	Vec128i;
 
+#define CastVeciToVec(veci)		_mm_castsi128_ps(veci)
+#define CastVecToVeci(vec)		_mm_castps_si128(vec)
+
 #define VecZero()				_mm_setzero_ps()
 
 #define VecSet1(f)				_mm_set1_ps(f)
-#define VecSet1_i(i)			_mm_castsi128_ps(_mm_set1_epi32(i))
-
 #define VecSet(x,y,z,w)			_mm_setr_ps(x,y,z,w)
-#define VecSet_i(x,y,z,w)		_mm_castsi128_ps(_mm_setr_epi32(x,y,z,w))
+
+#define VeciZero()				_mm_setzero_si128()
+
+#define VeciSet1(i)				_mm_set1_epi32(i)
+#define VeciSet(x,y,z,w)		_mm_setr_epi32(x,y,z,w)
 
 namespace VecConst {
 
-	//const Vec128 VecMaskXYZ				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000);
-	//const Vec128 VecMaskXY				= VecSet_i(0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0x00000000);
-	//const Vec128 VecMaskZW				= VecSet_i(0x00000000, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF);
-	//const Vec128 VecMaskW				= VecSet_i(0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF);
-
-	const Vec128 SignMask				= VecSet1_i(0x80000000);
-	const Vec128 InvSignMask			= VecSet1_i(0x7FFFFFFF);
+	const Vec128 SignMask				= CastVeciToVec(VeciSet1(0x80000000));
+	const Vec128 InvSignMask			= CastVeciToVec(VeciSet1(0x7FFFFFFF));
 	
 	const Vec128 Sign_PNPN				= VecSet(1.f, -1.f, 1.f, -1.f);
 	const Vec128 Sign_PPNN				= VecSet(1.f, 1.f, -1.f, -1.f);
@@ -53,16 +53,6 @@ namespace VecConst {
 	
 	const Vec128 Half_DegToRad			= VecSet1(0.5f * PI / 180.f);
 };
-
-#define VeciZero()				_mm_setzero_si128()
-
-#define VeciSet1(i)				_mm_set1_epi32(i)
-
-namespace VeciConst
-{
-	const Vec128i ExponentBias			= VeciSet1(0x7F);
-}
-
 
 #define VecLoad1(f_ptr)			_mm_load1_ps(f_ptr)
 
@@ -388,9 +378,10 @@ __forceinline Vec128 VecLog2(Vec128 vec)
 	// based on https://dsp.stackexchange.com/questions/20444/books-resources-for-implementing-various-mathematical-functions-in-fixed-point-a/20482#20482
 	// log2(x) = log2(1.mantisa * 2^exp) = log2(1.mantisa) + exp
 
-	const Vec128 exponentMask = VecSet1_i(0x7F800000);
-	const Vec128 mantisaMask = VecSet1_i(0x807FFFFF);
-	const Vec128 minNorm = VecSet1_i(0x00800000);
+	const Vec128 exponentMask = CastVeciToVec(VeciSet1(0x7F800000));
+	const Vec128 mantisaMask = CastVeciToVec(VeciSet1(0x807FFFFF));
+	const Vec128 minNorm = CastVeciToVec(VeciSet1(0x00800000));
+	const Vec128i ExponentBias = VeciSet1(0x7F);
 
 	const Vec128 LogParam0 = VecSet1(1.44254494359510f);
 	const Vec128 LogParam1 = VecSet1(-0.7181452567504f);
@@ -408,9 +399,9 @@ __forceinline Vec128 VecLog2(Vec128 vec)
 	x = _mm_or_ps(x, VecConst::Vec_One);
 
 	// exp
-	Vec128i expi = _mm_castps_si128(_mm_and_ps(vec, exponentMask));
+	Vec128i expi = CastVecToVeci(_mm_and_ps(vec, exponentMask));
 	expi = _mm_srli_epi32(expi, 23);
-	expi = _mm_sub_epi32(expi, VeciConst::ExponentBias);
+	expi = _mm_sub_epi32(expi, ExponentBias);
 	Vec128 exp = _mm_cvtepi32_ps(expi);
 
 	x = _mm_sub_ps(x, VecConst::Vec_One);
@@ -465,6 +456,7 @@ __forceinline Vec128 VecExp2(Vec128 vec)
 	const Vec128 ExpParam3 = VecSet1(0.05203236900844f);
 	const Vec128 ExpParam4 = VecSet1(0.01355574723481f);
 	const Vec128i ExpMax = VeciSet1(0xFF);
+	const Vec128i ExponentBias = VeciSet1(0x7F);
 	
 	Vec128 floor = _mm_round_ps(vec, _MM_FROUND_FLOOR);
 	Vec128 x = _mm_sub_ps(vec, floor);
@@ -475,10 +467,10 @@ __forceinline Vec128 VecExp2(Vec128 vec)
 	y = _mm_add_ps(_mm_mul_ps(y, x), VecConst::Vec_One);
 
 	Vec128i ifloor = _mm_cvtps_epi32(floor);
-	ifloor = _mm_add_epi32(ifloor, VeciConst::ExponentBias);
+	ifloor = _mm_add_epi32(ifloor, ExponentBias);
 	ifloor = _mm_max_epi32(_mm_min_epi32(ifloor, ExpMax), VeciZero()); // clamp to 0 - 0xFF
 	ifloor = _mm_slli_epi32(ifloor, 23); // shift to exponent part
-	Vec128 z = _mm_castsi128_ps(ifloor);
+	Vec128 z = CastVeciToVec(ifloor);
 
 	return _mm_mul_ps(y, z);
 }

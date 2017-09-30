@@ -29,6 +29,19 @@ struct Vertex
 		tangent = inTangent;
 		texCoords = inTexCoords;
 	}
+
+	void YUpToZUp()
+	{
+		float tmp = position.z;
+		position.z = position.y;
+		position.y = -tmp;
+		tmp = normal.z;
+		normal.z = normal.y;
+		normal.y = -tmp;
+		tmp = tangent.z;
+		tangent.z = tangent.y;
+		tangent.y = -tmp;
+	}
 };
 
 class MeshData
@@ -146,6 +159,11 @@ static void MakeCube(MeshData& meshData)
 		idxList.push_back(i * 4 + 3);
 	}
 
+#if RE_UP_AXIS == RE_Z_UP
+	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
+		vertList.data()[i].YUpToZUp();
+#endif
+
 	meshData.CacheCount();
 }
 
@@ -219,6 +237,11 @@ static void MakeSphere(MeshData& meshData, int div)
 		idxList.push_back(prevRingStart + next);
 		idxList.push_back(curRingStart);
 	}
+
+#if RE_UP_AXIS == RE_Z_UP
+	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
+		vertList.data()[i].YUpToZUp();
+#endif
 
 	assert(vertList.size() == vertCount);
 	assert(idxList.size() == idxCount);
@@ -328,6 +351,11 @@ static void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 		idxList.push_back(prevRingStart + ringIdx);
 		idxList.push_back(curRingStart);
 	}
+
+#if RE_UP_AXIS == RE_Z_UP
+	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
+		vertList.data()[i].YUpToZUp();
+#endif
 
 	meshData.CacheCount();
 }
@@ -470,10 +498,16 @@ static void MakeIcosahedron(MeshData& meshData, int tesLevel)
 		}
 	}
 
+#if RE_UP_AXIS == RE_Z_UP
+	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
+		vertList.data()[i].YUpToZUp();
+#endif
+
 	meshData.CacheCount();
 }
 
-static void MakeQuad(MeshData& meshData)
+// view space quad
+static void MakeQuadVS(MeshData& meshData)
 {
 	std::vector<Vertex>& vertList = meshData.vertices;
 	std::vector<GLuint>& idxList = meshData.indices;

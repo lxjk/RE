@@ -32,6 +32,8 @@ public:
 		invViewMat = QuatToMatrix4(rotation);
 		// translation
 		invViewMat.SetTranslation(position);
+		// convert
+		invViewMat = ToInvViewMatrix(invViewMat);
 		// view
 		viewMat = invViewMat.GetTransformInverseNoScale();
 		// proj

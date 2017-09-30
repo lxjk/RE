@@ -8,7 +8,7 @@
 #define RE_Y_UP 1
 #define RE_Z_UP 2
 
-#define RE_UP_AXIS RE_Y_UP
+#define RE_UP_AXIS RE_Z_UP
 
 #define RE_EULER_ZYX	1 // Z: Yaw, Y: Pitch, X: Roll
 #define RE_EULER_ZXY	2 // Z: Yaw, X: Pitch, Y: Roll
@@ -426,36 +426,49 @@ inline Vector4_3 GetRightVector(const Quat& q)
 #endif
 }
 
-inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward, const Vector4_3& up)
+// convert from model matrix to invert view matrix
+__forceinline Matrix4 ToInvViewMatrix(const Matrix4& m)
 {
 #if RE_UP_AXIS == RE_Z_UP
-	Vector4_3 y = forward;
-	Vector4_3 x = y.Cross3(up);
-	VectorSelectLE(x.SizeSqr3(), KINDA_SMALL_NUMBER,
-		Vector4_3(1.f, 0.f, 0.f),
-		x.GetNormalized3());
-	Vector4_3 z = x.Cross3(y);
+	Matrix4 r = m;
+	r.mVec[1] = m.mVec[2];
+	r.mVec[2] = VecNegate(m.mVec[1]);
+	return r;
 #else
-	Vector4_3 z = -forward;
-	Vector4_3 x = up.Cross3(z);
-	//if (x.SizeSqr3() <= KINDA_SMALL_NUMBER)
-	//	x = Vector4_3(1.f, 0.f, 0.f);
-	//else
-	//	x = x.GetNormalized3();
-	VectorSelectLE(x.SizeSqr3(), KINDA_SMALL_NUMBER, 
-		Vector4_3(1.f, 0.f, 0.f), 
-		x.GetNormalized3());
-	Vector4_3 y = z.Cross3(x);
+	return m;
 #endif
+}
+
+inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward, const Vector4_3& up)
+{
+	Vector4_3 right = forward.Cross3(up);
+	//if (right.SizeSqr3() <= KINDA_SMALL_NUMBER)
+	//	right = Vector4_3(1.f, 0.f, 0.f);
+	//else
+	//	right = right.GetNormalized3();
+	right = VectorSelectLE(right.SizeSqr3(), KINDA_SMALL_NUMBER,
+		Vector4_3(1.f, 0.f, 0.f),
+		right.GetNormalized3());
+	Vector4_3 newUp = right.Cross3(forward);
 
 	Matrix4 r = Matrix4::Identity();
-	r.SetAxes(x, y, z);
+
+#if RE_UP_AXIS == RE_Z_UP
+	r.SetAxes(right, forward, newUp);
+#else
+	r.SetAxes(right, newUp, -forward);
+#endif
+
 	return r;
 }
 
 inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward)
 {
+#if RE_UP_AXIS == RE_Z_UP
+	return MakeMatrixFromForward(forward, Vector4_3(0.f, 0.f, 1.f));
+#else
 	return MakeMatrixFromForward(forward, Vector4_3(0.f, 1.f, 0.f));
+#endif
 }
 
 inline Matrix4 MakeMatrixPerspectiveProj(float fov, float width, float height, float zNear, float zFar, float jitterX = 0, float jitterY = 0)

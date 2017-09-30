@@ -61,7 +61,7 @@ public:
 	{
 		LightMesh = inLightMesh;
 		position = Vector4_3(0, 0, 0);
-		direction = Vector4_3(0, 0, -1);
+		direction = Vector4_3(0, 1, 0);
 		color = Vector4_3(0, 0, 0);
 		intensity = 0;
 		radius = 1;
@@ -94,23 +94,23 @@ public:
 			modelMat = MakeMatrixFromForward(direction);
 			modelMat.SetTranslation(position);
 
-			lightViewMat = modelMat.GetTransformInverseNoScale();
+			lightViewMat = ToInvViewMatrix(modelMat).GetTransformInverseNoScale();
 
-			modelMat.ApplyScale(endRadius, endRadius, radius);
+			modelMat.ApplyScale(endRadius, radius, endRadius);
 		}
 		else if (attenParams.x > 0)
 		{
 			// point light
 			modelMat = Matrix4::Identity();
 			modelMat.SetTranslation(position);
-			modelMat.ApplyScale(radius);
 
-			lightViewMat = Matrix4::Identity();
-			lightViewMat.SetTranslation(-position);
+			lightViewMat = ToInvViewMatrix(modelMat).GetTransformInverseNoScale();
+
+			modelMat.ApplyScale(radius);
 		}
 		else
 		{
-			lightViewMat = MakeMatrixFromForward(direction).GetTransposed3();
+			lightViewMat = ToInvViewMatrix(MakeMatrixFromForward(direction)).GetTransposed3();
 		}
 	}
 

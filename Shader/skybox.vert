@@ -1,5 +1,6 @@
 #version 330 core
 
+#include "Include/Common.incl"
 #include "Include/CommonUBO.incl"
 #include "Include/CommonVertexInput.incl"
 
@@ -14,5 +15,5 @@ void main()
 	// unjitter
 	posCS.xy += projMat[2].xy * posCS.w;
 	gl_Position = posCS.xyww;
-	vs_out.texCoords = position;
+	vs_out.texCoords = GetCubeMapCoord(position);
 }
