@@ -122,8 +122,8 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			//tmp += VecAtan2(d[i].v1.mVec, d[i].v2.mVec);
-			tmp += VecExp(d[i].v1.mVec);
+			//tmp += VecAtan2(d[i].v1.m128, d[i].v2.m128);
+			tmp += VecExp(d[i].v1.m128);
 			//tmp += Matrix4ToQuat(d[i].m1);
 			//tmp += QuatToEuler(d[i].q1);
 			//tmp += d[i].m1.GetInverse();
@@ -142,7 +142,7 @@ void Bench()
 		for (int i = 0; i < count; ++i)
 		{
 			//Vec128 s, c;
-			//VecSinCos(d[i].v1.mVec, s, c);
+			//VecSinCos(d[i].v1.m128, s, c);
 			//tmp += (VecAdd(s, c));
 			//tmp += EulerToQuat(d[i].v1);
 			tmp += expf(d[i].v1.x);
@@ -165,7 +165,7 @@ void Bench()
 		unsigned __int64 t0 = __rdtsc();
 		for (int i = 0; i < count; ++i)
 		{
-			tmp += VecExp(d[i].v1.mVec);
+			tmp += VecExp(d[i].v1.m128);
 			//tmp += QuatToEuler(d[i].q1);
 			//tmp += d[i].m1.GetTransformInverse();
 			//tmp += UT_Matrix4_GetInverse_DirectX(d[i].m1);
@@ -305,14 +305,14 @@ int main(int argc, char **argv)
 	//	);
 
 	//RandomTest<FuncVV2V>(
-	//	[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.m128, v2.m128);},
 	//	[](const Vector4& v1, const Vector4& v2) { return VecSet(atan2f(v1.x, v2.x), atan2f(v1.y, v2.y), atan2f(v1.z, v2.z), atan2f(v1.w, v2.w));},
-	//	[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.mVec, v2.mVec);},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecAtan2(v1.m128, v2.m128);},
 	//	-2, 2, 20000, 4
 	//	);
 	
 	//RandomTest<FuncVV2F>(
-	//	[](const Vector4& v1, const Vector4& v2) { return VecDot2(v1.mVec, v2.mVec);},
+	//	[](const Vector4& v1, const Vector4& v2) { return VecDot2(v1.m128, v2.m128);},
 	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot2(v1, v2);},
 	//	[](const Vector4& v1, const Vector4& v2) { return UT_Vector4_Dot2_Glm(v1, v2);},
 	//	-2, 2, 20000, 0
@@ -333,9 +333,9 @@ int main(int argc, char **argv)
 	//	);
 	
 	//RandomTest<FuncV2V>(
-	//	[](const Vector4& v1) { return VecInvSqrt(VecAbs(v1.mVec)); },
-	//	[](const Vector4& v1) { return VecDiv(VecSet1(1), VecSqrt(VecAbs(v1.mVec))); },
-	//	[](const Vector4& v1) { return VecDiv(VecSet1(1), VecSqrt(VecAbs(v1.mVec))); },
+	//	[](const Vector4& v1) { return VecInvSqrt(VecAbs(v1.m128)); },
+	//	[](const Vector4& v1) { return VecDiv(VecSet1(1), VecSqrt(VecAbs(v1.m128))); },
+	//	[](const Vector4& v1) { return VecDiv(VecSet1(1), VecSqrt(VecAbs(v1.m128))); },
 	//	-2, 2, 20000, 3
 	//	);
 

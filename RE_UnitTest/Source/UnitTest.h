@@ -662,7 +662,7 @@ void RandomTest(FuncV2V f1, FuncV2V f2, FuncV2V f3, float minR, float maxR, int 
 {
 	VectorLoopBegin(i, count, v)
 	{
-		//Vector4 t = VecRSqrt(v.mVec);
+		//Vector4 t = VecRSqrt(v.m128);
 		//IntFloatUnion u;
 		//PrintValue(t);
 

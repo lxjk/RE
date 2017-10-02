@@ -174,10 +174,10 @@ __forceinline Matrix4 UT_Matrix4_GetInverse_Intel(const Matrix4& m1)
 	const unsigned int _Sign_PNNP[4] = { 0x00000000, 0x80000000, 0x80000000, 0x00000000 };
 
 	// Load the full matrix into registers
-	__m128 _L1 = m1.mVec[0];
-	__m128 _L2 = m1.mVec[1];
-	__m128 _L3 = m1.mVec[2];
-	__m128 _L4 = m1.mVec[3];
+	__m128 _L1 = m1.m128[0];
+	__m128 _L2 = m1.m128[1];
+	__m128 _L3 = m1.m128[2];
+	__m128 _L4 = m1.m128[3];
 
 	// The inverse is calculated using "Divide and Conquer" technique. The
 	// original matrix is divide into four 2x2 sub-matrices. Since each
@@ -268,10 +268,10 @@ __forceinline Matrix4 UT_Matrix4_GetInverse_Intel(const Matrix4& m1)
 	iC = _mm_mul_ps(rd, iC);
 	iD = _mm_mul_ps(rd, iD);
 
-	r.mVec[0] = _mm_shuffle_ps(iA, iB, 0x77);
-	r.mVec[1] = _mm_shuffle_ps(iA, iB, 0x22);
-	r.mVec[2] = _mm_shuffle_ps(iC, iD, 0x77);
-	r.mVec[3] = _mm_shuffle_ps(iC, iD, 0x22);
+	r.m128[0] = _mm_shuffle_ps(iA, iB, 0x77);
+	r.m128[1] = _mm_shuffle_ps(iA, iB, 0x22);
+	r.m128[2] = _mm_shuffle_ps(iC, iD, 0x77);
+	r.m128[3] = _mm_shuffle_ps(iC, iD, 0x22);
 
 	return r;
 }
@@ -281,23 +281,23 @@ __forceinline Matrix4 UT_Matrix4_GetInverse_DirectX(const Matrix4& m1)
 	Matrix4 r;
 
 	//XMMATRIX MT = XMMatrixTranspose(M);
-	Vec128 V00 = VecSwizzleMask(m1.mVec[2], _MM_SHUFFLE(1, 1, 0, 0));
-	Vec128 V10 = VecSwizzleMask(m1.mVec[3], _MM_SHUFFLE(3, 2, 3, 2));
-	Vec128 V01 = VecSwizzleMask(m1.mVec[0], _MM_SHUFFLE(1, 1, 0, 0));
-	Vec128 V11 = VecSwizzleMask(m1.mVec[1], _MM_SHUFFLE(3, 2, 3, 2));
-	Vec128 V02 = _mm_shuffle_ps(m1.mVec[2], m1.mVec[0], _MM_SHUFFLE(2, 0, 2, 0));
-	Vec128 V12 = _mm_shuffle_ps(m1.mVec[3], m1.mVec[1], _MM_SHUFFLE(3, 1, 3, 1));
+	Vec128 V00 = VecSwizzleMask(m1.m128[2], _MM_SHUFFLE(1, 1, 0, 0));
+	Vec128 V10 = VecSwizzleMask(m1.m128[3], _MM_SHUFFLE(3, 2, 3, 2));
+	Vec128 V01 = VecSwizzleMask(m1.m128[0], _MM_SHUFFLE(1, 1, 0, 0));
+	Vec128 V11 = VecSwizzleMask(m1.m128[1], _MM_SHUFFLE(3, 2, 3, 2));
+	Vec128 V02 = _mm_shuffle_ps(m1.m128[2], m1.m128[0], _MM_SHUFFLE(2, 0, 2, 0));
+	Vec128 V12 = _mm_shuffle_ps(m1.m128[3], m1.m128[1], _MM_SHUFFLE(3, 1, 3, 1));
 
 	Vec128 D0 = _mm_mul_ps(V00, V10);
 	Vec128 D1 = _mm_mul_ps(V01, V11);
 	Vec128 D2 = _mm_mul_ps(V02, V12);
 
-	V00 = VecSwizzleMask(m1.mVec[2], _MM_SHUFFLE(3, 2, 3, 2));
-	V10 = VecSwizzleMask(m1.mVec[3], _MM_SHUFFLE(1, 1, 0, 0));
-	V01 = VecSwizzleMask(m1.mVec[0], _MM_SHUFFLE(3, 2, 3, 2));
-	V11 = VecSwizzleMask(m1.mVec[1], _MM_SHUFFLE(1, 1, 0, 0));
-	V02 = _mm_shuffle_ps(m1.mVec[2], m1.mVec[0], _MM_SHUFFLE(3, 1, 3, 1));
-	V12 = _mm_shuffle_ps(m1.mVec[3], m1.mVec[1], _MM_SHUFFLE(2, 0, 2, 0));
+	V00 = VecSwizzleMask(m1.m128[2], _MM_SHUFFLE(3, 2, 3, 2));
+	V10 = VecSwizzleMask(m1.m128[3], _MM_SHUFFLE(1, 1, 0, 0));
+	V01 = VecSwizzleMask(m1.m128[0], _MM_SHUFFLE(3, 2, 3, 2));
+	V11 = VecSwizzleMask(m1.m128[1], _MM_SHUFFLE(1, 1, 0, 0));
+	V02 = _mm_shuffle_ps(m1.m128[2], m1.m128[0], _MM_SHUFFLE(3, 1, 3, 1));
+	V12 = _mm_shuffle_ps(m1.m128[3], m1.m128[1], _MM_SHUFFLE(2, 0, 2, 0));
 
 	V00 = _mm_mul_ps(V00, V10);
 	V01 = _mm_mul_ps(V01, V11);
@@ -307,15 +307,15 @@ __forceinline Matrix4 UT_Matrix4_GetInverse_DirectX(const Matrix4& m1)
 	D2 = _mm_sub_ps(D2, V02);
 	// V11 = D0Y,D0W,D2Y,D2Y
 	V11 = _mm_shuffle_ps(D0, D2, _MM_SHUFFLE(1, 1, 3, 1));
-	V00 = VecSwizzleMask(m1.mVec[1], _MM_SHUFFLE(1, 0, 2, 1));
+	V00 = VecSwizzleMask(m1.m128[1], _MM_SHUFFLE(1, 0, 2, 1));
 	V10 = _mm_shuffle_ps(V11, D0, _MM_SHUFFLE(0, 3, 0, 2));
-	V01 = VecSwizzleMask(m1.mVec[0], _MM_SHUFFLE(0, 1, 0, 2));
+	V01 = VecSwizzleMask(m1.m128[0], _MM_SHUFFLE(0, 1, 0, 2));
 	V11 = _mm_shuffle_ps(V11, D0, _MM_SHUFFLE(2, 1, 2, 1));
 	// V13 = D1Y,D1W,D2W,D2W
 	Vec128 V13 = _mm_shuffle_ps(D1, D2, _MM_SHUFFLE(3, 3, 3, 1));
-	V02 = VecSwizzleMask(m1.mVec[3], _MM_SHUFFLE(1, 0, 2, 1));
+	V02 = VecSwizzleMask(m1.m128[3], _MM_SHUFFLE(1, 0, 2, 1));
 	V12 = _mm_shuffle_ps(V13, D1, _MM_SHUFFLE(0, 3, 0, 2));
-	Vec128 V03 = VecSwizzleMask(m1.mVec[2], _MM_SHUFFLE(0, 1, 0, 2));
+	Vec128 V03 = VecSwizzleMask(m1.m128[2], _MM_SHUFFLE(0, 1, 0, 2));
 	V13 = _mm_shuffle_ps(V13, D1, _MM_SHUFFLE(2, 1, 2, 1));
 
 	Vec128 C0 = _mm_mul_ps(V00, V10);
@@ -325,15 +325,15 @@ __forceinline Matrix4 UT_Matrix4_GetInverse_DirectX(const Matrix4& m1)
 
 	// V11 = D0X,D0Y,D2X,D2X
 	V11 = _mm_shuffle_ps(D0, D2, _MM_SHUFFLE(0, 0, 1, 0));
-	V00 = VecSwizzleMask(m1.mVec[1], _MM_SHUFFLE(2, 1, 3, 2));
+	V00 = VecSwizzleMask(m1.m128[1], _MM_SHUFFLE(2, 1, 3, 2));
 	V10 = _mm_shuffle_ps(D0, V11, _MM_SHUFFLE(2, 1, 0, 3));
-	V01 = VecSwizzleMask(m1.mVec[0], _MM_SHUFFLE(1, 3, 2, 3));
+	V01 = VecSwizzleMask(m1.m128[0], _MM_SHUFFLE(1, 3, 2, 3));
 	V11 = _mm_shuffle_ps(D0, V11, _MM_SHUFFLE(0, 2, 1, 2));
 	// V13 = D1X,D1Y,D2Z,D2Z
 	V13 = _mm_shuffle_ps(D1, D2, _MM_SHUFFLE(2, 2, 1, 0));
-	V02 = VecSwizzleMask(m1.mVec[3], _MM_SHUFFLE(2, 1, 3, 2));
+	V02 = VecSwizzleMask(m1.m128[3], _MM_SHUFFLE(2, 1, 3, 2));
 	V12 = _mm_shuffle_ps(D1, V13, _MM_SHUFFLE(2, 1, 0, 3));
-	V03 = VecSwizzleMask(m1.mVec[2], _MM_SHUFFLE(1, 3, 2, 3));
+	V03 = VecSwizzleMask(m1.m128[2], _MM_SHUFFLE(1, 3, 2, 3));
 	V13 = _mm_shuffle_ps(D1, V13, _MM_SHUFFLE(0, 2, 1, 2));
 
 	V00 = _mm_mul_ps(V00, V10);
@@ -345,19 +345,19 @@ __forceinline Matrix4 UT_Matrix4_GetInverse_DirectX(const Matrix4& m1)
 	C4 = _mm_sub_ps(C4, V02);
 	C6 = _mm_sub_ps(C6, V03);
 
-	V00 = VecSwizzleMask(m1.mVec[1], _MM_SHUFFLE(0, 3, 0, 3));
+	V00 = VecSwizzleMask(m1.m128[1], _MM_SHUFFLE(0, 3, 0, 3));
 	// V10 = D0Z,D0Z,D2X,D2Y
 	V10 = _mm_shuffle_ps(D0, D2, _MM_SHUFFLE(1, 0, 2, 2));
 	V10 = VecSwizzleMask(V10, _MM_SHUFFLE(0, 2, 3, 0));
-	V01 = VecSwizzleMask(m1.mVec[0], _MM_SHUFFLE(2, 0, 3, 1));
+	V01 = VecSwizzleMask(m1.m128[0], _MM_SHUFFLE(2, 0, 3, 1));
 	// V11 = D0X,D0W,D2X,D2Y
 	V11 = _mm_shuffle_ps(D0, D2, _MM_SHUFFLE(1, 0, 3, 0));
 	V11 = VecSwizzleMask(V11, _MM_SHUFFLE(2, 1, 0, 3));
-	V02 = VecSwizzleMask(m1.mVec[3], _MM_SHUFFLE(0, 3, 0, 3));
+	V02 = VecSwizzleMask(m1.m128[3], _MM_SHUFFLE(0, 3, 0, 3));
 	// V12 = D1Z,D1Z,D2Z,D2W
 	V12 = _mm_shuffle_ps(D1, D2, _MM_SHUFFLE(3, 2, 2, 2));
 	V12 = VecSwizzleMask(V12, _MM_SHUFFLE(0, 2, 3, 0));
-	V03 = VecSwizzleMask(m1.mVec[2], _MM_SHUFFLE(2, 0, 3, 1));
+	V03 = VecSwizzleMask(m1.m128[2], _MM_SHUFFLE(2, 0, 3, 1));
 	// V13 = D1X,D1W,D2Z,D2W
 	V13 = _mm_shuffle_ps(D1, D2, _MM_SHUFFLE(3, 2, 3, 0));
 	V13 = VecSwizzleMask(V13, _MM_SHUFFLE(2, 1, 0, 3));
@@ -384,12 +384,12 @@ __forceinline Matrix4 UT_Matrix4_GetInverse_DirectX(const Matrix4& m1)
 	C4 = VecSwizzleMask(C4, _MM_SHUFFLE(3, 1, 2, 0));
 	C6 = VecSwizzleMask(C6, _MM_SHUFFLE(3, 1, 2, 0));
 	// Get the determinate
-	Vec128 vTemp = VecDotV(C0, m1.mVec[0]);
+	Vec128 vTemp = VecDotV(C0, m1.m128[0]);
 	vTemp = _mm_div_ps(VecSet1(1.f), vTemp);
-	r.mVec[0] = _mm_mul_ps(C0, vTemp);
-	r.mVec[1] = _mm_mul_ps(C2, vTemp);
-	r.mVec[2] = _mm_mul_ps(C4, vTemp);
-	r.mVec[3] = _mm_mul_ps(C6, vTemp);
+	r.m128[0] = _mm_mul_ps(C0, vTemp);
+	r.m128[1] = _mm_mul_ps(C2, vTemp);
+	r.m128[2] = _mm_mul_ps(C4, vTemp);
+	r.m128[3] = _mm_mul_ps(C6, vTemp);
 
 	return r;
 }
@@ -419,7 +419,7 @@ __forceinline Matrix4 UT_Matrix4_GetInverseTransposed3(const Matrix4& m1)
 	r.m[2][2] = +(m1.m[0][0] * m1.m[1][1] - m1.m[1][0] * m1.m[0][1]);
 	r /= Determinant;
 
-	r.mVec[3] = VecSet(0.f, 0.f, 0.f, 1.f);
+	r.m128[3] = VecSet(0.f, 0.f, 0.f, 1.f);
 
 	return r;
 }

@@ -25,8 +25,8 @@ public:
 
 	inline bool IsInBounds(const Vector4_3& point)
 	{
-		Vec128 t0 = VecCmpLE(point.mVec, max.mVec);
-		Vec128 t1 = VecCmpGE(point.mVec, min.mVec);
+		Vec128 t0 = VecCmpLE(point.m128, max.m128);
+		Vec128 t1 = VecCmpGE(point.m128, min.m128);
 		int r = VecMoveMask(VecAnd(t0, t1));
 		return (r & 0x7) == 0x7; // ignore w component
 		//return point.x <= max.x && point.x >= min.x &&
@@ -36,8 +36,8 @@ public:
 
 	inline bool IsOverlap(const BoxBounds& otherBounds)
 	{
-		Vec128 t0 = VecCmpLE(otherBounds.min.mVec, max.mVec);
-		Vec128 t1 = VecCmpGE(otherBounds.max.mVec, min.mVec);
+		Vec128 t0 = VecCmpLE(otherBounds.min.m128, max.m128);
+		Vec128 t1 = VecCmpGE(otherBounds.max.m128, min.m128);
 		int r = VecMoveMask(VecAnd(t0, t1));
 		return (r & 0x7) == 0x7; // ignore w component
 		//return otherBounds.max.x >= min.x && otherBounds.max.y >= min.y && otherBounds.max.z >= min.z &&
@@ -54,12 +54,12 @@ public:
 		//}
 		outBounds += inMat.TransformPoint(min);
 		outBounds += inMat.TransformPoint(max);
-		outBounds += inMat.TransformPoint(VecBlend(min.mVec, max.mVec, 0,0,1,0));
-		outBounds += inMat.TransformPoint(VecBlend(min.mVec, max.mVec, 0,1,0,0));
-		outBounds += inMat.TransformPoint(VecBlend(min.mVec, max.mVec, 1,0,0,0));
-		outBounds += inMat.TransformPoint(VecBlend(min.mVec, max.mVec, 0,1,1,0));
-		outBounds += inMat.TransformPoint(VecBlend(min.mVec, max.mVec, 1,0,1,0));
-		outBounds += inMat.TransformPoint(VecBlend(min.mVec, max.mVec, 1,1,0,0));
+		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 0,0,1,0));
+		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 0,1,0,0));
+		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 1,0,0,0));
+		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 0,1,1,0));
+		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 1,0,1,0));
+		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 1,1,0,0));
 	}
 
 	// we don't do check here, expect an array of at least 8 elements
@@ -67,18 +67,18 @@ public:
 	{
 		outPoints[0] = min;
 		outPoints[1] = max;
-		outPoints[2] = VecBlend(min.mVec, max.mVec, 0,0,1,0);
-		outPoints[3] = VecBlend(min.mVec, max.mVec, 0,1,0,0);
-		outPoints[4] = VecBlend(min.mVec, max.mVec, 1,0,0,0);
-		outPoints[5] = VecBlend(min.mVec, max.mVec, 0,1,1,0);
-		outPoints[6] = VecBlend(min.mVec, max.mVec, 1,0,1,0);
-		outPoints[7] = VecBlend(min.mVec, max.mVec, 1,1,0,0);
+		outPoints[2] = VecBlend(min.m128, max.m128, 0,0,1,0);
+		outPoints[3] = VecBlend(min.m128, max.m128, 0,1,0,0);
+		outPoints[4] = VecBlend(min.m128, max.m128, 1,0,0,0);
+		outPoints[5] = VecBlend(min.m128, max.m128, 0,1,1,0);
+		outPoints[6] = VecBlend(min.m128, max.m128, 1,0,1,0);
+		outPoints[7] = VecBlend(min.m128, max.m128, 1,1,0,0);
 	}
 
 	BoxBounds& operator+= (const Vector4_3& point)
 	{
-		min.mVec = VecMin(min.mVec, point.mVec);
-		max.mVec = VecMax(max.mVec, point.mVec);
+		min.m128 = VecMin(min.m128, point.m128);
+		max.m128 = VecMax(max.m128, point.m128);
 		//if (point.x < min.x) min.x = point.x;
 		//if (point.y < min.y) min.y = point.y;
 		//if (point.z < min.z) min.z = point.z;
@@ -90,8 +90,8 @@ public:
 
 	BoxBounds& operator+= (const BoxBounds& otherBounds)
 	{
-		min.mVec = VecMin(min.mVec, otherBounds.min.mVec);
-		max.mVec = VecMax(max.mVec, otherBounds.max.mVec);
+		min.m128 = VecMin(min.m128, otherBounds.min.m128);
+		max.m128 = VecMax(max.m128, otherBounds.max.m128);
 		//if (otherBounds.min.x < min.x) min.x = otherBounds.min.x;
 		//if (otherBounds.min.y < min.y) min.y = otherBounds.min.y;
 		//if (otherBounds.min.z < min.z) min.z = otherBounds.min.z;

@@ -125,13 +125,13 @@ namespace VecConst {
 #define VecInterleave_2233(vec1, vec2)			_mm_unpackhi_ps(vec1, vec2)
 
 // only return -1 or 1, no 0
-_forceinline Vec128 VecSign(Vec128 vec)
+__forceinline Vec128 VecSign(Vec128 vec)
 {
 	return _mm_or_ps(_mm_and_ps(vec, VecConst::SignMask), VecConst::Vec_One);
 }
 
 // sign part is only -1 or 1, no 0
-_forceinline void VecSignAndAbs(Vec128 vec, Vec128& outSign, Vec128& outAbs)
+__forceinline void VecSignAndAbs(Vec128 vec, Vec128& outSign, Vec128& outAbs)
 {
 	Vec128 mask = _mm_and_ps(vec, VecConst::SignMask);
 	outSign = _mm_or_ps(mask, VecConst::Vec_One);
@@ -239,7 +239,7 @@ __forceinline Vec128 VecDot2V(Vec128 vec1, Vec128 vec2)
 	return VecSwizzle_0022(t1); // duplicate 0, 2 to 1, 3
 }
 
-// return vector value (x1*x2 + y1*y2, z1*z2 + w1*w2, ?, ?)
+// return vector value (x1*x2 + y1*y2, z1*z2 + w1*w2, x1*x2 + y1*y2, z1*z2 + w1*w2)
 __forceinline Vec128 VecDot2P(Vec128 vec1, Vec128 vec2)
 {
 	Vec128 v = _mm_mul_ps(vec1, vec2);

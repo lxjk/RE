@@ -17,7 +17,7 @@ public:
 	union
 	{
 		float m[4][4];
-		Vec128 mVec[4];
+		Vec128 m128[4];
 		// rows or columns based on which one we choose
 		Vector4 mLine[4];
 		struct
@@ -41,10 +41,10 @@ public:
 
 	//Matrix4(Vec128 vec0, Vec128 vec1, Vec128 vec2, Vec128 vec3)
 	//{
-	//	mVec[0] = vec0;
-	//	mVec[1] = vec1;
-	//	mVec[2] = vec2;
-	//	mVec[3] = vec3;
+	//	m128[0] = vec0;
+	//	m128[1] = vec1;
+	//	m128[2] = vec2;
+	//	m128[3] = vec3;
 	//}
 	
 	// const getter
@@ -74,28 +74,28 @@ public:
 	inline Matrix4 operator+(const Matrix4& m) const
 	{
 		Matrix4 r;
-		r.mVec[0] = VecAdd(mVec[0], m.mVec[0]);
-		r.mVec[1] = VecAdd(mVec[1], m.mVec[1]);
-		r.mVec[2] = VecAdd(mVec[2], m.mVec[2]);
-		r.mVec[3] = VecAdd(mVec[3], m.mVec[3]);
+		r.m128[0] = VecAdd(m128[0], m.m128[0]);
+		r.m128[1] = VecAdd(m128[1], m.m128[1]);
+		r.m128[2] = VecAdd(m128[2], m.m128[2]);
+		r.m128[3] = VecAdd(m128[3], m.m128[3]);
 		return r;
 	}
 	inline Matrix4& operator+=(const Matrix4& m)
 	{
-		mVec[0] = VecAdd(mVec[0], m.mVec[0]);
-		mVec[1] = VecAdd(mVec[1], m.mVec[1]);
-		mVec[2] = VecAdd(mVec[2], m.mVec[2]);
-		mVec[3] = VecAdd(mVec[3], m.mVec[3]);
+		m128[0] = VecAdd(m128[0], m.m128[0]);
+		m128[1] = VecAdd(m128[1], m.m128[1]);
+		m128[2] = VecAdd(m128[2], m.m128[2]);
+		m128[3] = VecAdd(m128[3], m.m128[3]);
 		return *this;
 	}
 
 	inline Matrix4& operator+=(float f)
 	{
 		Vec128 t = VecSet1(f);
-		mVec[0] = VecAdd(mVec[0], t);
-		mVec[1] = VecAdd(mVec[1], t);
-		mVec[2] = VecAdd(mVec[2], t);
-		mVec[3] = VecAdd(mVec[3], t);
+		m128[0] = VecAdd(m128[0], t);
+		m128[1] = VecAdd(m128[1], t);
+		m128[2] = VecAdd(m128[2], t);
+		m128[3] = VecAdd(m128[3], t);
 		return *this;
 	}
 
@@ -103,18 +103,18 @@ public:
 	inline Matrix4 operator-(const Matrix4& m) const
 	{
 		Matrix4 r;
-		r.mVec[0] = VecSub(mVec[0], m.mVec[0]);
-		r.mVec[1] = VecSub(mVec[1], m.mVec[1]);
-		r.mVec[2] = VecSub(mVec[2], m.mVec[2]);
-		r.mVec[3] = VecSub(mVec[3], m.mVec[3]);
+		r.m128[0] = VecSub(m128[0], m.m128[0]);
+		r.m128[1] = VecSub(m128[1], m.m128[1]);
+		r.m128[2] = VecSub(m128[2], m.m128[2]);
+		r.m128[3] = VecSub(m128[3], m.m128[3]);
 		return r;
 	}
 	inline Matrix4& operator-=(const Matrix4& m)
 	{
-		mVec[0] = VecSub(mVec[0], m.mVec[0]);
-		mVec[1] = VecSub(mVec[1], m.mVec[1]);
-		mVec[2] = VecSub(mVec[2], m.mVec[2]);
-		mVec[3] = VecSub(mVec[3], m.mVec[3]);
+		m128[0] = VecSub(m128[0], m.m128[0]);
+		m128[1] = VecSub(m128[1], m.m128[1]);
+		m128[2] = VecSub(m128[2], m.m128[2]);
+		m128[3] = VecSub(m128[3], m.m128[3]);
 		return *this;
 	}
 
@@ -123,19 +123,19 @@ public:
 	{
 		Matrix4 r;
 		Vec128 t = VecSet1(f);
-		r.mVec[0] = VecMul(mVec[0], t);
-		r.mVec[1] = VecMul(mVec[1], t);
-		r.mVec[2] = VecMul(mVec[2], t);
-		r.mVec[3] = VecMul(mVec[3], t);
+		r.m128[0] = VecMul(m128[0], t);
+		r.m128[1] = VecMul(m128[1], t);
+		r.m128[2] = VecMul(m128[2], t);
+		r.m128[3] = VecMul(m128[3], t);
 		return r;
 	}
 	inline Matrix4& operator*=(float f)
 	{
 		Vec128 t = VecSet1(f);
-		mVec[0] = VecMul(mVec[0], t);
-		mVec[1] = VecMul(mVec[1], t);
-		mVec[2] = VecMul(mVec[2], t);
-		mVec[3] = VecMul(mVec[3], t);
+		m128[0] = VecMul(m128[0], t);
+		m128[1] = VecMul(m128[1], t);
+		m128[2] = VecMul(m128[2], t);
+		m128[3] = VecMul(m128[3], t);
 		return *this;
 	}
 
@@ -144,19 +144,19 @@ public:
 	{
 		Matrix4 r;
 		Vec128 t = VecSet1(f);
-		r.mVec[0] = VecDiv(mVec[0], t);
-		r.mVec[1] = VecDiv(mVec[1], t);
-		r.mVec[2] = VecDiv(mVec[2], t);
-		r.mVec[3] = VecDiv(mVec[3], t);
+		r.m128[0] = VecDiv(m128[0], t);
+		r.m128[1] = VecDiv(m128[1], t);
+		r.m128[2] = VecDiv(m128[2], t);
+		r.m128[3] = VecDiv(m128[3], t);
 		return r;
 	}
 	inline Matrix4& operator/=(float f)
 	{
 		Vec128 t = VecSet1(f);
-		mVec[0] = VecDiv(mVec[0], t);
-		mVec[1] = VecDiv(mVec[1], t);
-		mVec[2] = VecDiv(mVec[2], t);
-		mVec[3] = VecDiv(mVec[3], t);
+		m128[0] = VecDiv(m128[0], t);
+		m128[1] = VecDiv(m128[1], t);
+		m128[2] = VecDiv(m128[2], t);
+		m128[3] = VecDiv(m128[3], t);
 		return *this;
 	}
 
@@ -164,10 +164,10 @@ public:
 	inline Vector4 operator*(const Vector4& v) const
 	{
 		Vec128 r;
-		r =				VecMul(mVec[0], VecSwizzle1(v.mVec,0));
-		r = VecAdd(r,	VecMul(mVec[1], VecSwizzle1(v.mVec,1)));
-		r = VecAdd(r,	VecMul(mVec[2], VecSwizzle1(v.mVec,2)));
-		r = VecAdd(r,	VecMul(mVec[3], VecSwizzle1(v.mVec,3)));
+		r =				VecMul(m128[0], VecSwizzle1(v.m128,0));
+		r = VecAdd(r,	VecMul(m128[1], VecSwizzle1(v.m128,1)));
+		r = VecAdd(r,	VecMul(m128[2], VecSwizzle1(v.m128,2)));
+		r = VecAdd(r,	VecMul(m128[3], VecSwizzle1(v.m128,3)));
 		return r;
 	}
 
@@ -175,34 +175,34 @@ public:
 	inline Matrix4 operator*(const Matrix4& m) const
 	{
 #if MATRIX_COLUMN_MAJOR
-		const Vec128* vecA = mVec;
-		const Vec128* vecB = m.mVec;
+		const Vec128* vecA = m128;
+		const Vec128* vecB = m.m128;
 #else
-		const Vec128* vecA = m.mVec;
-		const Vec128* vecB = mVec;
+		const Vec128* vecA = m.m128;
+		const Vec128* vecB = m128;
 #endif
 
 		Matrix4 r;
 		// line 0
-		r.mVec[0] =						VecMul(vecA[0], VecSwizzle1(vecB[0], 0));
-		r.mVec[0] = VecAdd(r.mVec[0],	VecMul(vecA[1], VecSwizzle1(vecB[0], 1)));
-		r.mVec[0] = VecAdd(r.mVec[0],	VecMul(vecA[2], VecSwizzle1(vecB[0], 2)));
-		r.mVec[0] = VecAdd(r.mVec[0],	VecMul(vecA[3], VecSwizzle1(vecB[0], 3)));
+		r.m128[0] =						VecMul(vecA[0], VecSwizzle1(vecB[0], 0));
+		r.m128[0] = VecAdd(r.m128[0],	VecMul(vecA[1], VecSwizzle1(vecB[0], 1)));
+		r.m128[0] = VecAdd(r.m128[0],	VecMul(vecA[2], VecSwizzle1(vecB[0], 2)));
+		r.m128[0] = VecAdd(r.m128[0],	VecMul(vecA[3], VecSwizzle1(vecB[0], 3)));
 		// line 1
-		r.mVec[1] =						VecMul(vecA[0], VecSwizzle1(vecB[1], 0));
-		r.mVec[1] = VecAdd(r.mVec[1],	VecMul(vecA[1], VecSwizzle1(vecB[1], 1)));
-		r.mVec[1] = VecAdd(r.mVec[1],	VecMul(vecA[2], VecSwizzle1(vecB[1], 2)));
-		r.mVec[1] = VecAdd(r.mVec[1],	VecMul(vecA[3], VecSwizzle1(vecB[1], 3)));
+		r.m128[1] =						VecMul(vecA[0], VecSwizzle1(vecB[1], 0));
+		r.m128[1] = VecAdd(r.m128[1],	VecMul(vecA[1], VecSwizzle1(vecB[1], 1)));
+		r.m128[1] = VecAdd(r.m128[1],	VecMul(vecA[2], VecSwizzle1(vecB[1], 2)));
+		r.m128[1] = VecAdd(r.m128[1],	VecMul(vecA[3], VecSwizzle1(vecB[1], 3)));
 		// line 2
-		r.mVec[2] =						VecMul(vecA[0], VecSwizzle1(vecB[2], 0));
-		r.mVec[2] = VecAdd(r.mVec[2],	VecMul(vecA[1], VecSwizzle1(vecB[2], 1)));
-		r.mVec[2] = VecAdd(r.mVec[2],	VecMul(vecA[2], VecSwizzle1(vecB[2], 2)));
-		r.mVec[2] = VecAdd(r.mVec[2],	VecMul(vecA[3], VecSwizzle1(vecB[2], 3)));
+		r.m128[2] =						VecMul(vecA[0], VecSwizzle1(vecB[2], 0));
+		r.m128[2] = VecAdd(r.m128[2],	VecMul(vecA[1], VecSwizzle1(vecB[2], 1)));
+		r.m128[2] = VecAdd(r.m128[2],	VecMul(vecA[2], VecSwizzle1(vecB[2], 2)));
+		r.m128[2] = VecAdd(r.m128[2],	VecMul(vecA[3], VecSwizzle1(vecB[2], 3)));
 		// line 3
-		r.mVec[3] =						VecMul(vecA[0], VecSwizzle1(vecB[3], 0));
-		r.mVec[3] = VecAdd(r.mVec[3],	VecMul(vecA[1], VecSwizzle1(vecB[3], 1)));
-		r.mVec[3] = VecAdd(r.mVec[3],	VecMul(vecA[2], VecSwizzle1(vecB[3], 2)));
-		r.mVec[3] = VecAdd(r.mVec[3],	VecMul(vecA[3], VecSwizzle1(vecB[3], 3)));
+		r.m128[3] =						VecMul(vecA[0], VecSwizzle1(vecB[3], 0));
+		r.m128[3] = VecAdd(r.m128[3],	VecMul(vecA[1], VecSwizzle1(vecB[3], 1)));
+		r.m128[3] = VecAdd(r.m128[3],	VecMul(vecA[2], VecSwizzle1(vecB[3], 2)));
+		r.m128[3] = VecAdd(r.m128[3],	VecMul(vecA[3], VecSwizzle1(vecB[3], 3)));
 		return r;
 	}
 
@@ -228,15 +228,15 @@ public:
 		// from _MM_TRANSPOSE4_PS()
 		Matrix4 r;
 
-		Vec128 t0 = VecShuffle_0101(mVec[0], mVec[1]); // 00, 01, 10, 11
-		Vec128 t1 = VecShuffle_0101(mVec[2], mVec[3]); // 20, 21, 30, 31
-		Vec128 t2 = VecShuffle_2323(mVec[0], mVec[1]); // 02, 03, 12, 13
-		Vec128 t3 = VecShuffle_2323(mVec[2], mVec[3]); // 22, 23, 32, 33
+		Vec128 t0 = VecShuffle_0101(m128[0], m128[1]); // 00, 01, 10, 11
+		Vec128 t1 = VecShuffle_0101(m128[2], m128[3]); // 20, 21, 30, 31
+		Vec128 t2 = VecShuffle_2323(m128[0], m128[1]); // 02, 03, 12, 13
+		Vec128 t3 = VecShuffle_2323(m128[2], m128[3]); // 22, 23, 32, 33
 
-		r.mVec[0] = VecShuffle(t0, t1, 0, 2, 0, 2); // 00, 10, 20, 30
-		r.mVec[1] = VecShuffle(t0, t1, 1, 3, 1, 3); // 01, 11, 21, 31
-		r.mVec[2] = VecShuffle(t2, t3, 0, 2, 0, 2); // 02, 12, 22, 32
-		r.mVec[3] = VecShuffle(t2, t3, 1, 3, 1, 3); // 03, 13, 23, 33
+		r.m128[0] = VecShuffle(t0, t1, 0, 2, 0, 2); // 00, 10, 20, 30
+		r.m128[1] = VecShuffle(t0, t1, 1, 3, 1, 3); // 01, 11, 21, 31
+		r.m128[2] = VecShuffle(t2, t3, 0, 2, 0, 2); // 02, 12, 22, 32
+		r.m128[3] = VecShuffle(t2, t3, 1, 3, 1, 3); // 03, 13, 23, 33
 
 		return r;		
 	}
@@ -244,11 +244,11 @@ public:
 	// returns (00, 10, 20, 23), (01, 11, 21, 23), (02, 12, 22, 23)
 	__forceinline void Internal_GetTransposed3(Vec128& outTLine0, Vec128& outTLine1, Vec128& outTLine2) const
 	{
-		Vec128 t0 = VecShuffle_0101(mVec[0], mVec[1]); // 00, 01, 10, 11
-		Vec128 t1 = VecShuffle_2323(mVec[0], mVec[1]); // 02, 03, 12, 13
-		outTLine0 = VecShuffle(t0, mVec[2], 0, 2, 0, 3); // 00, 10, 20, 23
-		outTLine1 = VecShuffle(t0, mVec[2], 1, 3, 1, 3); // 01, 11, 21, 23
-		outTLine2 = VecShuffle(t1, mVec[2], 0, 2, 2, 3); // 02, 12, 22, 23
+		Vec128 t0 = VecShuffle_0101(m128[0], m128[1]); // 00, 01, 10, 11
+		Vec128 t1 = VecShuffle_2323(m128[0], m128[1]); // 02, 03, 12, 13
+		outTLine0 = VecShuffle(t0, m128[2], 0, 2, 0, 3); // 00, 10, 20, 23
+		outTLine1 = VecShuffle(t0, m128[2], 1, 3, 1, 3); // 01, 11, 21, 23
+		outTLine2 = VecShuffle(t1, m128[2], 0, 2, 2, 3); // 02, 12, 22, 23
 	}
 
 	inline Matrix4 GetTransposed3() const
@@ -256,8 +256,8 @@ public:
 		Matrix4 r;
 
 		// transpose 3x3, we know m03 = m13 = m23 = 0
-		Internal_GetTransposed3(r.mVec[0], r.mVec[1], r.mVec[2]);
-		r.mVec[3] = mVec[3];
+		Internal_GetTransposed3(r.m128[0], r.m128[1], r.m128[2]);
+		r.m128[3] = m128[3];
 
 		return r;
 	}
@@ -279,10 +279,10 @@ public:
 		//                                                               | A1  A3 |
 				
 		// sub matrices
-		Vec128 A = VecShuffle_0101(mVec[0], mVec[1]);
-		Vec128 C = VecShuffle_2323(mVec[0], mVec[1]);
-		Vec128 B = VecShuffle_0101(mVec[2], mVec[3]);
-		Vec128 D = VecShuffle_2323(mVec[2], mVec[3]);
+		Vec128 A = VecShuffle_0101(m128[0], m128[1]);
+		Vec128 C = VecShuffle_2323(m128[0], m128[1]);
+		Vec128 B = VecShuffle_0101(m128[2], m128[3]);
+		Vec128 D = VecShuffle_2323(m128[2], m128[3]);
 
 		Vec128 detA = VecSet1(m[0][0] * m[1][1] - m[0][1] * m[1][0]);
 		Vec128 detC = VecSet1(m[0][2] * m[1][3] - m[0][3] * m[1][2]);
@@ -292,8 +292,8 @@ public:
 #if 0 // for determinant, float version is faster
 		// determinant as (|A| |C| |B| |D|)
 		Vec128 detSub = VecSub(
-			VecMul(VecShuffle(mVec[0], mVec[2], 0,2,0,2), VecShuffle(mVec[1], mVec[3], 1,3,1,3)),
-			VecMul(VecShuffle(mVec[0], mVec[2], 1,3,1,3), VecShuffle(mVec[1], mVec[3], 0,2,0,2))
+			VecMul(VecShuffle(m128[0], m128[2], 0,2,0,2), VecShuffle(m128[1], m128[3], 1,3,1,3)),
+			VecMul(VecShuffle(m128[0], m128[2], 1,3,1,3), VecShuffle(m128[1], m128[3], 0,2,0,2))
 			);
 		Vec128 detA = VecSwizzle1(detSub, 0);
 		Vec128 detC = VecSwizzle1(detSub, 1);
@@ -342,10 +342,10 @@ public:
 
 		// apply adjugate and store, here we combine adjugate shuffle and store shuffle
 		// btw adjuagate fuction: Adj(Vec) = VecMul(VecSwizzle(Vec, 3,1,2,0), adjSignMask)
-		r.mVec[0] = VecShuffle(X_, Z_, 3,1,3,1);
-		r.mVec[1] = VecShuffle(X_, Z_, 2,0,2,0);
-		r.mVec[2] = VecShuffle(Y_, W_, 3,1,3,1);
-		r.mVec[3] = VecShuffle(Y_, W_, 2,0,2,0);
+		r.m128[0] = VecShuffle(X_, Z_, 3,1,3,1);
+		r.m128[1] = VecShuffle(X_, Z_, 2,0,2,0);
+		r.m128[2] = VecShuffle(Y_, W_, 3,1,3,1);
+		r.m128[3] = VecShuffle(Y_, W_, 2,0,2,0);
 
 		return r;
 	}
@@ -369,10 +369,10 @@ public:
 		//                                                               | A2  A3 |
 
 		// sub matrices
-		Vec128 A = VecShuffle_0101(mVec[0], mVec[1]);
-		Vec128 B = VecShuffle_2323(mVec[0], mVec[1]);
-		Vec128 C = VecShuffle_0101(mVec[2], mVec[3]);
-		Vec128 D = VecShuffle_2323(mVec[2], mVec[3]);
+		Vec128 A = VecShuffle_0101(m128[0], m128[1]);
+		Vec128 B = VecShuffle_2323(m128[0], m128[1]);
+		Vec128 C = VecShuffle_0101(m128[2], m128[3]);
+		Vec128 D = VecShuffle_2323(m128[2], m128[3]);
 
 		Vec128 detA = VecSet1(m[0][0] * m[1][1] - m[0][1] * m[1][0]);
 		Vec128 detB = VecSet1(m[0][2] * m[1][3] - m[0][3] * m[1][2]);
@@ -382,8 +382,8 @@ public:
 #if 0 // for determinant, float version is faster
 		// determinant as (|A| |B| |C| |D|)
 		Vec128 detSub = VecSub(
-			VecMul(VecShuffle(mVec[0], mVec[2], 0, 2, 0, 2), VecShuffle(mVec[1], mVec[3], 1, 3, 1, 3)),
-			VecMul(VecShuffle(mVec[0], mVec[2], 1, 3, 1, 3), VecShuffle(mVec[1], mVec[3], 0, 2, 0, 2))
+			VecMul(VecShuffle(m128[0], m128[2], 0, 2, 0, 2), VecShuffle(m128[1], m128[3], 1, 3, 1, 3)),
+			VecMul(VecShuffle(m128[0], m128[2], 1, 3, 1, 3), VecShuffle(m128[1], m128[3], 0, 2, 0, 2))
 		);
 		Vec128 detA = VecSwizzle1(detSub, 0);
 		Vec128 detB = VecSwizzle1(detSub, 1);
@@ -432,10 +432,10 @@ public:
 
 		// apply adjugate and store, here we combine adjugate shuffle and store shuffle
 		// btw adjuagate fuction: Adj(Vec) = VecMul(VecSwizzle(Vec, 3,1,2,0), adjSignMask)
-		r.mVec[0] = VecShuffle(X_, Y_, 3, 1, 3, 1);
-		r.mVec[1] = VecShuffle(X_, Y_, 2, 0, 2, 0);
-		r.mVec[2] = VecShuffle(Z_, W_, 3, 1, 3, 1);
-		r.mVec[3] = VecShuffle(Z_, W_, 2, 0, 2, 0);
+		r.m128[0] = VecShuffle(X_, Y_, 3, 1, 3, 1);
+		r.m128[1] = VecShuffle(X_, Y_, 2, 0, 2, 0);
+		r.m128[2] = VecShuffle(Z_, W_, 3, 1, 3, 1);
+		r.m128[3] = VecShuffle(Z_, W_, 2, 0, 2, 0);
 
 		return r;
 	}
@@ -455,13 +455,13 @@ public:
 		Matrix4 r;
 
 		// transpose 3x3, we know m03 = m13 = m23 = 0
-		Internal_GetTransposed3(r.mVec[0], r.mVec[1], r.mVec[2]);
+		Internal_GetTransposed3(r.m128[0], r.m128[1], r.m128[2]);
 
 		// last line
-		r.mVec[3] =						VecMul(r.mVec[0], VecSwizzle1(mVec[3], 0));
-		r.mVec[3] = VecAdd(r.mVec[3],	VecMul(r.mVec[1], VecSwizzle1(mVec[3], 1)));
-		r.mVec[3] = VecAdd(r.mVec[3],	VecMul(r.mVec[2], VecSwizzle1(mVec[3], 2)));
-		r.mVec[3] = VecSub(VecSet(0.f, 0.f, 0.f, 1.f), r.mVec[3]);
+		r.m128[3] =						VecMul(r.m128[0], VecSwizzle1(m128[3], 0));
+		r.m128[3] = VecAdd(r.m128[3],	VecMul(r.m128[1], VecSwizzle1(m128[3], 1)));
+		r.m128[3] = VecAdd(r.m128[3],	VecMul(r.m128[2], VecSwizzle1(m128[3], 2)));
+		r.m128[3] = VecSub(VecSet(0.f, 0.f, 0.f, 1.f), r.m128[3]);
 
 		return r;
 	}
@@ -471,13 +471,13 @@ public:
 		Matrix4 r;
 
 		// transpose 3x3, we know m03 = m13 = m23 = 0
-		Internal_GetTransposed3(r.mVec[0], r.mVec[1], r.mVec[2]);
+		Internal_GetTransposed3(r.m128[0], r.m128[1], r.m128[2]);
 
 		 // (mLine[0].SizeSqr3(), mLine[1].SizeSqr3(), mLine[2].SizeSqr3(), 0)
 		Vec128 sizeSqr; 
-		sizeSqr =					VecMul(r.mVec[0], r.mVec[0]);
-		sizeSqr = VecAdd(sizeSqr,	VecMul(r.mVec[1], r.mVec[1]));
-		sizeSqr = VecAdd(sizeSqr,	VecMul(r.mVec[2], r.mVec[2]));
+		sizeSqr =					VecMul(r.m128[0], r.m128[0]);
+		sizeSqr = VecAdd(sizeSqr,	VecMul(r.m128[1], r.m128[1]));
+		sizeSqr = VecAdd(sizeSqr,	VecMul(r.m128[2], r.m128[2]));
 
 		// optional test to avoid divide by 0
 		// if(sizeSqr < SMALL_NUMBER) sizeSqr = 1;
@@ -487,15 +487,15 @@ public:
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)
 			);
 
-		r.mVec[0] = VecMul(r.mVec[0], rSizeSqr);
-		r.mVec[1] = VecMul(r.mVec[1], rSizeSqr);
-		r.mVec[2] = VecMul(r.mVec[2], rSizeSqr);
+		r.m128[0] = VecMul(r.m128[0], rSizeSqr);
+		r.m128[1] = VecMul(r.m128[1], rSizeSqr);
+		r.m128[2] = VecMul(r.m128[2], rSizeSqr);
 
 		// last line
-		r.mVec[3] =						VecMul(r.mVec[0], VecSwizzle1(mVec[3], 0));
-		r.mVec[3] = VecAdd(r.mVec[3],	VecMul(r.mVec[1], VecSwizzle1(mVec[3], 1)));
-		r.mVec[3] = VecAdd(r.mVec[3],	VecMul(r.mVec[2], VecSwizzle1(mVec[3], 2)));
-		r.mVec[3] = VecSub(VecSet(0.f, 0.f, 0.f, 1.f), r.mVec[3]);
+		r.m128[3] =						VecMul(r.m128[0], VecSwizzle1(m128[3], 0));
+		r.m128[3] = VecAdd(r.m128[3],	VecMul(r.m128[1], VecSwizzle1(m128[3], 1)));
+		r.m128[3] = VecAdd(r.m128[3],	VecMul(r.m128[2], VecSwizzle1(m128[3], 2)));
+		r.m128[3] = VecSub(VecSet(0.f, 0.f, 0.f, 1.f), r.m128[3]);
 
 		return r;
 	}
@@ -505,19 +505,19 @@ public:
 	{
 		Matrix4 r;
 
-		r.mVec[0] = VecCross(mVec[1], mVec[2]);
-		Vec128 det = VecDot3V(mVec[0], r.mVec[0]);
+		r.m128[0] = VecCross(m128[1], m128[2]);
+		Vec128 det = VecDot3V(m128[0], r.m128[0]);
 
-		r.mVec[1] = VecCross(mVec[2], mVec[0]);
-		r.mVec[2] = VecCross(mVec[0], mVec[1]);
+		r.m128[1] = VecCross(m128[2], m128[0]);
+		r.m128[2] = VecCross(m128[0], m128[1]);
 
 		Vec128 rDet = VecDiv(VecConst::Vec_One, det);
 
-		r.mVec[0] = VecMul(r.mVec[0], rDet);
-		r.mVec[1] = VecMul(r.mVec[1], rDet);
-		r.mVec[2] = VecMul(r.mVec[2], rDet);
+		r.m128[0] = VecMul(r.m128[0], rDet);
+		r.m128[1] = VecMul(r.m128[1], rDet);
+		r.m128[2] = VecMul(r.m128[2], rDet);
 			
-		r.mVec[3] = VecSet(0.f, 0.f, 0.f, 1.f);
+		r.m128[3] = VecSet(0.f, 0.f, 0.f, 1.f);
 		return r;
 	}
 	// Requires this matrix to be transform matrix
@@ -543,11 +543,11 @@ public:
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)
 			);
 
-		r.mVec[0] = VecMul(mVec[0], rSizeSqr);
-		r.mVec[1] = VecMul(mVec[1], rSizeSqr);
-		r.mVec[2] = VecMul(mVec[2], rSizeSqr);
+		r.m128[0] = VecMul(m128[0], rSizeSqr);
+		r.m128[1] = VecMul(m128[1], rSizeSqr);
+		r.m128[2] = VecMul(m128[2], rSizeSqr);
 
-		r.mVec[3] = VecSet(0.f, 0.f, 0.f, 1.f);
+		r.m128[3] = VecSet(0.f, 0.f, 0.f, 1.f);
 		return r;
 	}
 #endif
@@ -556,18 +556,18 @@ public:
 	inline Vector4_3 TransformVector(const Vector4_3& v) const
 	{
 		Vec128 r;
-		r =				VecMul(mVec[0], VecSwizzle1(v.mVec, 0));
-		r = VecAdd(r,	VecMul(mVec[1], VecSwizzle1(v.mVec, 1)));
-		r = VecAdd(r,	VecMul(mVec[2], VecSwizzle1(v.mVec, 2)));
+		r =				VecMul(m128[0], VecSwizzle1(v.m128, 0));
+		r = VecAdd(r,	VecMul(m128[1], VecSwizzle1(v.m128, 1)));
+		r = VecAdd(r,	VecMul(m128[2], VecSwizzle1(v.m128, 2)));
 		return r;
 	}
 	// return value W = 1 (if the matrix is well-defined transform matrix)
 	inline Vector4_3 TransformPoint(const Vector4_3& v) const
 	{
 		Vec128 r;
-		r = VecAdd(mVec[3], VecMul(mVec[0], VecSwizzle1(v.mVec, 0)));
-		r = VecAdd(r,		VecMul(mVec[1], VecSwizzle1(v.mVec, 1)));
-		r = VecAdd(r,		VecMul(mVec[2], VecSwizzle1(v.mVec, 2)));
+		r = VecAdd(m128[3], VecMul(m128[0], VecSwizzle1(v.m128, 0)));
+		r = VecAdd(r,		VecMul(m128[1], VecSwizzle1(v.m128, 1)));
+		r = VecAdd(r,		VecMul(m128[2], VecSwizzle1(v.m128, 2)));
 		return r;
 	}
 
@@ -590,9 +590,9 @@ public:
 
 		// (dot3(v, mLine[0]), dot3(v, mLine[1]), dot3(v, mLine[2]), 0)
 		Vec128 r;
-		r =				VecMul(tLine0, VecSwizzle1(v.mVec, 0));
-		r = VecAdd(r,	VecMul(tLine1, VecSwizzle1(v.mVec, 1)));
-		r = VecAdd(r,	VecMul(tLine2, VecSwizzle1(v.mVec, 2)));
+		r =				VecMul(tLine0, VecSwizzle1(v.m128, 0));
+		r = VecAdd(r,	VecMul(tLine1, VecSwizzle1(v.m128, 1)));
+		r = VecAdd(r,	VecMul(tLine2, VecSwizzle1(v.m128, 2)));
 
 		return r;
 	}
@@ -620,9 +620,9 @@ public:
 
 		// (dot3(v, mLine[0]), dot3(v, mLine[1]), dot3(v, mLine[2]), 0)
 		Vec128 r;
-		r =				VecMul(tLine0, VecSwizzle1(v.mVec, 0));
-		r = VecAdd(r,	VecMul(tLine1, VecSwizzle1(v.mVec, 1)));
-		r = VecAdd(r,	VecMul(tLine2, VecSwizzle1(v.mVec, 2)));
+		r =				VecMul(tLine0, VecSwizzle1(v.m128, 0));
+		r = VecAdd(r,	VecMul(tLine1, VecSwizzle1(v.m128, 1)));
+		r = VecAdd(r,	VecMul(tLine2, VecSwizzle1(v.m128, 2)));
 		return VecDiv(r, sizeSqr);
 	}
 	// return value W = 0
@@ -639,7 +639,7 @@ public:
 
 	inline float GetDeterminant3() const
 	{
-		return VecDot3(mVec[0], VecCross(mVec[1], mVec[2]));
+		return VecDot3(m128[0], VecCross(m128[1], m128[2]));
 
 #if 0
 		return
@@ -655,10 +655,10 @@ public:
 	inline float GetDeterminant() const
 	{
 		// sub matrices
-		Vec128 A = VecShuffle_0101(mVec[0], mVec[1]);
-		Vec128 C = VecShuffle_2323(mVec[0], mVec[1]);
-		Vec128 B = VecShuffle_0101(mVec[2], mVec[3]);
-		Vec128 D = VecShuffle_2323(mVec[2], mVec[3]);
+		Vec128 A = VecShuffle_0101(m128[0], m128[1]);
+		Vec128 C = VecShuffle_2323(m128[0], m128[1]);
+		Vec128 B = VecShuffle_0101(m128[2], m128[3]);
+		Vec128 D = VecShuffle_2323(m128[2], m128[3]);
 
 		float detA = (m[0][0] * m[1][1] - m[0][1] * m[1][0]);
 		float detC = (m[0][2] * m[1][3] - m[0][3] * m[1][2]);
@@ -677,17 +677,17 @@ public:
 #if 0 // direct SIMD version, slower than float version
 	inline float GetDeterminant() const
 	{
-		Vec128 a = VecMul(	VecSwizzle(mVec[1], 1,2,3,3),
-			VecCross(		VecSwizzle(mVec[2], 1,2,3,3), VecSwizzle(mVec[3], 1,2,3,3)));
+		Vec128 a = VecMul(	VecSwizzle(m128[1], 1,2,3,3),
+			VecCross(		VecSwizzle(m128[2], 1,2,3,3), VecSwizzle(m128[3], 1,2,3,3)));
 
-		Vec128 b = VecMul(	VecSwizzle(mVec[1], 0,2,3,3),
-			VecCross(		VecSwizzle(mVec[3], 0,2,3,3), VecSwizzle(mVec[2], 0,2,3,3)));
+		Vec128 b = VecMul(	VecSwizzle(m128[1], 0,2,3,3),
+			VecCross(		VecSwizzle(m128[3], 0,2,3,3), VecSwizzle(m128[2], 0,2,3,3)));
 
-		Vec128 c = VecMul(	VecSwizzle(mVec[1], 0,1,3,3),
-			VecCross(		VecSwizzle(mVec[2], 0,1,3,3), VecSwizzle(mVec[3], 0,1,3,3)));
+		Vec128 c = VecMul(	VecSwizzle(m128[1], 0,1,3,3),
+			VecCross(		VecSwizzle(m128[2], 0,1,3,3), VecSwizzle(m128[3], 0,1,3,3)));
 		
-		Vec128 d = VecMul( mVec[1],
-			VecCross(		mVec[3], mVec[2]));
+		Vec128 d = VecMul( m128[1],
+			VecCross(		m128[3], m128[2]));
 
 		Vec128 ab_0101 = VecShuffle_0101(a, b);
 		Vec128 ab_2323 = VecShuffle_2323(a, b);
@@ -698,7 +698,7 @@ public:
 		v = VecAdd(VecShuffle(ab_0101, cd_0101, 1,3,1,3), v);
 		v = VecAdd(VecShuffle(ab_2323, cd_2323, 0,2,0,2), v);
 
-		v = VecMul(v, mVec[0]);
+		v = VecMul(v, m128[0]);
 		Vec128 shuf = VecSwizzle_1133(v); // 1, 1, 3, 3
 		Vec128 sums = VecAdd(v, shuf); // 0+1, 1+1, 2+3, 3+3
 		shuf = VecShuffle_2323(sums, shuf); // 2+3, 3+3, 3, 3
@@ -711,37 +711,37 @@ public:
 	// set axes, will zero w component
 	void SetAxes(const Vector4& x, const Vector4& y, const Vector4& z)
 	{
-		mVec[0] = VecZeroW(x.mVec);
-		mVec[1] = VecZeroW(y.mVec);
-		mVec[2] = VecZeroW(z.mVec);
+		m128[0] = VecZeroW(x.m128);
+		m128[1] = VecZeroW(y.m128);
+		m128[2] = VecZeroW(z.m128);
 	}
 
 	// set translation, will set w to 1
 	void SetTranslation(const Vector4& t)
 	{
-		mVec[3] = VecBlend(t.mVec, VecConst::Vec_One, 0,0,0,1);
+		m128[3] = VecBlend(t.m128, VecConst::Vec_One, 0,0,0,1);
 	}
 
 	void ApplyScale(float x)
 	{
 		Vec128 s = VecSet1(x);
-		mVec[0] = VecMul(mVec[0], s);
-		mVec[1] = VecMul(mVec[1], s);
-		mVec[2] = VecMul(mVec[2], s);
+		m128[0] = VecMul(m128[0], s);
+		m128[1] = VecMul(m128[1], s);
+		m128[2] = VecMul(m128[2], s);
 	}
 
 	void ApplyScale(float x, float y, float z)
 	{
-		mVec[0] = VecMul(mVec[0], VecSet1(x));
-		mVec[1] = VecMul(mVec[1], VecSet1(y));
-		mVec[2] = VecMul(mVec[2], VecSet1(z));
+		m128[0] = VecMul(m128[0], VecSet1(x));
+		m128[1] = VecMul(m128[1], VecSet1(y));
+		m128[2] = VecMul(m128[2], VecSet1(z));
 	}
 
 	void ApplyScale(const Vector4_3& s)
 	{
-		mVec[0] = VecMul(mVec[0], VecSwizzle1(s.mVec, 0));
-		mVec[1] = VecMul(mVec[1], VecSwizzle1(s.mVec, 1));
-		mVec[2] = VecMul(mVec[2], VecSwizzle1(s.mVec, 2));
+		m128[0] = VecMul(m128[0], VecSwizzle1(s.m128, 0));
+		m128[1] = VecMul(m128[1], VecSwizzle1(s.m128, 1));
+		m128[2] = VecMul(m128[2], VecSwizzle1(s.m128, 2));
 	}
 
 };

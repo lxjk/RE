@@ -12,7 +12,7 @@ public:
 	union
 	{
 		float m[4];
-		Vec128 mVec;
+		Vec128 m128;
 
 		struct
 		{
@@ -38,9 +38,9 @@ public:
 		x(v.x), y(v.y), z(v.z), w(inW)
 	{}
 
-	Vector4(Vec128 vec128)
+	Vector4(Vec128 vec)
 	{
-		mVec = vec128;
+		m128 = vec;
 	}
 
 	// const getter
@@ -50,93 +50,93 @@ public:
 	// add
 	inline Vector4 operator+(const Vector4& v) const
 	{
-		return VecAdd(mVec, v.mVec);
+		return VecAdd(m128, v.m128);
 	}
 	inline Vector4 operator+(float f) const
 	{
-		return VecAdd(mVec, VecSet1(f));
+		return VecAdd(m128, VecSet1(f));
 	}
 	inline Vector4& operator+=(const Vector4& v)
 	{
-		mVec = VecAdd(mVec, v.mVec);
+		m128 = VecAdd(m128, v.m128);
 		return *this;
 	}
 	inline Vector4& operator+=(float f)
 	{
-		mVec = VecAdd(mVec, VecSet1(f));
+		m128 = VecAdd(m128, VecSet1(f));
 		return *this;
 	}
 
 	// sub
 	inline Vector4 operator-(const Vector4& v) const
 	{
-		return VecSub(mVec, v.mVec);
+		return VecSub(m128, v.m128);
 	}
 	inline Vector4 operator-(float f) const
 	{
-		return VecSub(mVec, VecSet1(f));
+		return VecSub(m128, VecSet1(f));
 	}
 	inline Vector4& operator-=(const Vector4& v)
 	{
-		mVec = VecSub(mVec, v.mVec);
+		m128 = VecSub(m128, v.m128);
 		return *this;
 	}
 	inline Vector4& operator-=(float f)
 	{
-		mVec = VecSub(mVec, VecSet1(f));
+		m128 = VecSub(m128, VecSet1(f));
 		return *this;
 	}
 
 	// mul
 	inline Vector4 operator*(const Vector4& v) const
 	{
-		return VecMul(mVec, v.mVec);
+		return VecMul(m128, v.m128);
 	}
 	inline Vector4 operator*(float f) const
 	{
-		return VecMul(mVec, VecSet1(f));
+		return VecMul(m128, VecSet1(f));
 	}
 	inline Vector4& operator*=(const Vector4& v)
 	{
-		mVec = VecMul(mVec, v.mVec);
+		m128 = VecMul(m128, v.m128);
 		return *this;
 	}
 	inline Vector4& operator*=(float f)
 	{
-		mVec = VecMul(mVec, VecSet1(f));
+		m128 = VecMul(m128, VecSet1(f));
 		return *this;
 	}
 
 	// div
 	inline Vector4 operator/(const Vector4& v) const
 	{
-		return VecDiv(mVec, v.mVec);
+		return VecDiv(m128, v.m128);
 	}
 	inline Vector4 operator/(float f) const
 	{
-		return VecDiv(mVec, VecSet1(f));
+		return VecDiv(m128, VecSet1(f));
 	}
 	inline Vector4& operator/=(const Vector4& v)
 	{
-		mVec = VecDiv(mVec, v.mVec);
+		m128 = VecDiv(m128, v.m128);
 		return *this;
 	}
 	inline Vector4& operator/=(float f)
 	{
-		mVec = VecDiv(mVec, VecSet1(f));
+		m128 = VecDiv(m128, VecSet1(f));
 		return *this;
 	}
 
 	// negate
 	inline Vector4 operator-() const
 	{
-		return VecNegate(mVec);
+		return VecNegate(m128);
 	}
 
 	// vector4 dot: return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
 	inline float Dot4(const Vector4& v) const
 	{
-		return VecDot(mVec, v.mVec);
+		return VecDot(m128, v.m128);
 	}
 
 	// vector4_3 dot: return float value x1*x2 + y1*y2 + z1*z2
@@ -144,7 +144,7 @@ public:
 	{
 		// float version is faster
 		return x*v.x + y*v.y + z*v.z;
-		//return VecDot3(mVec, v.mVec);
+		//return VecDot3(m128, v.m128);
 	}
 
 	// vector4_2 dot: return float value x1*x2 + y1*y2
@@ -152,7 +152,7 @@ public:
 	{
 		// float version is faster
 		return x*v.x + y*v.y;
-		//return VecDot2(mVec, v.mVec);
+		//return VecDot2(m128, v.m128);
 	}
 
 	// vector4 dot: return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
@@ -166,7 +166,7 @@ public:
 	inline Vector4_3 Cross3(const Vector4_3& v) const
 	{
 		//return Vector4(y*v.z - z*v.y, z*v.x - x*v.z, x*v.y - y*v.x);
-		return VecCross(mVec, v.mVec);
+		return VecCross(m128, v.m128);
 	}
 
 	// vector4_2 cross: return z value as a result of Cross3
@@ -211,10 +211,10 @@ public:
 	inline Vector4 GetNormalized4() const
 	{
 		// sse method without branch
-		Vec128 sizeSqr = VecDotV(mVec, mVec);
+		Vec128 sizeSqr = VecDotV(m128, m128);
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		return VecBlendVar(
-			VecDiv(mVec, VecSqrt(sizeSqr)),
+			VecDiv(m128, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));
 
@@ -222,17 +222,17 @@ public:
 		float sizeSqr = Dot4(*this);
 		return (sizeSqr < SMALL_NUMBER) ?
 			VecZero() :
-			VecDiv(mVec, VecSet1(sqrt(sizeSqr)));
+			VecDiv(m128, VecSet1(sqrt(sizeSqr)));
 #endif
 	}
 	// precision around 0.0003
 	inline Vector4 GetNormalized4Fast() const
 	{
 		// sse method without branch
-		Vec128 sizeSqr = VecDotV(mVec, mVec);
+		Vec128 sizeSqr = VecDotV(m128, m128);
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		return VecBlendVar(
-			VecMul(mVec, VecInvSqrtFast(sizeSqr)),
+			VecMul(m128, VecInvSqrtFast(sizeSqr)),
 			VecZero(),
 			VecCmpLT(sizeSqr, VecConst::Vec_Small_Num));
 	}
@@ -243,12 +243,12 @@ public:
 	{
 		// set1 is faster than caclculate dot3 as vec128
 		Vec128 sizeSqr = VecSet1(Dot3(*this));
-		//Vec128 sizeSqr = VecDot3V(mVec, mVec);
+		//Vec128 sizeSqr = VecDot3V(m128, m128);
 
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		// also mask w value so it's always 0 (w mask value all 1)
 		return VecBlendVar(
-			VecDiv(mVec, VecSqrt(sizeSqr)),
+			VecDiv(m128, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecZeroW(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)));
 	}
@@ -259,12 +259,12 @@ public:
 	{
 		// set1 is faster than caclculate dot3 as vec128
 		Vec128 sizeSqr = VecSet1(Dot2(*this));
-		//Vec128 sizeSqr = VecDot2V(mVec, mVec);
+		//Vec128 sizeSqr = VecDot2V(m128, m128);
 
 		// if sizeSqr < SMALL_NUMBER return 0, else normalize
 		// also mask z,w value so it's always 0 (zw mask value all 1)
 		return VecBlendVar(
-			VecDiv(mVec, VecSqrt(sizeSqr)),
+			VecDiv(m128, VecSqrt(sizeSqr)),
 			VecZero(),
 			VecZeroZW(VecCmpLT(sizeSqr, VecConst::Vec_Small_Num)));
 	}
