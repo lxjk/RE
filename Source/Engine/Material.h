@@ -1,8 +1,7 @@
 #pragma once
 
 
-#include <vector>
-#include <unordered_map>
+#include "Containers/Containers.h"
 
 #include "Shader.h"
 #include "Texture2D.h"
@@ -93,7 +92,7 @@ class Material
 {
 public:
 
-	static std::vector<Material*> gMaterialContainer;
+	static REArray<Material*> gMaterialContainer;
 
 	static Material* Create(Shader* inShader)
 	{
@@ -109,8 +108,8 @@ public:
 	}
 
 	Shader* shader;
-	std::vector<char> parameterData;
-	std::vector<MaterialParameter> parameterList;
+	REArray<char> parameterData;
+	REArray<MaterialParameter> parameterList;
 
 	Material() {}
 	Material(Shader* inShader)

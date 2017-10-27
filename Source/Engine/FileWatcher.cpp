@@ -143,7 +143,7 @@ bool FileWatcher::Start(const char* dirName)
 	return true;
 }
 
-void FileWatcher::Update(std::vector<FileChangeResult>& out)
+void FileWatcher::Update(REArray<FileChangeResult>& out)
 {
 	FileChangeResult result;
 	for (int i = 0, ni = (int)workers.size(); i < ni; ++i)

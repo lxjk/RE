@@ -2,13 +2,13 @@
 
 #include "Texture.h"
 
-#include <vector>
+#include "Containers/Containers.h"
 
 class Texture2D : public Texture
 {
 public:
 
-	static std::vector<Texture2D*> gTexture2DContainer;
+	static REArray<Texture2D*> gTexture2DContainer;
 
 	static Texture2D* Create()
 	{

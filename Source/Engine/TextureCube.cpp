@@ -8,14 +8,14 @@
 
 #include "TextureCube.h"
 
-std::vector<TextureCube*> TextureCube::gTextureCubeContainer;
+REArray<TextureCube*> TextureCube::gTextureCubeContainer;
 
-void TextureCube::Load(std::vector<const char*> name, bool bSRGB, GLint wrapS, GLint wrapT, GLint wrapR, GLint minFilter, GLint magFilter)
+void TextureCube::Load(REArray<const char*> name, bool bSRGB, GLint wrapS, GLint wrapT, GLint wrapR, GLint minFilter, GLint magFilter)
 {
 	if (name.size() == 0)
 		return;
 
-	std::vector<SDL_Surface*> images;
+	REArray<SDL_Surface*> images;
 	images.reserve(name.size());
 
 	bool bSuccess = true;

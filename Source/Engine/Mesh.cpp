@@ -5,7 +5,7 @@
 
 #include "Mesh.h"
 
-std::vector<MeshData*> MeshData::gMeshDataContainer;
+REArray<MeshData*> MeshData::gMeshDataContainer;
 
 void MeshData::InitResource()
 {
@@ -60,7 +60,7 @@ void MeshData::InitResource()
 		bounds += vertices[i].position.ToVector4();
 }
 
-std::vector<Mesh*> Mesh::gMeshContainer;
+REArray<Mesh*> Mesh::gMeshContainer;
 
 void Mesh::Init(MeshData* inMeshData, Material* inMaterial)
 {

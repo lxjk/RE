@@ -50,8 +50,8 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 {
 	GLuint newProgramID = glCreateProgram();
 
-	std::vector<ShaderInfo> shaderInfoList;
-	std::vector<GLuint> shaderIDList;
+	REArray<ShaderInfo> shaderInfoList;
+	REArray<GLuint> shaderIDList;
 	int idx = 0;
 
 	if (vertexPath && vertexPath[0])
@@ -116,10 +116,9 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 	vertexType = EVertexType::None;
 	// process hint
 	int shaderInfoCount = (int)shaderInfoList.size();
-	ShaderInfo* shaderInfoListPtr = shaderInfoList.data();
 	for (int shaderInfoIdx = 0; shaderInfoIdx < shaderInfoCount; ++shaderInfoIdx)
 	{
-		ShaderInfo& shaderInfo = shaderInfoListPtr[shaderInfoIdx];
+		ShaderInfo& shaderInfo = shaderInfoList[shaderInfoIdx];
 
 		bUseDeferredPassTex |= shaderInfo.bUseDeferredPassTex;
 		bUsePostProcessPassTex |= shaderInfo.bUsePostProcessPassTex;
@@ -168,7 +167,7 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 	UniformLocationList.clear();
 	for (int shaderInfoIdx = 0; shaderInfoIdx < shaderInfoCount; ++shaderInfoIdx)
 	{
-		ShaderInfo& shaderInfo = shaderInfoListPtr[shaderInfoIdx];
+		ShaderInfo& shaderInfo = shaderInfoList[shaderInfoIdx];
 		// add dependent
 		dependentFileNames.insert(shaderInfo.involvedFiles.begin(), shaderInfo.involvedFiles.end());
 
@@ -254,7 +253,7 @@ GLint Shader::GetUniformLocation(const GLchar* name, bool bSilent)
 	//return GetUniformLocation_Internal(name);
 	for (int i = 0, ni = (int)UniformLocationList.size(); i < ni; ++i)
 	{
-		ValuePair& pair = UniformLocationList.data()[i];
+		ValuePair& pair = UniformLocationList[i];
 		if (strcmp(pair.key, name) == 0)
 		{
 			if (pair.value < 0)
@@ -284,7 +283,7 @@ GLint Shader::GetTextureUnit(const GLchar* name)
 {
 	for (int i = 0, ni = (int)TexUnitList.size(); i < ni; ++i)
 	{
-		ValuePair& pair = TexUnitList.data()[i];
+		ValuePair& pair = TexUnitList[i];
 		if (strcmp(pair.key, name) == 0)
 		{
 			if (pair.value < 0)

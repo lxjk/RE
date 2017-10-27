@@ -8,7 +8,7 @@
 
 #include "Texture2D.h"
 
-std::vector<Texture2D*> Texture2D::gTexture2DContainer;
+REArray<Texture2D*> Texture2D::gTexture2DContainer;
 
 void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLint minFilter, GLint magFilter)
 {

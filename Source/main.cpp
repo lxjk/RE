@@ -13,10 +13,12 @@
 // math
 #include "Math/REMath.h"
 
+// containers
+#include "Containers/Containers.h"
+
 // std
 #include <stdlib.h>
 #include <stdio.h>
-#include <vector>
 #include <functional>
 
 // local
@@ -49,7 +51,7 @@ int gWindowHeight = 720;
 
 const int MAX_DIRECTIONAL_LIGHT_COUNT = 4;
 
-//The window we'll be rendering to
+// the window we'll be rendering to
 SDL_Window* gWindow = NULL;
 
 // opengl context
@@ -158,8 +160,8 @@ MeshData gQuadMeshData;
 Mesh* gCubeMesh;
 Mesh* gSphereMesh;
 Mesh* gFSQuadMesh;
-std::vector<Mesh*> gNanosuitMeshes;
-std::vector<Mesh*> gSceneMeshes;
+REArray<Mesh*> gNanosuitMeshes;
+REArray<Mesh*> gSceneMeshes;
 
 Mesh* gDirectionalLightMesh;
 Mesh* gPointLightMesh;
@@ -178,9 +180,9 @@ Texture2D* gFloorNormalMap;
 TextureCube* gSkyboxMap;
 
 // light
-std::vector<Light> gDirectionalLights;
-std::vector<Light> gPointLights;
-std::vector<Light> gSpotLights;
+REArray<Light> gDirectionalLights;
+REArray<Light> gPointLights;
+REArray<Light> gSpotLights;
 
 // camera
 Camera gCamera;
@@ -213,7 +215,7 @@ bool Init()
 		return false;
 	}
 
-	// use opengl 3.1 core
+	// use opengl 4.2 core
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -234,6 +236,38 @@ bool Init()
 		printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
 		return false;
 	}
+
+	// create logo
+	SDL_Surface* icon = IMG_Load("Content/Logo/reicon_white.png");
+	if (icon)
+	{
+		SDL_SetWindowIcon(gWindow, icon);
+		SDL_FreeSurface(icon);
+		icon = 0;
+	}
+
+	// Get window surface 
+	SDL_Surface* windowSurface = SDL_GetWindowSurface(gWindow);
+	if (windowSurface == NULL)
+		printf("Window surface could not be created! SDL_Error: %s\n", SDL_GetError());
+
+	// Create splash screen surface 
+	SDL_Surface* splash = IMG_Load("Content/Logo/relogo_white.png");
+	if (splash)
+	{
+		SDL_Rect rect;
+		rect.w = splash->w;
+		rect.h = splash->h;
+		rect.x = (gWindowWidth - rect.w) / 2;
+		rect.y = (gWindowHeight - rect.h) / 2;
+
+		SDL_BlitScaled(splash, NULL, windowSurface, &rect);
+		SDL_UpdateWindowSurface(gWindow);
+
+		SDL_FreeSurface(splash);
+		splash = 0;
+	}
+	
 
 	// create opengl context
 	gContext = SDL_GL_CreateContext(gWindow);
@@ -281,6 +315,12 @@ bool Init()
 	gDeltaTimeBufferCount = _countof(gDeltaTimeBuffer);
 	memset(gDeltaTimeBuffer, 0, sizeof(float) * gDeltaTimeBufferCount);
 	gDeltaTimeBufferIdx = 0;
+
+	if(windowSurface)
+	{
+		SDL_FreeSurface(windowSurface);
+		windowSurface = 0;
+	}
 
 	return true;
 }
@@ -427,7 +467,7 @@ void MakeMeshComponents()
 		meshComp->SetPosition(Vector4_3(5, -5, -1));
 		meshComp->SetScale(Vector4_3(0.3f, 0.3f, 0.3f));
 
-		const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
+		const REArray<Mesh*>& meshList = meshComp->GetMeshList();
 		for (int i = 0; i < meshList.size(); ++i)
 		{
 			Material* material = meshList[i]->material;
@@ -462,7 +502,7 @@ void MakeMeshComponents()
 		//meshComp->SetPosition(Vector4_3(0, -6, -1));
 		//meshComp->SetScale(Vector4_3(1.f, 1.f, 1.f) * 0.07f);
 
-		//const std::vector<Mesh*>& meshList = meshComp->GetMeshList();
+		//const REArray<Mesh*>& meshList = meshComp->GetMeshList();
 		//for (int i = 0; i < meshList.size(); ++i)
 		//{
 		//	Material* material = meshList[i]->material;
@@ -788,7 +828,7 @@ bool InitEngine()
 	gFloorNormalMap = Texture2D::FindOrCreate("Content/Texture/178_norm.jpg", false, GL_REPEAT, GL_REPEAT);
 
 	gSkyboxMap = TextureCube::Create();
-	std::vector<const char*> skyboxMapNames;
+	REArray<const char*> skyboxMapNames;
 	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_rt.tga");
 	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_lf.tga");
 	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_up.tga");
@@ -988,10 +1028,9 @@ void Update(float deltaTime)
 	}
 
 	// end of frame
-	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
 	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
-		meshCompListPtr[i]->UpdateEndOfFrame(deltaTime);
+		MeshComponent::gMeshComponentContainer[i]->UpdateEndOfFrame(deltaTime);
 	}
 
 	// update imgui
@@ -1013,10 +1052,9 @@ void GeometryPass(RenderContext& renderContext)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
 	// draw models
-	MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
 	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
-		meshCompListPtr[i]->Draw(renderContext);
+		MeshComponent::gMeshComponentContainer[i]->Draw(renderContext);
 	}
 }
 
@@ -1067,10 +1105,9 @@ void DirectionalLightPass(RenderContext& renderContext)
 
 	// set light
 	int shadowIdx = 0;
-	Light* lightPtr = gDirectionalLights.data();
 	for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
 	{
-		Light& light = lightPtr[i];
+		Light& light = gDirectionalLights[i];
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity, 3);
 		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams, 4);
@@ -1132,7 +1169,7 @@ void SetupLightVolumeMaterial(RenderContext& renderContext, const Light& light)
 	}
 }
 
-void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lights)
+void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 {
 	//GPU_SCOPED_PROFILE("light volume");
 
@@ -1188,14 +1225,13 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 		s.cullFaceMode = GL_FRONT;
 	});
 
-	std::vector<int> cameraInsideLight;
+	REArray<int> cameraInsideLight;
 	cameraInsideLight.reserve(4);
-	std::vector<int> volumetricLight;
+	REArray<int> volumetricLight;
 	volumetricLight.reserve(4);
 
 	int stencilBits = 8;
 
-	const Light* lightsPtr = lights.data();
 	for (int i = 0, ni = (int)lights.size(); i < ni; i += stencilBits)
 	{
 		// prepass
@@ -1212,7 +1248,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 			int lightIdx = i + j;
 			char mask = 1 << j;
 
-			const Light& light = lightsPtr[lightIdx];
+			const Light& light = lights[lightIdx];
 			bool bSpot = (light.attenParams.y > 0);
 
 			// volumetric?
@@ -1265,7 +1301,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 			int lightIdx = i + j;
 			char mask = 1 << j;
 
-			const Light& light = lightsPtr[lightIdx];
+			const Light& light = lights[lightIdx];
 			bool bSpot = (light.attenParams.y > 0);
 
 			if (skipFlag & mask)
@@ -1283,7 +1319,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 	onePassVolumeRenderState.Apply();
 	for (int i = 0, ni = (int)cameraInsideLight.size(); i < ni; ++i)
 	{
-		const Light& light = lightsPtr[cameraInsideLight.data()[i]];
+		const Light& light = lights[cameraInsideLight[i]];
 		SetupLightVolumeMaterial(renderContext, light);
 		light.LightMesh->Draw(renderContext);
 	}
@@ -1291,7 +1327,7 @@ void LightVolumePass(RenderContext& renderContext, const std::vector<Light>& lig
 	frontFogVolumeRenderState.Apply();
 	for (int i = 0, ni = (int)volumetricLight.size(); i < ni; ++i)
 	{
-		const Light& light = lightsPtr[volumetricLight.data()[i]];
+		const Light& light = lights[volumetricLight[i]];
 		SetupLightVolumeMaterial(renderContext, light);
 		light.LightMesh->Draw(renderContext);
 	}
@@ -1327,7 +1363,7 @@ void LightPass(RenderContext& renderContext)
 }
 
 void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const RenderInfo& renderInfo, Material* material,
-	std::vector<MeshComponent*>& involvedMeshComps)
+	REArray<MeshComponent*>& involvedMeshComps)
 {
 	// attach to frame buffers
 	gDepthOnlyBuffer.AttachDepth(shadowMap, false);
@@ -1345,10 +1381,9 @@ void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const Ren
 	glClear(GL_DEPTH_BUFFER_BIT);
 
 	// draw models
-	MeshComponent** involvedMeshCompListPtr = involvedMeshComps.data();
 	for (int i = 0, ni = (int)involvedMeshComps.size(); i < ni; ++i)
 	{
-		involvedMeshCompListPtr[i]->Draw(renderContext, material);
+		involvedMeshComps[i]->Draw(renderContext, material);
 	}
 }
 
@@ -1390,21 +1425,19 @@ void ShadowPass(RenderContext& renderContext)
 
 		bool bFixedSize = false;
 
-		MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
-
-		Light* lightPtr = gDirectionalLights.data();
 		for (int lightIdx = 0, nlightIdx = (int)gDirectionalLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
-			Light& light = lightPtr[lightIdx];
+			Light& light = gDirectionalLights[lightIdx];
 			if (!light.bCastShadow)
 				continue;
 
 			// calculate light space bounds
 			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 			{
-				const Matrix4& adjustMat = light.lightViewMat * meshCompListPtr[i]->modelMat;
+				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
+				const Matrix4& adjustMat = light.lightViewMat * meshComp->modelMat;
 				// tranform bounds into light space
-				meshCompListPtr[i]->bounds.TransformBounds(adjustMat, meshCompListPtr[i]->boundsLS);
+				meshComp->bounds.TransformBounds(adjustMat, meshComp->boundsLS);
 			}
 
 			Matrix4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
@@ -1444,18 +1477,19 @@ void ShadowPass(RenderContext& renderContext)
 				const float stepBack = 50.f;
 				frustumBounds.max.z += stepBack;
 
-				std::vector<MeshComponent*> involvedMeshComps;
+				REArray<MeshComponent*> involvedMeshComps;
 				involvedMeshComps.reserve(MeshComponent::gMeshComponentContainer.size());
 
 				// process scene bounds and do frustum culling
 				BoxBounds sceneBounds;
 				for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 				{
+					MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
 					// overlap test
-					if (frustumBounds.IsOverlap(meshCompListPtr[i]->boundsLS))
+					if (frustumBounds.IsOverlap(meshComp->boundsLS))
 					{
-						sceneBounds += meshCompListPtr[i]->boundsLS;
-						involvedMeshComps.push_back(meshCompListPtr[i]);
+						sceneBounds += meshComp->boundsLS;
+						involvedMeshComps.push_back(meshComp);
 					}
 				}
 
@@ -1513,10 +1547,9 @@ void ShadowPass(RenderContext& renderContext)
 	// spot lights
 	if (gRenderSettings.bDrawShadowSpot)
 	{
-		Light* lightPtr = gSpotLights.data();
 		for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
-			Light& light = lightPtr[lightIdx];
+			Light& light = gSpotLights[lightIdx];
 			if (!light.bCastShadow)
 				continue;
 
@@ -1548,10 +1581,9 @@ void ShadowPass(RenderContext& renderContext)
 	// point lights
 	if (gRenderSettings.bDrawShadowPoint)
 	{
-		Light* lightPtr = gPointLights.data();
 		for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
-			Light& light = lightPtr[lightIdx];
+			Light& light = gPointLights[lightIdx];
 			if (!light.bCastShadow)
 				continue;
 
@@ -1625,11 +1657,10 @@ void DebugForwardPass(RenderContext& renderContext)
 	if (gRenderSettings.bDrawBounds)
 	{
 		// bounds
-		MeshComponent** meshCompListPtr = MeshComponent::gMeshComponentContainer.data();
 		for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 		{
 			// draw bounds
-			MeshComponent* meshComp = meshCompListPtr[i];
+			MeshComponent* meshComp = MeshComponent::gMeshComponentContainer[i];
 			Vector4_3 center = meshComp->bounds.GetCenter();
 			Vector4_3 extent = meshComp->bounds.GetExtent();
 
@@ -2086,9 +2117,9 @@ void Render()
 
 void ProcessShaderReload()
 {
-	static std::vector<FileChangeResult> results;
-	static std::set<std::string> changedFiles;
-	static std::set<Shader*> changedShaders;
+	static REArray<FileChangeResult> results;
+	static RESet<std::string> changedFiles;
+	static RESet<Shader*> changedShaders;
 	results.clear();
 	changedFiles.clear();
 	changedShaders.clear();
@@ -2165,9 +2196,8 @@ int main(int argc, char **argv)
 					if (event.key.keysym.sym == SDLK_r)
 					{
 						LoadShaders(true);
-						Material** materialContainerPtr = Material::gMaterialContainer.data();
 						for (int i = 0, ni = (int)Material::gMaterialContainer.size(); i < ni; ++i)
-							materialContainerPtr[i]->Reload();
+							Material::gMaterialContainer[i]->Reload();
 						//Mesh** meshlContainerPtr = Mesh::gMeshContainer.data();
 						//for (int i = 0, ni = (int)Mesh::gMeshContainer.size(); i < ni; ++i)
 						//	meshlContainerPtr[i]->SetAttributes();

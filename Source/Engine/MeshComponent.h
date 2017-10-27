@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include "Containers/Containers.h"
 
 #include "Math/REMath.h"
 
@@ -11,7 +11,7 @@ class Mesh;
 class MeshComponent : public Component
 {
 public:
-	static std::vector<MeshComponent*> gMeshComponentContainer;
+	static REArray<MeshComponent*> gMeshComponentContainer;
 
 	static MeshComponent* Create()
 	{
@@ -39,7 +39,7 @@ public:
 	, bRenderTransformDirty(true)
 	{}
 
-	MeshComponent(const std::vector<Mesh*>& inMeshList,
+	MeshComponent(const REArray<Mesh*>& inMeshList,
 		Vector4_3 inPosition = Vector4_3::Zero(),
 		Vector4_3 inRotation = Vector4_3::Zero(),
 		Vector4_3 inScale = Vector4_3(1))
@@ -73,15 +73,15 @@ public:
 
 	virtual void UpdateEndOfFrame(float deltaTime) override;
 
-	const std::vector<Mesh*>& GetMeshList() { return meshList; }
-	void SetMeshList(const std::vector<Mesh*>& inMeshList);
+	const REArray<Mesh*>& GetMeshList() { return meshList; }
+	void SetMeshList(const REArray<Mesh*>& inMeshList);
 	void AddMesh(Mesh* inMesh);
 
 	void Draw(struct RenderContext& renderContext, Material* overrideMaterial = 0);
 
 protected:
 
-	std::vector<Mesh*> meshList;
+	REArray<Mesh*> meshList;
 	bool bRenderTransformDirty;
 	bool bHasCachedRenderTransform;
 

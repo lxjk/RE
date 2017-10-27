@@ -6,9 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <vector>
-#include <set>
 #include <cassert>
+
+#include "Containers/Containers.h"
 
 class Material;
 
@@ -91,12 +91,12 @@ public:
 	GLchar fragmentFilePath[256];
 	GLchar geometryFilePath[256];
 
-	std::set<std::string> dependentFileNames;
+	RESet<std::string> dependentFileNames;
 
-	std::set<Material*> referenceMaterials;
+	RESet<Material*> referenceMaterials;
 
-	std::vector<ValuePair> TexUnitList;
-	std::vector<ValuePair> UniformLocationList;
+	REArray<ValuePair> TexUnitList;
+	REArray<ValuePair> UniformLocationList;
 
 	Shader()
 	{

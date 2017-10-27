@@ -3,7 +3,7 @@
 // opengl
 #include "SDL_opengl.h"
 
-#include <vector>
+#include "Containers/Containers.h"
 
 #include "Texture.h"
 
@@ -11,7 +11,7 @@ class TextureCube : public Texture
 {
 public:
 
-	static std::vector<TextureCube*> gTextureCubeContainer;
+	static REArray<TextureCube*> gTextureCubeContainer;
 
 	static TextureCube* Create()
 	{
@@ -25,7 +25,7 @@ public:
 		textureType = GL_TEXTURE_CUBE_MAP;
 	}
 
-	void Load(std::vector<const char*> name, bool bSRGB,
+	void Load(REArray<const char*> name, bool bSRGB,
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE, GLint wrapR = GL_CLAMP_TO_EDGE,
 		GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR);
 

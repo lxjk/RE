@@ -17,6 +17,12 @@
     <Filter Include="Source\Math">
       <UniqueIdentifier>{93b85b93-5450-40a9-8acf-d070b2f5a4c3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Containers">
+      <UniqueIdentifier>{c1046a82-63fc-40b1-93ee-d779d955136f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Memory">
+      <UniqueIdentifier>{d895e919-7001-4cdd-9e1f-1eced22dfbec}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\imgui\imgui.cpp">
@@ -168,5 +174,17 @@
     <ClInclude Include="Source\Math\UVector.h">
       <Filter>Source\Math</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Memory\Memory.h">
+      <Filter>Source\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="Source\Containers\Containers.h">
+      <Filter>Source\Containers</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

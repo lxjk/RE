@@ -18,7 +18,7 @@ class ShaderUniforms
 {
 public:
 	// <type, nameArray>
-	std::unordered_map<std::string, std::vector<std::string>> typeMap;
+	std::unordered_map<std::string, REArray<std::string>> typeMap;
 
 	void Append(const ShaderUniforms& other)
 	{
@@ -27,7 +27,7 @@ public:
 			if (itOther->second.size() > 0)
 			{
 				// insert or find name array according to type
-				std::vector<std::string>& nameArray = typeMap[itOther->first];
+				REArray<std::string>& nameArray = typeMap[itOther->first];
 				// append other
 				nameArray.insert(nameArray.begin(), itOther->second.begin(), itOther->second.end());
 			}
@@ -82,7 +82,7 @@ public:
 	ShaderUniforms shaderUniforms;
 	ShaderStructs shaderStructs;
 	ShaderDefines shaderDefines;
-	std::set<std::string> involvedFiles;
+	RESet<std::string> involvedFiles;
 
 	EVertexType vertexType = EVertexType::None;
 
@@ -118,8 +118,8 @@ class ShaderFileInfo
 public:
 	std::string fileName;
 	ShaderInfo shaderInfo;
-	std::set<Shader*> shaders;
-	std::set<std::string> childFiles;
+	RESet<Shader*> shaders;
+	RESet<std::string> childFiles;
 };
 
 class ExpressionParser

@@ -3,8 +3,9 @@
 #include "spsc.h"
 
 #include <string>
-#include <vector>
 #include <thread>
+
+#include "Containers/Containers.h"
 
 enum EFileChangeType
 {
@@ -46,11 +47,11 @@ public:
 
 	bool Start(const char* dirName);
 
-	void Update(std::vector<FileChangeResult>& out);
+	void Update(REArray<FileChangeResult>& out);
 
 	void Stop();
 
 protected:
 
-	std::vector<FileWatcherWorker*> workers;
+	REArray<FileWatcherWorker*> workers;
 };

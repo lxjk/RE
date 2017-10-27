@@ -4,7 +4,7 @@
 
 #include "MeshComponent.h"
 
-std::vector<MeshComponent*> MeshComponent::gMeshComponentContainer;
+REArray<MeshComponent*> MeshComponent::gMeshComponentContainer;
 
 void MeshComponent::CacheRenderMatrices()
 {
@@ -26,12 +26,12 @@ void MeshComponent::UpdateEndOfFrame(float deltaTime)
 		CacheRenderMatrices();
 }
 
-void MeshComponent::SetMeshList(const std::vector<Mesh*>& inMeshList)
+void MeshComponent::SetMeshList(const REArray<Mesh*>& inMeshList)
 {
 	meshList = inMeshList;
 	for (int i = 0, ni = (int)inMeshList.size(); i < ni; ++i)
 	{
-		MeshData* meshData = inMeshList.data()[i]->meshData;
+		MeshData* meshData = inMeshList[i]->meshData;
 		if(meshData)
 			bounds += meshData->bounds;
 	}
@@ -52,16 +52,16 @@ void MeshComponent::Draw(RenderContext& renderContext, Material* overrideMateria
 		overrideMaterial->SetParameter("modelMat", modelMat);
 		//overrideMaterial->SetParameter("normalMat", normalMat);
 	}
-	Mesh** meshListPtr = meshList.data();
 	for (int i = 0, ni = (int)meshList.size(); i < ni; ++i)
 	{
+		Mesh*& mesh = meshList[i];
 		if (!overrideMaterial)
 		{
-			meshListPtr[i]->material->SetParameter("prevModelMat", prevModelMat);
-			meshListPtr[i]->material->SetParameter("modelMat", modelMat);
+			mesh->material->SetParameter("prevModelMat", prevModelMat);
+			mesh->material->SetParameter("modelMat", modelMat);
 			//meshListPtr[i]->material->SetParameter("normalMat", normalMat);
 		}
 
-		meshListPtr[i]->Draw(renderContext, overrideMaterial);
+		mesh->Draw(renderContext, overrideMaterial);
 	}
 }

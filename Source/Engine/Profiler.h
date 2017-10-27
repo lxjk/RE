@@ -1,12 +1,12 @@
 #pragma once
 
-#include <map>
-#include <unordered_map>
-#include <vector>
+
 #include <string>
 
 #include "gl/glew.h"
 
+
+#include "Containers/Containers.h"
 #include "Math/REMath.h"
 
 #include "SDL.h"
@@ -34,8 +34,8 @@ class ScopedProfileTimerCPU
 	size_t nameSize;
 
 public:
-	static std::map<std::string, double> timerMap;
-	static std::unordered_map<std::string, double> timeStampMap[2];
+	static RESortedMap<std::string, double> timerMap;
+	static REMap<std::string, double> timeStampMap[2];
 	static int MapWriteIdx;
 	static char fullName[1024];
 
@@ -88,8 +88,8 @@ class ScopedProfileTimerGPU
 	size_t nameSize;
 
 public:
-	static std::map<std::string, double> timerMap;
-	static std::unordered_map<std::string, std::vector<TimestampPair>> timeStampPairMap[2];
+	static RESortedMap<std::string, double> timerMap;
+	static REMap<std::string, REArray<TimestampPair>> timeStampPairMap[2];
 	static int MapWriteIdx;
 	static char fullName[1024];
 

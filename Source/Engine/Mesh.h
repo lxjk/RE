@@ -1,7 +1,6 @@
 #pragma once
 
-#include <vector>
-
+#include "Containers/Containers.h"
 #include "Math/REMath.h"
 #include "Math/UVector.h"
 #include "Material.h"
@@ -47,7 +46,7 @@ struct Vertex
 class MeshData
 {
 public:
-	static std::vector<MeshData*> gMeshDataContainer;
+	static REArray<MeshData*> gMeshDataContainer;
 
 	static MeshData* Create()
 	{
@@ -71,8 +70,8 @@ public:
 
 	void InitResource();
 
-	std::vector<Vertex> vertices;
-	std::vector<GLuint> indices;
+	REArray<Vertex> vertices;
+	REArray<GLuint> indices;
 	GLsizei vertCount;
 	GLsizei idxCount;
 
@@ -86,7 +85,7 @@ class Mesh
 {
 public:
 
-	static std::vector<Mesh*> gMeshContainer;
+	static REArray<Mesh*> gMeshContainer;
 
 	static Mesh* Create()
 	{
@@ -112,8 +111,8 @@ public:
 
 static void MakeCube(MeshData& meshData)
 {
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
+	REArray<Vertex>& vertList = meshData.vertices;
+	REArray<GLuint>& idxList = meshData.indices;
 	Vector4_2 uv[4] =
 	{
 		Vector4_2(0, 0),
@@ -161,7 +160,7 @@ static void MakeCube(MeshData& meshData)
 
 #if RE_UP_AXIS == RE_Z_UP
 	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
-		vertList.data()[i].YUpToZUp();
+		vertList[i].YUpToZUp();
 #endif
 
 	meshData.CacheCount();
@@ -169,8 +168,8 @@ static void MakeCube(MeshData& meshData)
 
 static void MakeSphere(MeshData& meshData, int div)
 {
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
+	REArray<Vertex>& vertList = meshData.vertices;
+	REArray<GLuint>& idxList = meshData.indices;
 
 	int latDiv = div / 2 + 1;
 
@@ -240,7 +239,7 @@ static void MakeSphere(MeshData& meshData, int div)
 
 #if RE_UP_AXIS == RE_Z_UP
 	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
-		vertList.data()[i].YUpToZUp();
+		vertList[i].YUpToZUp();
 #endif
 
 	assert(vertList.size() == vertCount);
@@ -259,8 +258,8 @@ static Vector4_3 GetTangent(Vector4_3 normal)
 
 static void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 {
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
+	REArray<Vertex>& vertList = meshData.vertices;
+	REArray<GLuint>& idxList = meshData.indices;
 
 	Vector4_3 mainAxis(0, 0, -1);
 	Vector4_3 secAxis(0, 1, 0);
@@ -354,13 +353,13 @@ static void MakeCone(MeshData& meshData, int firstRingVertCount, int level)
 
 #if RE_UP_AXIS == RE_Z_UP
 	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
-		vertList.data()[i].YUpToZUp();
+		vertList[i].YUpToZUp();
 #endif
 
 	meshData.CacheCount();
 }
 
-static int FindNewVert(const std::vector<Vector4_3>& newVertTable, int i0, int i1)
+static int FindNewVert(const REArray<Vector4_3>& newVertTable, int i0, int i1)
 {
 	for (int i = 0; i < newVertTable.size(); ++i)
 	{
@@ -373,8 +372,8 @@ static int FindNewVert(const std::vector<Vector4_3>& newVertTable, int i0, int i
 
 static void MakeIcosahedron(MeshData& meshData, int tesLevel)
 {
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
+	REArray<Vertex>& vertList = meshData.vertices;
+	REArray<GLuint>& idxList = meshData.indices;
 
 	vertList.empty();
 	idxList.empty();
@@ -440,7 +439,7 @@ static void MakeIcosahedron(MeshData& meshData, int tesLevel)
 		int newVertStartIdx = (int)vertList.size();
 
 		int newVertCount = idxCount / 2;
-		std::vector<Vector4_3> newVertTable;
+		REArray<Vector4_3> newVertTable;
 		newVertTable.reserve(newVertCount);
 
 		for (int faceIdx = 0; faceIdx < idxCount; faceIdx += 3)
@@ -500,7 +499,7 @@ static void MakeIcosahedron(MeshData& meshData, int tesLevel)
 
 #if RE_UP_AXIS == RE_Z_UP
 	for (int i = 0, ni = (int)vertList.size(); i < ni; ++i)
-		vertList.data()[i].YUpToZUp();
+		vertList[i].YUpToZUp();
 #endif
 
 	meshData.CacheCount();
@@ -509,8 +508,8 @@ static void MakeIcosahedron(MeshData& meshData, int tesLevel)
 // view space quad
 static void MakeQuadVS(MeshData& meshData)
 {
-	std::vector<Vertex>& vertList = meshData.vertices;
-	std::vector<GLuint>& idxList = meshData.indices;
+	REArray<Vertex>& vertList = meshData.vertices;
+	REArray<GLuint>& idxList = meshData.indices;
 
 	vertList.reserve(4);
 	idxList.reserve(6);

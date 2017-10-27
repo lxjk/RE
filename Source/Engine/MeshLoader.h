@@ -12,7 +12,7 @@ enum class EMeshConversion
 	YUpToZUP,
 };
 
-void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene, std::vector<Material*>& materials, EMeshConversion conversion)
+void ProcessMesh(REArray<Mesh*>& output, aiMesh* mesh, const aiScene* scene, REArray<Material*>& materials, EMeshConversion conversion)
 {
 	// add mesh
 	int idx = (int)output.size();
@@ -21,8 +21,8 @@ void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene,
 
 	// create mesh data
 	MeshData* meshData = MeshData::Create();
-	std::vector<Vertex>& vertList = meshData->vertices;
-	std::vector<GLuint>& idxList = meshData->indices;
+	REArray<Vertex>& vertList = meshData->vertices;
+	REArray<GLuint>& idxList = meshData->indices;
 
 	bool bHasTexCoord = (mesh->mTextureCoords[0] > 0);
 	for (unsigned int i = 0; i < mesh->mNumVertices; ++i)
@@ -61,7 +61,7 @@ void ProcessMesh(std::vector<Mesh*>& output, aiMesh* mesh, const aiScene* scene,
 	}
 }
 
-void ProcessNode(std::vector<Mesh*>& output, aiNode* node, const aiScene* scene, std::vector<Material*>& materials, EMeshConversion conversion)
+void ProcessNode(REArray<Mesh*>& output, aiNode* node, const aiScene* scene, REArray<Material*>& materials, EMeshConversion conversion)
 {
 	for (unsigned int i = 0; i < node->mNumMeshes; ++i)
 	{
@@ -74,7 +74,7 @@ void ProcessNode(std::vector<Mesh*>& output, aiNode* node, const aiScene* scene,
 	}
 
 }
-void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShader, EMeshConversion conversion = EMeshConversion::None)
+void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, EMeshConversion conversion = EMeshConversion::None)
 {
 	Assimp::Importer import;
 	const aiScene* scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
@@ -92,7 +92,7 @@ void LoadMesh(std::vector<Mesh*>& output, std::string path, Shader* defaultShade
 	}
 
 	// make materials
-	std::vector<Material*> materials;
+	REArray<Material*> materials;
 	for (unsigned int i = 0; i < scene->mNumMaterials; ++i)
 	{
 		Material* material = Material::Create(defaultShader);

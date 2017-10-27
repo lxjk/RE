@@ -3,14 +3,13 @@
 
 #include "Material.h"
 
-std::vector<Material*> Material::gMaterialContainer;
+REArray<Material*> Material::gMaterialContainer;
 
 void Material::Reload()
 {
-	MaterialParameter* paramListPtr = parameterList.data();
 	for (int i = 0, ni = (int)parameterList.size(); i < ni; ++i)
 	{
-		paramListPtr[i].location = -1;
+		parameterList[i].location = -1;
 	}
 }
 
@@ -27,13 +26,13 @@ void Material::Use(RenderContext& renderContext)
 
 	// set parameters
 	char* paramDataPtr = parameterData.data();
-	MaterialParameter* paramListPtr = parameterList.data();
 	for (int i = 0, ni = (int)parameterList.size(); i < ni; ++i)
 	{
-		if (bNewMat || paramListPtr[i].bDirty)
+		MaterialParameter& param = parameterList[i];
+		if (bNewMat || param.bDirty)
 		{
-			paramListPtr[i].bDirty = false;
-			paramListPtr[i].SendValue(shader, paramDataPtr);
+			param.bDirty = false;
+			param.SendValue(shader, paramDataPtr);
 		}
 	}
 
@@ -48,10 +47,14 @@ void Material::SetParameter(const char* name, char* data, int bytes, EMaterialPa
 	for (int i = 0; i < paramListSize; ++i)
 	{
 		//if (parameterList.data()[i].name[0] == name[0])
-		if (strcmp(parameterList.data()[i].name, name) == 0)
+		params = &parameterList[i];
+		if (strcmp(params->name, name) == 0)
 		{
-			params = &parameterList.data()[i];
 			break;
+		}
+		else
+		{
+			params = 0;
 		}
 	}
 	if (!params)
