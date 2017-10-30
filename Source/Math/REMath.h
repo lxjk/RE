@@ -401,6 +401,8 @@ __forceinline Vector4 VectorSelectGT(float a, float b, const Vector4& T, const V
 }
 
 
+// =================================================================
+// Coordinates and Matrices specifics
 
 inline Vector4_3 GetUpVector(const Quat& q)
 {
@@ -538,4 +540,108 @@ inline Matrix4 OrthoAddJitter(const Matrix4& inMat, float width, float height, f
 	Result.m[3][1] += jitterY * 2.f / height;
 
 	return Result;
+}
+
+// output 6 planes
+// w = projMat[0][0], h = projMat[1][1], n = near plane dist, f = far plane dist
+inline void GetFrustumPlanes(const Matrix4& viewMat, float w, float h, float n, float f, Plane* outPlanes)
+{
+	Vec128 vecW = VecSet1(w);
+	Vec128 vecH = VecSet1(h);
+	Vec128 normW = VecSet1(1.f / (1.f + w * w));
+	Vec128 normH = VecSet1(1.f / (1.f + h * h));
+
+	Matrix4 transViewMat = viewMat.GetTransposed();
+	Vec128 right = transViewMat.m128[0];
+	Vec128 up = transViewMat.m128[1];
+	Vec128 forward = transViewMat.m128[2]; // negated at this point
+	
+	// far plane: (-forward, dot(T, forward) + f)
+	outPlanes[5] = VecAdd(forward, VecSet(0.f, 0.f, 0.f, f));
+
+	// negate to get actual forward
+	forward = VecNegate(forward);
+
+	// near plane: (forward, -dot(T, forward) - n)
+	outPlanes[0] = VecAdd(forward, VecSet(0.f, 0.f, 0.f, -n));
+	// left plane: (forward + w*right, -dot(T, forward + w*right)) * normW
+	outPlanes[1] = VecMul(VecAdd(forward, VecMul(right, vecW)), normW);
+	// right plane: (forward - w*right, -dot(T, forward - w*right)) * normW
+	outPlanes[2] = VecMul(VecSub(forward, VecMul(right, vecW)), normW);
+	// top plane: (forward + h*up, -dot(T, forward + h*up)) * normH
+	outPlanes[3] = VecMul(VecAdd(forward, VecMul(up, vecH)), normH);
+	// bottom plane: (forward - h*up, -dot(T, forward - h*up)) * normH
+	outPlanes[4] = VecMul(VecSub(forward, VecMul(up, vecH)), normH);
+}
+
+// =================================================================
+// Geometry
+
+inline Plane MakePlane(const Vector4_3& normal, const Vector4_3& point)
+{
+	// (n, -dot(n,p))
+	return VecBlend(normal.m128, VecNegate(VecDot3V(normal.m128, point.m128)), 0, 0, 0, 1);
+}
+
+// return signed distance, positive if on the normal side
+inline float PointDistToPlane(const Vector4_3& point, const Plane& plane)
+{
+	// point.Dot3(plane) - plane.w
+	return VecDot(plane.m128, VecBlend(point.m128, VecConst::Vec_One, 0, 0, 0, 1));
+}
+
+// intersection between 2 AABB (minA, maxA) and (minB, maxB)
+inline bool IsAABBIntersectAABB(const Vector4_3& minA, const Vector4_3& maxA, const Vector4_3& minB, const Vector4_3& maxB)
+{
+	Vec128 t0 = VecCmpLE(minA.m128, maxB.m128);
+	Vec128 t1 = VecCmpGE(maxA.m128, minB.m128);
+	int r = VecMoveMask(VecAnd(t0, t1));
+	return (r & 0x7) == 0x7; // ignore w component
+	//return maxB.x >= minA.x && maxB.y >= minA.y && maxB.z >= minA.z &&
+	//	minB.x <= maxA.x && minB.y <= maxA.y && minB.z <= maxA.z;
+}
+
+// intersection between AABB (min, max) and sphere (center, radius)
+inline bool IsAABBIntersectSphere(const Vector4_3& min, const Vector4_3& max, const Vector4_3& center, float radius)
+{
+	Vector4_3 boxCenter = (min + max) * 0.5f;
+	Vector4_3 boxExtent = (max - min) * 0.5f;
+	Vector4_3 diff = Max(Abs(center - boxCenter) - boxExtent, Vector4_3::Zero());
+	return diff.SizeSqr3() <= radius * radius;
+}
+
+// intersection between AABB (min, max) and convex volume (planes, planeCount) plane normals point inside the volume
+inline bool IsAABBIntersectConvexVolume(const Vector4_3& min, const Vector4_3& max, Plane* planes, int planeCount)
+{
+	// prepare min/max
+	Vec128 pMin = VecBlend(min.m128, VecConst::Vec_One, 0, 0, 0, 1);
+	Vec128 pMax = VecBlend(max.m128, VecConst::Vec_One, 0, 0, 0, 1);
+	for (int i = 0; i < planeCount; ++i)
+	{
+		Vec128 plane = planes[i].m128;
+		// choose positive vertex, if this point is outside the volume, AABB is outside
+		Vec128 pVert = VecBlendVar(pMin, pMax, VecCmpGE(plane, VecZero()));
+		if (VecDot(pVert, plane) < 0)
+			return false;
+	}
+	return true;
+}
+
+// this version will transfrom plane into space of AABB
+// intersection between AABB (min, max) and convex volume (planes, planeCount) plane normals point inside the volume
+inline bool IsAABBIntersectConvexVolume(const Vector4_3& min, const Vector4_3& max, Plane* planes, int planeCount,
+	const Matrix4& invMatAABB)
+{
+	// prepare min/max
+	Vec128 pMin = VecBlend(min.m128, VecConst::Vec_One, 0, 0, 0, 1);
+	Vec128 pMax = VecBlend(max.m128, VecConst::Vec_One, 0, 0, 0, 1);
+	for (int i = 0; i < planeCount; ++i)
+	{
+		Vec128 plane = invMatAABB.TransformPlane(planes[i]).m128;
+		// choose positive vertex, if this point is outside the volume, AABB is outside
+		Vec128 pVert = VecBlendVar(pMin, pMax, VecCmpGE(plane, VecZero()));
+		if (VecDot(pVert, plane) < 0)
+			return false;
+	}
+	return true;
 }

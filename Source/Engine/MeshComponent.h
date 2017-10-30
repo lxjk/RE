@@ -26,17 +26,21 @@ public:
 
 	Matrix4 prevModelMat;
 	Matrix4 modelMat;
+	Matrix4 invModelMatNoScale;
 
 
 	BoxBounds bounds;
 
-	BoxBounds boundsLS;
+	BoxBounds scaledBounds; // local space bounds with scale applied, for culling
+
+	bool bRenderVisibile = true; // for shadow rendering
 
 	MeshComponent()
 	: position(Vector4_3::Zero())
 	, rotation(Vector4_3::Zero())
 	, scale(Vector4_3(1))
 	, bRenderTransformDirty(true)
+	, bHasCachedRenderTransform(false)
 	{}
 
 	MeshComponent(const REArray<Mesh*>& inMeshList,
@@ -81,9 +85,10 @@ public:
 
 protected:
 
-	REArray<Mesh*> meshList;
 	bool bRenderTransformDirty;
 	bool bHasCachedRenderTransform;
+
+	REArray<Mesh*> meshList;
 
 	void CacheRenderMatrices();
 };

@@ -18,7 +18,7 @@ float GetBias(vec3 normal, vec3 light, float biasFactor)
 	float cosAlpha = dot(normal, light);
 	float sinAlpha = sqrt(1.0 - cosAlpha * cosAlpha);
 	//return (0.0025 /*+ 0.0015 * cascade*/) * sinAlpha / cosAlpha;
-	return max(biasFactor * sinAlpha / cosAlpha, 0.00002);
+	return max(biasFactor * sinAlpha / cosAlpha, 0.002);
 	//float bias = 0.004 * (1.0 - abs(dot(normal, -lights[i].directionRAB.xyz)));  
 	//float bias = 0.008;
 }

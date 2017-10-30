@@ -6,6 +6,9 @@ struct Vector4;
 typedef Vector4 Vector4_3;
 typedef Vector4 Vector4_2;
 
+// normal in (x,y,z), signed distance to origin in w, w is positive if origin is in the normal side
+typedef Vector4 Plane;
+
 __declspec(align(16)) struct Vector4
 {
 public:

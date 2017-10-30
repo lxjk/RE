@@ -44,7 +44,7 @@
 #include "imgui/imgui_impl.h"
 
 #define SHADER_DEBUG_BUFFER 0
-#define LOAD_SCENE_MESH 0
+#define LOAD_SCENE_MESH 1
 
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
@@ -1050,11 +1050,22 @@ void GeometryPass(RenderContext& renderContext)
 	glClearDepth(1);
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	Plane frustumPlanes[6];
+	GetFrustumPlanes(renderContext.viewPoint.viewMat,
+		renderContext.viewPoint.projMat.m[0][0], renderContext.viewPoint.projMat.m[1][1],
+		renderContext.viewPoint.nearPlane, renderContext.viewPoint.farPlane, frustumPlanes);
 	
 	// draw models
 	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
-		MeshComponent::gMeshComponentContainer[i]->Draw(renderContext);
+		MeshComponent* meshComp = MeshComponent::gMeshComponentContainer[i];
+		if (IsAABBIntersectConvexVolume(
+			meshComp->scaledBounds.min, meshComp->scaledBounds.max,
+			frustumPlanes, 6, meshComp->invModelMatNoScale))
+		{
+			meshComp->Draw(renderContext);
+		}
 	}
 }
 
@@ -1383,7 +1394,9 @@ void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const Ren
 	// draw models
 	for (int i = 0, ni = (int)involvedMeshComps.size(); i < ni; ++i)
 	{
-		involvedMeshComps[i]->Draw(renderContext, material);
+		MeshComponent*& meshComp = involvedMeshComps[i];
+		if(meshComp->bRenderVisibile)
+			meshComp->Draw(renderContext, material);
 	}
 }
 
@@ -1425,6 +1438,9 @@ void ShadowPass(RenderContext& renderContext)
 
 		bool bFixedSize = false;
 
+		REArray<BoxBounds, 16> lightSpaceBounds;
+		lightSpaceBounds.resize(MeshComponent::gMeshComponentContainer.size());
+
 		for (int lightIdx = 0, nlightIdx = (int)gDirectionalLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
 			Light& light = gDirectionalLights[lightIdx];
@@ -1437,7 +1453,7 @@ void ShadowPass(RenderContext& renderContext)
 				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
 				const Matrix4& adjustMat = light.lightViewMat * meshComp->modelMat;
 				// tranform bounds into light space
-				meshComp->bounds.TransformBounds(adjustMat, meshComp->boundsLS);
+				lightSpaceBounds[i] = meshComp->bounds.GetTransformedBounds(adjustMat);
 			}
 
 			Matrix4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
@@ -1477,24 +1493,28 @@ void ShadowPass(RenderContext& renderContext)
 				const float stepBack = 50.f;
 				frustumBounds.max.z += stepBack;
 
-				REArray<MeshComponent*> involvedMeshComps;
-				involvedMeshComps.reserve(MeshComponent::gMeshComponentContainer.size());
-
 				// process scene bounds and do frustum culling
+				bool bHasMeshToRender = false;
 				BoxBounds sceneBounds;
 				for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 				{
 					MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
 					// overlap test
-					if (frustumBounds.IsOverlap(meshComp->boundsLS))
+					if (IsAABBIntersectAABB(frustumBounds.min, frustumBounds.max, 
+						lightSpaceBounds[i].min, lightSpaceBounds[i].max))
 					{
-						sceneBounds += meshComp->boundsLS;
-						involvedMeshComps.push_back(meshComp);
+						sceneBounds += lightSpaceBounds[i];
+						meshComp->bRenderVisibile = true;
+						bHasMeshToRender = true;
+					}
+					else
+					{
+						meshComp->bRenderVisibile = false;
 					}
 				}
 
 				// skip if we have no mesh to render
-				if (involvedMeshComps.size() == 0)
+				if (!bHasMeshToRender)
 					continue;
 
 				// only change far plane if scene bounds are closer, don't extend it
@@ -1539,14 +1559,18 @@ void ShadowPass(RenderContext& renderContext)
 				shadowRenderInfo.Proj = lightProjMat;
 				shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
 
-				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, involvedMeshComps);
+				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
 			}
 		}
 	}
+	
+	const float lightNearPlane = 0.1f;
 
 	// spot lights
 	if (gRenderSettings.bDrawShadowSpot)
 	{
+		Plane frustumPlanes[6];
+
 		for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
 			Light& light = gSpotLights[lightIdx];
@@ -1560,11 +1584,11 @@ void ShadowPass(RenderContext& renderContext)
 				shadowMap->AllocateForFrameBuffer(512, 512, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
 				light.shadowData[0].shadowMap = shadowMap;
 			}
-			
+
 			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
 				DegToRad(light.outerHalfAngle) * 2,
 				(float)shadowMap->width, (float)shadowMap->height, 
-				0.1f, light.radius,
+				lightNearPlane, light.radius,
 				viewPoint.jitterX, viewPoint.jitterY);
 
 			light.shadowData[0].shadowMat = remapMat * lightProjMat * light.lightViewMat * viewPoint.invViewMat;
@@ -1574,7 +1598,31 @@ void ShadowPass(RenderContext& renderContext)
 			shadowRenderInfo.Proj = lightProjMat;
 			shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
 
-			DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
+			// culling
+			GetFrustumPlanes(light.lightViewMat, lightProjMat.m[0][0], lightProjMat.m[1][1], 
+				lightNearPlane, light.radius, frustumPlanes);
+
+			bool bHasMeshToRender = false;
+			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+			{
+				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
+				// do visibility test in scaled model space, 
+				// so we keep sphere radius untouched and inverse transform center to model space, while scaling the bounds
+				if (IsAABBIntersectConvexVolume(
+					meshComp->scaledBounds.min, meshComp->scaledBounds.max,
+					frustumPlanes, 6, meshComp->invModelMatNoScale))
+				{
+					meshComp->bRenderVisibile = true;
+					bHasMeshToRender = true;
+				}
+				else
+				{
+					meshComp->bRenderVisibile = false;
+				}
+			}
+
+			if(bHasMeshToRender)
+				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
 		}
 	}
 	
@@ -1598,7 +1646,7 @@ void ShadowPass(RenderContext& renderContext)
 			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
 				DegToRad(90.f), 
 				(float)shadowMap->width, (float)shadowMap->height,
-				0.1f, light.radius,
+				lightNearPlane, light.radius,
 				viewPoint.jitterX, viewPoint.jitterY);
 
 			light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
@@ -1613,8 +1661,29 @@ void ShadowPass(RenderContext& renderContext)
 			{
 				gPrepassCubeMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightProjMat * gLightOmniViewMat[i]);
 			}
+			
+			bool bHasMeshToRender = false;
+			// process scene bounds and do frustum culling
+			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+			{
+				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
+				// do visibility test in scaled model space, 
+				// so we keep sphere radius untouched and inverse transform center to model space, while scaling the bounds
+				if(IsAABBIntersectSphere(
+					meshComp->scaledBounds.min, meshComp->scaledBounds.max,
+					meshComp->invModelMatNoScale.TransformPoint(light.position), light.radius))
+				{
+					bHasMeshToRender = true;
+					meshComp->bRenderVisibile = true;
+				}
+				else
+				{
+					meshComp->bRenderVisibile = false;
+				}
+			}
 
-			DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassCubeMaterial, MeshComponent::gMeshComponentContainer);
+			if(bHasMeshToRender)
+				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassCubeMaterial, MeshComponent::gMeshComponentContainer);
 		}
 	}
 }
@@ -1660,7 +1729,47 @@ void DebugForwardPass(RenderContext& renderContext)
 		for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 		{
 			// draw bounds
-			MeshComponent* meshComp = MeshComponent::gMeshComponentContainer[i];
+			MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
+			Vector4_3 center = meshComp->bounds.GetCenter();
+			Vector4_3 extent = meshComp->bounds.GetExtent();
+
+			Matrix4 boundMat = Matrix4::Identity();
+			boundMat.SetTranslation(center);
+			boundMat.ApplyScale(extent);
+
+			Matrix4 modelMat = meshComp->modelMat * boundMat;
+
+			gLightDebugMaterial->SetParameter("modelMat", modelMat);
+			gLightDebugMaterial->SetParameter("color", Vector4_3(1, 0, 0), 3);
+
+			gCubeMesh->Draw(renderContext, gLightDebugMaterial);
+		}
+	}
+
+	Light& light = gSpotLights[0];
+	Plane frustumPlanes[6];
+
+	const float lightNearPlane = 0.1f;
+	Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
+		DegToRad(light.outerHalfAngle) * 2,
+		512, 512,
+		lightNearPlane, light.radius,
+		0, 0);
+
+	GetFrustumPlanes(light.lightViewMat, lightProjMat.m[0][0], lightProjMat.m[1][1],
+		lightNearPlane, light.radius, frustumPlanes);
+
+	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+	{
+		MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
+		if (IsAABBIntersectConvexVolume(
+			meshComp->scaledBounds.min, meshComp->scaledBounds.max,
+			frustumPlanes, 6, meshComp->invModelMatNoScale))
+		{
+		//if (IsAABBIntersectSphere(
+		//	meshComp->scaledBounds.min, meshComp->scaledBounds.max,
+		//	meshComp->invModelMatNoScale.TransformPoint(light.position), light.radius)) 
+		//{
 			Vector4_3 center = meshComp->bounds.GetCenter();
 			Vector4_3 extent = meshComp->bounds.GetExtent();
 

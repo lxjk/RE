@@ -27,7 +27,7 @@ inline __declspec(allocator) void* _Aligned_Allocate(size_t _Count, size_t _Sz, 
 	return (_Ptr);
 }
 
-inline void* _Aligned_Deallocate(void * _Ptr)
+inline void _Aligned_Deallocate(void * _Ptr)
 {
 	_aligned_free(_Ptr);
 }

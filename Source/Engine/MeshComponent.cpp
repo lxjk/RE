@@ -11,7 +11,14 @@ void MeshComponent::CacheRenderMatrices()
 	bRenderTransformDirty = false;
 
 	prevModelMat = modelMat;
-	modelMat = MakeMatrix(position, EulerToQuat(rotation), scale);
+	modelMat = QuatToMatrix4(EulerToQuat(rotation));
+	modelMat.SetTranslation(position);
+	invModelMatNoScale = modelMat.GetTransformInverseNoScale();
+	modelMat.ApplyScale(scale);
+	//modelMat = MakeMatrix(position, EulerToQuat(rotation), scale);
+
+	scaledBounds.min = bounds.min * scale;
+	scaledBounds.max = bounds.max * scale;
 
 	if (!bHasCachedRenderTransform)
 	{

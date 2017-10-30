@@ -23,6 +23,12 @@ public:
 		return (max - min) * 0.5f;
 	}
 
+	inline void SetCenterAndExtent(const Vector4_3& center, const Vector4_3& extent)
+	{
+		min = center - extent;
+		max = center + extent;
+	}
+
 	inline bool IsInBounds(const Vector4_3& point)
 	{
 		Vec128 t0 = VecCmpLE(point.m128, max.m128);
@@ -34,18 +40,9 @@ public:
 		//	point.z <= max.z && point.z >= min.z;
 	}
 
-	inline bool IsOverlap(const BoxBounds& otherBounds)
+	BoxBounds GetTransformedBounds(const Matrix4& inMat)
 	{
-		Vec128 t0 = VecCmpLE(otherBounds.min.m128, max.m128);
-		Vec128 t1 = VecCmpGE(otherBounds.max.m128, min.m128);
-		int r = VecMoveMask(VecAnd(t0, t1));
-		return (r & 0x7) == 0x7; // ignore w component
-		//return otherBounds.max.x >= min.x && otherBounds.max.y >= min.y && otherBounds.max.z >= min.z &&
-		//	otherBounds.min.x <= max.x && otherBounds.min.y <= max.y && otherBounds.min.z <= max.z;
-	}
-
-	void TransformBounds(const Matrix4& inMat, BoxBounds& outBounds)
-	{
+		BoxBounds outBounds;
 		//Vector4_3 boundsPoints[8];
 		//GetPoints(boundsPoints);
 		//for (int pIdx = 0; pIdx < 8; ++pIdx)
@@ -60,6 +57,8 @@ public:
 		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 0,1,1,0));
 		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 1,0,1,0));
 		outBounds += inMat.TransformPoint(VecBlend(min.m128, max.m128, 1,1,0,0));
+
+		return outBounds;
 	}
 
 	// we don't do check here, expect an array of at least 8 elements

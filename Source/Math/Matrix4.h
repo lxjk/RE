@@ -637,6 +637,26 @@ public:
 		return InverseTransformVector(v - mLine[3]);
 	}
 
+	// requires this matrix to be transform matrix with no scale
+	inline Plane TransformPlane(const Plane& p) const
+	{
+		Vector4_3 n = TransformVector(p);
+		//n.w = p.w - n.Dot3(mTranslation);
+		//return n;
+		Vec128 dp = VecDot3V(n.m128, m128[3]);
+		return VecBlend(n.m128, VecSub(p.m128, dp), 0,0,0,1);
+	}
+
+	// requires this matrix to be transform matrix with no scale
+	inline Plane InverseTransformPlane(const Plane& p) const
+	{
+		Vector4_3 n = InverseTransformVectorNoScale(p);
+		//n.w = p.w + p.Dot3(mTranslation);
+		//return n;
+		Vec128 dp = VecDot3V(p.m128, m128[3]);
+		return VecBlend(n.m128, VecAdd(p.m128, dp), 0,0,0,1);
+	}
+
 	inline float GetDeterminant3() const
 	{
 		return VecDot3(m128[0], VecCross(m128[1], m128[2]));

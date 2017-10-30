@@ -34,6 +34,7 @@ namespace VecConst {
 	const Vec128 Sign_NNPP				= VecSet(-1.f, -1.f, 1.f, 1.f);
 
 	const Vec128 Vec_One				= VecSet1(1.f);
+	const Vec128 Vec_Neg_One			= VecSet1(-1.f);
 	const Vec128 Vec_Two				= VecSet1(2.f);
 	const Vec128 Vec_Half				= VecSet1(0.5f);
 	const Vec128 Vec_Neg_Half			= VecSet1(-0.5f);

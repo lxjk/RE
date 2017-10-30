@@ -147,6 +147,8 @@ void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, E
 		{
 			material->SetParameter("hasRoughnessTex", 0);
 		}
+
+		material->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
 	}
 
 	ProcessNode(output, scene->mRootNode, scene, materials, conversion);
