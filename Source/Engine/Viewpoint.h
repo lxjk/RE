@@ -24,6 +24,8 @@ public:
 	Matrix4 invViewMat;
 	Matrix4 projMat;
 	Matrix4 viewProjMat;
+
+	Plane frustumPlanes[6];
 	
 	void CacheMatrices()
 	{
@@ -44,6 +46,8 @@ public:
 
 		float tanHalfFOV = Tan(fov * 0.5f);
 		nearRadius = nearPlane * Sqrt(1 + tanHalfFOV * tanHalfFOV * (1 + height * height / width / width));
+		
+		GetFrustumPlanes(viewMat, projMat.m[0][0], projMat.m[1][1], nearPlane, farPlane, frustumPlanes);
 	}
 
 	// we don't do bound check here, expect an array of at least 4 elements

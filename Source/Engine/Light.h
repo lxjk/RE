@@ -51,7 +51,10 @@ public:
 	Vector4 attenParams; // bRadial, bSpot, outerCosHalfAngle, invDiffCosHalfAngle
 
 	Matrix4 modelMat;
+	Matrix4 lightInvViewMat;
 	Matrix4 lightViewMat;
+
+	bool bRenderVisibile = true; // for shadow/light rendering
 
 	ShadowData shadowData[MAX_CASCADE_COUNT];
 
@@ -94,7 +97,8 @@ public:
 			modelMat = MakeMatrixFromForward(direction);
 			modelMat.SetTranslation(position);
 
-			lightViewMat = ToInvViewMatrix(modelMat).GetTransformInverseNoScale();
+			lightInvViewMat = ToInvViewMatrix(modelMat);
+			lightViewMat = lightInvViewMat.GetTransformInverseNoScale();
 
 			modelMat.ApplyScale(endRadius, radius, endRadius);
 		}
@@ -104,13 +108,15 @@ public:
 			modelMat = Matrix4::Identity();
 			modelMat.SetTranslation(position);
 
-			lightViewMat = ToInvViewMatrix(modelMat).GetTransformInverseNoScale();
+			lightInvViewMat = ToInvViewMatrix(modelMat);
+			lightViewMat = lightInvViewMat.GetTransformInverseNoScale();
 
 			modelMat.ApplyScale(radius);
 		}
 		else
 		{
-			lightViewMat = ToInvViewMatrix(MakeMatrixFromForward(direction)).GetTransposed3();
+			lightInvViewMat = ToInvViewMatrix(MakeMatrixFromForward(direction));
+			lightViewMat = lightInvViewMat.GetTransposed3();
 		}
 	}
 

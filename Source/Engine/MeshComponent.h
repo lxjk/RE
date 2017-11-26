@@ -26,12 +26,11 @@ public:
 
 	Matrix4 prevModelMat;
 	Matrix4 modelMat;
-	Matrix4 invModelMatNoScale;
 
 
 	BoxBounds bounds;
 
-	BoxBounds scaledBounds; // local space bounds with scale applied, for culling
+	OrientedBoxBounds OBB;
 
 	bool bRenderVisibile = true; // for shadow rendering
 

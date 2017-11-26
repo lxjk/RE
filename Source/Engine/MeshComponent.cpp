@@ -13,12 +13,10 @@ void MeshComponent::CacheRenderMatrices()
 	prevModelMat = modelMat;
 	modelMat = QuatToMatrix4(EulerToQuat(rotation));
 	modelMat.SetTranslation(position);
-	invModelMatNoScale = modelMat.GetTransformInverseNoScale();
 	modelMat.ApplyScale(scale);
 	//modelMat = MakeMatrix(position, EulerToQuat(rotation), scale);
 
-	scaledBounds.min = bounds.min * scale;
-	scaledBounds.max = bounds.max * scale;
+	OBB.SetBounds(bounds, modelMat, scale);
 
 	if (!bHasCachedRenderTransform)
 	{
