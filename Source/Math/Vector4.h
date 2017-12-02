@@ -49,6 +49,17 @@ public:
 	// const getter
 	static __forceinline Vector4 Zero() { return VecZero(); }
 
+	// return (x, y, z, 0)
+	__forceinline Vector4 GetZeroW() const
+	{
+		return VecBlend(m128, VecZero(), 0, 0, 0, 1);
+	}
+
+	// return (x, y, z, 1)
+	__forceinline Vector4 GetOneW() const
+	{
+		return VecBlend(m128, VecConst::Vec_One, 0, 0, 0, 1);
+	}
 
 	// add
 	inline Vector4 operator+(const Vector4& v) const

@@ -172,30 +172,39 @@ __forceinline Vec128 VecInvSqrtEpic(Vec128 v)
 }
 #endif
 
-// return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
-//#define VecDot(vec1, vec2)		_mm_cvtss_f32(_mm_dp_ps(vec1, vec2, 0xF1))
-// This is faster than _mm_dp_ps ?!!!
-__forceinline float VecDot(Vec128 vec1, Vec128 vec2)
+// return x+y+z+w
+__forceinline float VecSum(Vec128 v)
 {
-	Vec128 v = _mm_mul_ps(vec1, vec2); // 0, 1, 2, 3
 	Vec128 shuf = VecSwizzle_1133(v); // 1, 1, 3, 3
 	Vec128 sums = _mm_add_ps(v, shuf); // 0+1, 1+1, 2+3, 3+3
 	shuf = VecShuffle_2323(sums, shuf); // 2+3, 3+3, 3, 3
 	sums = _mm_add_ps(sums, shuf); //0+1+2+3, x, x, x, 
 	return _mm_cvtss_f32(sums);
 #if 0
-	Vec128 t0 = VecMul(vec1, vec2);
-	Vec128 t1 = _mm_hadd_ps(t0, t0);
+	Vec128 t1 = _mm_hadd_ps(v, v);
 	Vec128 t2 = _mm_hadd_ps(t1, t1);
 	return _mm_cvtss_f32(t2);
 #endif
 }
 
+// return x+y+z+w in vector
+__forceinline Vec128 VecSumV(Vec128 v)
+{
+	Vec128 t1 = _mm_hadd_ps(v, v);
+	return _mm_hadd_ps(t1, t1);
+}
+
+// return float value x1*x2 + y1*y2 + z1*z2 + w1*w2
+//#define VecDot(vec1, vec2)		_mm_cvtss_f32(_mm_dp_ps(vec1, vec2, 0xF1))
+// This is faster than _mm_dp_ps ?!!!
+__forceinline float VecDot(Vec128 vec1, Vec128 vec2)
+{
+	return VecSum(_mm_mul_ps(vec1, vec2));
+}
+
 __forceinline Vec128 VecDotV(Vec128 vec1, Vec128 vec2)
 {
-	Vec128 t0 = _mm_mul_ps(vec1, vec2);
-	Vec128 t1 = _mm_hadd_ps(t0, t0);
-	return _mm_hadd_ps(t1, t1);
+	return VecSumV(_mm_mul_ps(vec1, vec2));
 }
 
 // for doing vector 3 by itself, we would better do float version

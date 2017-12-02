@@ -43,8 +43,13 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl.h"
 
+// cache sime
+#include "CacheSim.h"
+
 #define SHADER_DEBUG_BUFFER 0
 #define LOAD_SCENE_MESH 1
+
+#define LOAD_CACHE_SIM 1
 
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
@@ -60,6 +65,12 @@ SDL_GLContext gContext;
 // shader file cache
 std::unordered_map<std::string, ShaderFileInfo> gShaderFileCache;
 FileWatcher fileWatcher;
+
+// cache sim
+#if LOAD_CACHE_SIM
+CacheSim::DynamicLoader cachesim;
+bool bCacheSimCaptureFrame = false;
+#endif
 
 // time
 bool gHasResetFrame;
@@ -295,6 +306,18 @@ bool Init()
 	{
 		printf("Warning: Unable to set VSync! SDL Error: %s\n", SDL_GetError());
 	}
+	
+	// init cache sim
+#if LOAD_CACHE_SIM
+	if (!cachesim.Init())
+	{
+		printf("Warning: Cache sim failed to init.\n");
+	}
+	else
+	{
+		cachesim.SetThreadCoreMapping(cachesim.GetCurrentThreadId(), 0);
+	}
+#endif
 
 	//Initialize Engine
 	if (!InitEngine())
@@ -1037,6 +1060,29 @@ void Update(float deltaTime)
 	ImGui_Impl_NewFrame(gWindow);
 }
 
+void CullLights(RenderContext& renderContext)
+{
+	CPU_SCOPED_PROFILE("cull lights");
+
+	// point lights
+	for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
+	{
+		Light& light = gPointLights[lightIdx];
+		light.bRenderVisibile =
+			IsSphereIntersectFrustum(light.position, light.radius, renderContext.viewPoint.frustumPlanes, 6);
+	}
+
+	// spot lights
+	Vector4 packedFrustumVerts[6];
+	for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
+	{
+		Light& light = gSpotLights[lightIdx];
+		MakeFrustumPackedVerts(light.lightInvViewMat, 0, light.radius, light.outerTanHalfAngle, 1.f, packedFrustumVerts);
+		light.bRenderVisibile =
+			IsFrustumIntersectFrustum(packedFrustumVerts, renderContext.viewPoint.frustumPlanes, 6);
+	}
+}
+
 void GeometryPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("geometry");
@@ -1050,19 +1096,12 @@ void GeometryPass(RenderContext& renderContext)
 	glClearDepth(1);
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-	Plane frustumPlanes[6];
-	GetFrustumPlanes(renderContext.viewPoint.viewMat,
-		renderContext.viewPoint.projMat.m[0][0], renderContext.viewPoint.projMat.m[1][1],
-		renderContext.viewPoint.nearPlane, renderContext.viewPoint.farPlane, frustumPlanes);
 	
 	// draw models
 	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
 		MeshComponent* meshComp = MeshComponent::gMeshComponentContainer[i];
-		if (IsAABBIntersectConvexVolume(
-			meshComp->scaledBounds.min, meshComp->scaledBounds.max,
-			frustumPlanes, 6, meshComp->invModelMatNoScale))
+		if(IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, renderContext.viewPoint.frustumPlanes, 6))
 		{
 			meshComp->Draw(renderContext);
 		}
@@ -1261,6 +1300,13 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 
 			const Light& light = lights[lightIdx];
 			bool bSpot = (light.attenParams.y > 0);
+
+			// not visible?
+			if(!light.bRenderVisibile)
+			{
+				skipFlag |= mask;
+				continue;
+			}
 
 			// volumetric?
 			if (light.bVolumetricFog)
@@ -1574,7 +1620,7 @@ void ShadowPass(RenderContext& renderContext)
 		for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
 			Light& light = gSpotLights[lightIdx];
-			if (!light.bCastShadow)
+			if (!light.bCastShadow || !light.bRenderVisibile)
 				continue;
 
 			Texture2D* shadowMap = (Texture2D*)light.shadowData[0].shadowMap;
@@ -1606,11 +1652,7 @@ void ShadowPass(RenderContext& renderContext)
 			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 			{
 				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
-				// do visibility test in scaled model space, 
-				// so we keep sphere radius untouched and inverse transform center to model space, while scaling the bounds
-				if (IsAABBIntersectConvexVolume(
-					meshComp->scaledBounds.min, meshComp->scaledBounds.max,
-					frustumPlanes, 6, meshComp->invModelMatNoScale))
+				if(IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, frustumPlanes, 6))
 				{
 					meshComp->bRenderVisibile = true;
 					bHasMeshToRender = true;
@@ -1632,7 +1674,7 @@ void ShadowPass(RenderContext& renderContext)
 		for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
 			Light& light = gPointLights[lightIdx];
-			if (!light.bCastShadow)
+			if (!light.bCastShadow || !light.bRenderVisibile)
 				continue;
 
 			TextureCube* shadowMap = (TextureCube*)light.shadowData[0].shadowMap;
@@ -1667,11 +1709,10 @@ void ShadowPass(RenderContext& renderContext)
 			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 			{
 				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
-				// do visibility test in scaled model space, 
-				// so we keep sphere radius untouched and inverse transform center to model space, while scaling the bounds
-				if(IsAABBIntersectSphere(
-					meshComp->scaledBounds.min, meshComp->scaledBounds.max,
-					meshComp->invModelMatNoScale.TransformPoint(light.position), light.radius))
+				if(IsOBBIntersectSphere(
+					meshComp->OBB.permutedAxisCenter, meshComp->OBB.center, meshComp->OBB.extent,
+					light.position, light.radius
+				))
 				{
 					bHasMeshToRender = true;
 					meshComp->bRenderVisibile = true;
@@ -1762,14 +1803,11 @@ void DebugForwardPass(RenderContext& renderContext)
 	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
 		MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
-		if (IsAABBIntersectConvexVolume(
-			meshComp->scaledBounds.min, meshComp->scaledBounds.max,
-			frustumPlanes, 6, meshComp->invModelMatNoScale))
+		if (IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, frustumPlanes, 6))
+		//if (IsOBBIntersectSphere(
+		//	meshComp->OBB.permutedAxisCenter, meshComp->OBB.center, meshComp->OBB.extent,
+		//	light.position, light.radius))
 		{
-		//if (IsAABBIntersectSphere(
-		//	meshComp->scaledBounds.min, meshComp->scaledBounds.max,
-		//	meshComp->invModelMatNoScale.TransformPoint(light.position), light.radius)) 
-		//{
 			Vector4_3 center = meshComp->bounds.GetCenter();
 			Vector4_3 extent = meshComp->bounds.GetExtent();
 
@@ -2134,6 +2172,9 @@ void Render()
 			gJitterIdx -= gJitterCount;
 	}
 	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 200.f, jitterX, jitterY);
+
+	// cull lights
+	CullLights(renderContext);
 	
 	if (gRenderSettings.bDrawShadow)
 	{
@@ -2311,6 +2352,12 @@ int main(int argc, char **argv)
 						//for (int i = 0, ni = (int)Mesh::gMeshContainer.size(); i < ni; ++i)
 						//	meshlContainerPtr[i]->SetAttributes();
 					}
+#if LOAD_CACHE_SIM
+					else if (event.key.keysym.sym == SDLK_c)
+					{
+						bCacheSimCaptureFrame = true;
+					}
+#endif
 				}
 				else if (event.type == SDL_WINDOWEVENT)
 				{
@@ -2323,6 +2370,11 @@ int main(int argc, char **argv)
 					}
 				}
 			}
+
+#if LOAD_CACHE_SIM
+			if(bCacheSimCaptureFrame)
+				cachesim.Start();
+#endif
 
 			ProcessShaderReload();
 
@@ -2361,6 +2413,14 @@ int main(int argc, char **argv)
 #endif
 
 			gHasResetFrame = false;
+
+#if LOAD_CACHE_SIM
+			if (bCacheSimCaptureFrame)
+			{
+				bCacheSimCaptureFrame = false;
+				cachesim.End();
+			}
+#endif
 		}
 	}
 

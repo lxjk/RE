@@ -33,6 +33,11 @@ public:
 		m128 = vec128;
 	}
 
+	Quat(Vector4 v)
+	{
+		m128 = v.m128;
+	}
+
 	static __forceinline Quat Identity()
 	{
 		const Quat identity(VecSet(0.f, 0.f, 0.f, 1.f));

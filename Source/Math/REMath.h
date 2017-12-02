@@ -1,5 +1,7 @@
 #pragma once
 
+//#include <stdio.h>
+
 #include "MathUtil.h"
 #include "Vector4.h"
 #include "Matrix4.h"
@@ -334,6 +336,8 @@ __forceinline Vector4	Min(Vector4 a, Vector4 b) { return VecMin(a.m128, b.m128);
 __forceinline Vector4	Max(Vector4 a, Vector4 b) { return VecMax(a.m128, b.m128); }
 
 __forceinline float		Clamp(float inValue, float inMin, float inMax) { return Min(Max(inValue, inMin), inMax); }
+// per component clamp
+__forceinline Vector4	Clamp(Vector4 inValue, Vector4 inMin, Vector4 inMax) { return Min(Max(inValue, inMin), inMax); }
 
 __forceinline double	Lerp(double a, double b, double alpha) { return a + (b - a) * alpha; }
 __forceinline float		Lerp(float a, float b, float alpha) { return a + (b - a) * alpha; }
@@ -584,10 +588,17 @@ inline Plane MakePlane(const Vector4_3& normal, const Vector4_3& point)
 }
 
 // return signed distance, positive if on the normal side
-inline float PointDistToPlane(const Vector4_3& point, const Plane& plane)
+inline float PointToPlaneDist(const Vector4_3& point, const Plane& plane)
 {
-	// point.Dot3(plane) - plane.w
-	return VecDot(plane.m128, VecBlend(point.m128, VecConst::Vec_One, 0, 0, 0, 1));
+	// point.Dot3(plane) + plane.w
+	//return VecDot(plane.m128, VecBlend(point.m128, VecConst::Vec_One, 0, 0, 0, 1));
+	return plane.Dot4(point.GetOneW());
+}
+
+// return intersection point of line (defined by point & dir (assumed normalized)) and plane
+inline Vector4_3 LinePlaneIntersection(const Vector4_3& point, const Vector4_3& dir, const Plane& plane)
+{
+	return point - dir * (PointToPlaneDist(point, plane) / dir.Dot3(plane));
 }
 
 // intersection between 2 AABB (minA, maxA) and (minB, maxB)
@@ -610,8 +621,8 @@ inline bool IsAABBIntersectSphere(const Vector4_3& min, const Vector4_3& max, co
 	return diff.SizeSqr3() <= radius * radius;
 }
 
-// intersection between AABB (min, max) and convex volume (planes, planeCount) plane normals point inside the volume
-inline bool IsAABBIntersectConvexVolume(const Vector4_3& min, const Vector4_3& max, Plane* planes, int planeCount)
+// intersection between AABB (min, max) and frustum (planes, planeCount) plane normals point inside the volume
+inline bool IsAABBIntersectFrustum(const Vector4_3& min, const Vector4_3& max, Plane* planes, int planeCount)
 {
 	// prepare min/max
 	Vec128 pMin = VecBlend(min.m128, VecConst::Vec_One, 0, 0, 0, 1);
@@ -628,8 +639,8 @@ inline bool IsAABBIntersectConvexVolume(const Vector4_3& min, const Vector4_3& m
 }
 
 // this version will transfrom plane into space of AABB
-// intersection between AABB (min, max) and convex volume (planes, planeCount) plane normals point inside the volume
-inline bool IsAABBIntersectConvexVolume(const Vector4_3& min, const Vector4_3& max, Plane* planes, int planeCount,
+// intersection between AABB (min, max) and frustum (planes, planeCount) plane normals point inside the volume
+inline bool IsAABBIntersectFrustum(const Vector4_3& min, const Vector4_3& max, Plane* planes, int planeCount,
 	const Matrix4& invMatAABB)
 {
 	// prepare min/max
@@ -641,6 +652,101 @@ inline bool IsAABBIntersectConvexVolume(const Vector4_3& min, const Vector4_3& m
 		// choose positive vertex, if this point is outside the volume, AABB is outside
 		Vec128 pVert = VecBlendVar(pMin, pMax, VecCmpGE(plane, VecZero()));
 		if (VecDot(pVert, plane) < 0)
+			return false;
+	}
+	return true;
+}
+
+// intersection between OBB (permutedAxis, obbCenter, obbExtent) and sphere (center, radius)
+// permutedScaledAxis has 3 elements: (X.x, Y.x, Z.x, ?), (X.y, Y.y, Z.y, ?), (X.z, Y.z, Z.z, ?)
+inline bool IsOBBIntersectSphere(const Vector4* permutedAxis, const Vector4_3& obbCenter, const Vector4_3 obbExtent,
+	const Vector4_3& center, float radius)
+{
+	Vec128 diff = VecSub(center.m128, obbCenter.m128);
+	Vec128 t0 = VecMul(permutedAxis[0].m128, VecSwizzle1(diff, 0));
+	Vec128 t1 = VecAdd(t0, VecMul(permutedAxis[1].m128, VecSwizzle1(diff, 1)));
+	Vec128 t2 = VecAdd(t1, VecMul(permutedAxis[2].m128, VecSwizzle1(diff, 2))); // (DiffDotSx, PDiffDotSy, DiffDotSz, ?)
+	Vec128 distVec = VecMax(VecSub(VecAbs(t2), obbExtent.m128), VecZero());	
+	return VecDot3(distVec, distVec) <= radius * radius;
+}
+
+// intersection between OBB (permutedAxisCenter, obbExtent) and frustum (planes, planeCount) plane normals point inside the volume
+// permutedScaledAxisCenter has 3 elements: (X.x, Y.x, Z.x, C.x), (X.y, Y.y, Z.y, C.y), (X.z, SY.z, SZ.z, C.z)
+inline bool IsOBBIntersectFrustum(const Vector4* permutedAxisCenter, const Vector4_3 obbExtent, Plane* planes, int planeCount)
+{
+	for (int i = 0; i < planeCount; ++i)
+	{
+		Vec128 plane = planes[i].m128;
+		Vec128 t0 = VecMul(permutedAxisCenter[0].m128, VecSwizzle1(plane, 0));
+		Vec128 t1 = VecAdd(t0, VecMul(permutedAxisCenter[1].m128, VecSwizzle1(plane, 1)));
+		Vec128 t2 = VecAdd(t1, VecMul(permutedAxisCenter[2].m128, VecSwizzle1(plane, 2))); // (PDotSx, PDotSy, PDotSz, PDotC)
+		Vec128 t3 = VecBlend(VecAbs(VecMul(t2, obbExtent.m128)), VecAdd(t2, plane), 0, 0, 0, 1); // (Abs(PDotSx), Abs(PDotSy), Abs(PDotSz), signedDist)
+		if (VecSum(t3) < 0)
+			return false;
+	}
+	return true;
+}
+
+// intersection between sphere (center, radius) and frustum (planes, planeCount) plane normals point inside the volume
+inline bool IsSphereIntersectFrustum(const Vector4_3& center, float radius, Plane* planes, int planeCount)
+{
+	for (int i = 0; i < planeCount; ++i)
+	{
+		if (PointToPlaneDist(center, planes[i]) < -radius)
+			return false;
+	}
+	return true;
+}
+
+// outPackedVerts must contain at least 6 elements
+// aspectRatio = height / width
+inline void MakeFrustumPackedVerts(const Matrix4& invViewMat, float near, float far, float tanHalfAngle, float aspectRatio, Vector4* outPackedVerts)
+{
+	float x0 = near * tanHalfAngle;
+	float y0 = x0 * aspectRatio;
+	float x1 = far * tanHalfAngle;
+	float y1 = x1 * aspectRatio;
+	Matrix4 tmp;
+	tmp.mLine[0] = invViewMat.TransformPoint(Vector4_3(x0, y0, -near));
+	tmp.mLine[1] = invViewMat.TransformPoint(Vector4_3(-x0, y0, -near));
+	tmp.mLine[2] = invViewMat.TransformPoint(Vector4_3(x0, -y0, -near));
+	tmp.mLine[3] = invViewMat.TransformPoint(Vector4_3(-x0, -y0, -near));
+	tmp = tmp.GetTransposed43();
+	outPackedVerts[0] = tmp.mLine[0];
+	outPackedVerts[1] = tmp.mLine[1];
+	outPackedVerts[2] = tmp.mLine[2];
+	tmp.mLine[0] = invViewMat.TransformPoint(Vector4_3(x1, y1, -far));
+	tmp.mLine[1] = invViewMat.TransformPoint(Vector4_3(-x1, y1, -far));
+	tmp.mLine[2] = invViewMat.TransformPoint(Vector4_3(x1, -y1, -far));
+	tmp.mLine[3] = invViewMat.TransformPoint(Vector4_3(-x1, -y1, -far));
+	tmp = tmp.GetTransposed43();
+	outPackedVerts[3] = tmp.mLine[0];
+	outPackedVerts[4] = tmp.mLine[1];
+	outPackedVerts[5] = tmp.mLine[2];
+}
+
+// intersection between frustum (packedVerts) and frustum (planes, planeCount) plane normals point inside the volume
+// first frustum is defined by 8 verts, packed in an array of 6 Vector4 as
+// (x0, x1, x2, x3) (y0, y1, y2, y3) (z0, z1, z2, z3) (x4, x5, x6, x7) (y4, y5, y6, y7) (z4, z5, z6, z7)
+inline bool IsFrustumIntersectFrustum(Vector4* packedVerts, Plane* planes, int planeCount)
+{
+	for (int i = 0; i < planeCount; ++i)
+	{
+		Vec128 plane = planes[i].m128;
+		Vec128 planeX = VecSwizzle1(plane, 0);
+		Vec128 planeY = VecSwizzle1(plane, 1);
+		Vec128 planeZ = VecSwizzle1(plane, 2);
+		Vec128 planeW = VecSwizzle1(plane, 3);
+		Vec128 t0 = VecAdd(VecMul(packedVerts[0].m128, planeX), planeW);
+		Vec128 t1 = VecAdd(VecMul(packedVerts[1].m128, planeY), t0);
+		Vec128 t2 = VecAdd(VecMul(packedVerts[2].m128, planeZ), t1);
+		Vec128 result = VecCmpLT(t2, VecZero());
+		Vec128 t3 = VecAdd(VecMul(packedVerts[3].m128, planeX), planeW);
+		Vec128 t4 = VecAdd(VecMul(packedVerts[4].m128, planeY), t3);
+		Vec128 t5 = VecAdd(VecMul(packedVerts[5].m128, planeZ), t4);
+		result = VecAnd(result, VecCmpLT(t5, VecZero()));
+		// if all verts are outside the frustum, we are outside the frustum
+		if (VecMoveMask(result) == 0xF)
 			return false;
 	}
 	return true;

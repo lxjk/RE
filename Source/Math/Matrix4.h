@@ -241,6 +241,25 @@ public:
 		return r;		
 	}
 
+	// transpose but don't process last line
+	// returns (00, 10, 20, 30), (01, 11, 21, 31), (02, 12, 22, 32), (undefined)
+	inline Matrix4 GetTransposed43() const
+	{
+		// from _MM_TRANSPOSE4_PS()
+		Matrix4 r;
+
+		Vec128 t0 = VecShuffle_0101(m128[0], m128[1]); // 00, 01, 10, 11
+		Vec128 t1 = VecShuffle_0101(m128[2], m128[3]); // 20, 21, 30, 31
+		Vec128 t2 = VecShuffle_2323(m128[0], m128[1]); // 02, 03, 12, 13
+		Vec128 t3 = VecShuffle_2323(m128[2], m128[3]); // 22, 23, 32, 33
+
+		r.m128[0] = VecShuffle(t0, t1, 0, 2, 0, 2); // 00, 10, 20, 30
+		r.m128[1] = VecShuffle(t0, t1, 1, 3, 1, 3); // 01, 11, 21, 31
+		r.m128[2] = VecShuffle(t2, t3, 0, 2, 0, 2); // 02, 12, 22, 32
+
+		return r;
+	}
+
 	// returns (00, 10, 20, 23), (01, 11, 21, 23), (02, 12, 22, 23)
 	__forceinline void Internal_GetTransposed3(Vec128& outTLine0, Vec128& outTLine1, Vec128& outTLine2) const
 	{
@@ -500,7 +519,6 @@ public:
 		return r;
 	}
 
-#if 0 // no need for calculating normal matrix	
 	inline Matrix4 GetInverseTransposed3() const
 	{
 		Matrix4 r;
@@ -550,7 +568,6 @@ public:
 		r.m128[3] = VecSet(0.f, 0.f, 0.f, 1.f);
 		return r;
 	}
-#endif
 
 	// return value W = 0 (if the matrix is well-defined transform matrix)
 	inline Vector4_3 TransformVector(const Vector4_3& v) const
