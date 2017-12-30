@@ -86,7 +86,12 @@ void Mesh::Draw(RenderContext& renderContext, Material* overrideMaterial) const
 		renderContext.currentVAO = meshData->VAO;
 		glBindVertexArray(meshData->VAO);
 	}
+	if (drawMaterial->bBothSide && renderContext.currentRenderState->bCullFace)
+		glDisable(GL_CULL_FACE);
 	//glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
 	glDrawElements(GL_TRIANGLES, meshData->idxCount, GL_UNSIGNED_INT, 0);
 	//glBindVertexArray(0);
+
+	if (drawMaterial->bBothSide && renderContext.currentRenderState->bCullFace)
+		glEnable(GL_CULL_FACE);
 }

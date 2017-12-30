@@ -148,6 +148,24 @@ void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, E
 			material->SetParameter("hasRoughnessTex", 0);
 		}
 
+		// mask
+		if (aiMaterial->GetTextureCount(aiTextureType_OPACITY) > 0)
+		{
+			aiString str;
+			aiMaterial->GetTexture(aiTextureType_OPACITY, 0, &str);
+			std::string texPath = localPath;
+			texPath.append(str.C_Str());
+			Texture2D* tex = Texture2D::FindOrCreate(texPath.c_str(), false, GL_REPEAT, GL_REPEAT);
+			material->SetParameter("hasMaskTex", 1);
+			material->SetParameter("maskTex", tex);
+			// TEMP: here we assume masked material want to draw both side (foliage)
+			material->bBothSide = true;
+		}
+		else
+		{
+			material->SetParameter("hasMaskTex", 0);
+		}
+
 		material->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
 	}
 

@@ -16,9 +16,12 @@
 #include "Material.h"
 #include "Viewpoint.h"
 
+struct RenderState;
+
 struct RenderContext
 {
-	Material* currentMaterial = 0;
+	const Material* currentMaterial = 0;
+	const RenderState* currentRenderState = 0;
 	GLint currentVAO = -1;
 	Viewpoint viewPoint;
 };
@@ -70,8 +73,10 @@ struct RenderState
 			initFunc(*this);
 	}
 
-	void Apply() const
+	void Apply(RenderContext& renderContext) const
 	{
+		renderContext.currentRenderState = this;
+
 		if (bColorWrite)
 			glColorMask(bColorWriteR, bColorWriteG, bColorWriteB, bColorWriteA);
 		else

@@ -13,3 +13,8 @@ void Texture::Bind(GLuint textureUnitOffset)
 	glActiveTexture(GL_TEXTURE0 + textureUnitOffset);
 	glBindTexture(textureType, textureID);
 }
+
+bool Texture::HasAlpha()
+{
+	return format == GL_RGBA || format == GL_ALPHA;
+}

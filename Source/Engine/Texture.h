@@ -22,6 +22,8 @@ public:
 	void AttachToFrameBuffer(GLenum attachment);
 	void Bind(GLuint textureUnitOffset);
 
+	bool HasAlpha();
+
 	GLenum textureType;
 	GLuint textureID;
 	int width;

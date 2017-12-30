@@ -597,7 +597,8 @@ void AllocateRenderTarget(bool bCreate)
 		//gNormalTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB16F, GL_RGB, GL_FLOAT);
 		gNormalTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
 		// albedo
-		gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
+		//gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
+		gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
 		// material: metallic + roughness + ? + ao
 		gMaterialTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
 		// velocity
@@ -866,6 +867,7 @@ bool InitEngine()
 	gGBufferMaterial->SetParameter("hasNormalTex", 1);
 	gGBufferMaterial->SetParameter("normalTex", gNormalMap);
 	gGBufferMaterial->SetParameter("hasRoughnessTex", 0);
+	gGBufferMaterial->SetParameter("hasMaskTex", 0);
 	gGBufferMaterial->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
 
 	// light
@@ -1089,7 +1091,7 @@ void GeometryPass(RenderContext& renderContext)
 
 	static const RenderState renderState;
 
-	renderState.Apply();
+	renderState.Apply(renderContext);
 
 	// clear frame buffer
 	glClearColor(0, 0, 0, 0);
@@ -1124,7 +1126,7 @@ void SSAOPass(RenderContext& renderContext)
 		s.bColorWriteA = true;
 	});
 
-	renderState.Apply();
+	renderState.Apply(renderContext);
 
 	// no need to clear
 	
@@ -1145,7 +1147,7 @@ void DirectionalLightPass(RenderContext& renderContext)
 	});
 
 	// directional light
-	renderState.Apply();
+	renderState.Apply(renderContext);
 
 	glClearColor(0, 0, 0, 0);
 	glClearDepth(1);
@@ -1285,7 +1287,7 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 	for (int i = 0, ni = (int)lights.size(); i < ni; i += stencilBits)
 	{
 		// prepass
-		prepassRenderState.Apply();
+		prepassRenderState.Apply(renderContext);
 
 		// clear stencil
 		glClearStencil(0);
@@ -1351,7 +1353,7 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 		}
 
 		// draw light
-		lightingRenderState.Apply();
+		lightingRenderState.Apply(renderContext);
 
 		for (int j = 0; j < stencilBits && i + j < ni; ++j)
 		{
@@ -1373,7 +1375,7 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 	}
 
 	// draw camera inside lights
-	onePassVolumeRenderState.Apply();
+	onePassVolumeRenderState.Apply(renderContext);
 	for (int i = 0, ni = (int)cameraInsideLight.size(); i < ni; ++i)
 	{
 		const Light& light = lights[cameraInsideLight[i]];
@@ -1381,7 +1383,7 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 		light.LightMesh->Draw(renderContext);
 	}
 
-	frontFogVolumeRenderState.Apply();
+	frontFogVolumeRenderState.Apply(renderContext);
 	for (int i = 0, ni = (int)volumetricLight.size(); i < ni; ++i)
 	{
 		const Light& light = lights[volumetricLight[i]];
@@ -1456,7 +1458,7 @@ void ShadowPass(RenderContext& renderContext)
 		s.bColorWrite = false;
 	});
 
-	renderState.Apply();
+	renderState.Apply(renderContext);
 
 	const static Matrix4 remapMat(
 		Vector4(0.5f, 0.f, 0.f, 0.0f),
@@ -1735,7 +1737,7 @@ void DebugForwardPass(RenderContext& renderContext)
 
 	static const RenderState renderState;
 
-	renderState.Apply();
+	renderState.Apply(renderContext);
 
 	// draw debug
 	for (int i = 0; i < gPointLights.size(); ++i)
@@ -1872,7 +1874,7 @@ void SkyboxPass(RenderContext& renderContext)
 		s.cullFaceMode = GL_FRONT;
 	});
 
-	renderState.Apply();
+	renderState.Apply(renderContext);
 
 	// enable blend for skybox additive
 	glEnable(GL_BLEND);
@@ -1926,7 +1928,7 @@ void PostProcessPass(RenderContext& renderContext)
 		s.bDepthTest = false;
 	});
 
-	renderState.Apply();
+	renderState.Apply(renderContext);
 	
 	// bind post process pass textures
 	//gSceneDepthStencilTex[gSceneDepthCurrentIdx].Bind(Shader::gDepthStencilTexUnit);
@@ -1968,7 +1970,7 @@ void PostProcessPass(RenderContext& renderContext)
 			s.stencilTestRef = 1;
 		});
 
-		renderStateSSRStencil.Apply();
+		renderStateSSRStencil.Apply(renderContext);
 
 		glClearStencil(0);
 		glClear(GL_STENCIL_BUFFER_BIT);
@@ -1978,7 +1980,7 @@ void PostProcessPass(RenderContext& renderContext)
 		// draw quad
 		gFSQuadMesh->Draw(renderContext, gSSRStencilMaterial);
 		
-		renderStateSSR.Apply();
+		renderStateSSR.Apply(renderContext);
 
 		gSSRMaterial->SetParameter("albedoTex", &gAlbedoTex);
 		gSSRMaterial->SetParameter("normalTex", &gNormalTex);
@@ -1988,7 +1990,7 @@ void PostProcessPass(RenderContext& renderContext)
 		// draw quad
 		gFSQuadMesh->Draw(renderContext, gSSRMaterial);
 
-		renderState.Apply();
+		renderState.Apply(renderContext);
 #endif
 	}
 

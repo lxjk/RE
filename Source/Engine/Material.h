@@ -107,6 +107,8 @@ public:
 		return mat;
 	}
 
+	bool bBothSide = false;
+
 	Shader* shader;
 	REArray<char> parameterData;
 	REArray<MaterialParameter> parameterList;
