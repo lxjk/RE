@@ -33,7 +33,7 @@ void main()
 		dot(modelMat[1], modelMat[1]), 
 		dot(modelMat[2], modelMat[2]));		
 	
-	mat3 viewNormalMat = mat3(viewMat * modelMat);	
+	mat3 viewNormalMat = mat3(viewMat) * mat3(modelMat);	
 	vs_out.normal = viewNormalMat * (normal / normalScalar);
 	vs_out.tangent = vec4(viewNormalMat * tangent.xyz, tangent.w);
 	

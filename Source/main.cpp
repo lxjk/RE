@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <functional>
+#include <algorithm>
 
 // local
 #include "Engine/Shader.h"
@@ -49,7 +50,7 @@
 #define SHADER_DEBUG_BUFFER 0
 #define LOAD_SCENE_MESH 1
 
-#define LOAD_CACHE_SIM 1
+#define LOAD_CACHE_SIM 0
 
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
@@ -112,6 +113,10 @@ Texture2D gDebugTex;
 float* gDebugTexBuffer;
 #endif
 
+// render globals
+REArray<MeshRenderData> gOpaqueMeshRenderList;
+REArray<MeshRenderData> gAlphaBlendMeshRenderList;
+
 // light const
 static Matrix4 gLightOmniViewMat[6];
 
@@ -134,6 +139,7 @@ int gJitterIdx = 0;
 
 // shader
 Shader gGBufferShader;
+Shader gAlphaBlendBasicShader;
 Shader gPrepassShader;
 Shader gPrepassCubeShader;
 Shader gDirectionalLightShader;
@@ -149,6 +155,7 @@ Shader gTAAShader;
 
 // material
 Material* gGBufferMaterial;
+Material* gAlphaBlendBasicMaterial;
 Material* gPrepassMaterial;
 Material* gPrepassCubeMaterial;
 Material* gDirectionalLightMaterial;
@@ -450,7 +457,7 @@ void MakeMeshComponents()
 {
 
 	// box
-	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(gAlphaBlendBasicMaterial));
 	boxMesh->material->SetParameter("metallic", 1.0f);
 	boxMesh->material->SetParameter("roughness", 0.3f);
 	for (int i = 0; i < 3; ++i)
@@ -561,7 +568,7 @@ void MakeMeshComponents()
 		floorMesh->material->SetParameter("tile", Vector4(32, 32, 0, 0), 4);
 		floorMesh->material->SetParameter("metallic", 0.f);
 		floorMesh->material->SetParameter("roughness", 0.3f);
-		floorMesh->material->SetParameter("color", Vector4_3(0.2f), 3);
+		//floorMesh->material->SetParameter("tintColor", Vector4(0.2f, 0.2f, 0.2f, 1.f), 4);
 		MeshComponent* meshComp = MeshComponent::Create();
 		meshComp->AddMesh(floorMesh);
 		meshComp->SetPosition(Vector4_3(0.f, 0.f, -1.2f));
@@ -711,6 +718,7 @@ void LoadShaders(bool bReload)
 	gShaderFileCache.clear();
 
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
+	gAlphaBlendBasicShader.Load("Shader/alphaBlendBasic.vert", "Shader/alphaBlendBasic.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
 	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepass.geom", "Shader/prepass.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
@@ -809,6 +817,7 @@ bool InitEngine()
 
 	// materials
 	gGBufferMaterial = Material::Create(&gGBufferShader);
+	gAlphaBlendBasicMaterial = Material::Create(&gAlphaBlendBasicShader);
 	gPrepassMaterial = Material::Create(&gPrepassShader);
 	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
@@ -861,7 +870,8 @@ bool InitEngine()
 	skyboxMapNames.push_back("Content/Texture/Skybox/miramar_ft.tga");
 	gSkyboxMap->Load(skyboxMapNames, true);
 
-	// set textures
+	// set default materials
+	gGBufferMaterial->SetParameter("tintColor", Vector4(1.f), 4);
 	gGBufferMaterial->SetParameter("hasDiffuseTex", 1);
 	gGBufferMaterial->SetParameter("diffuseTex", gDiffuseMap);
 	gGBufferMaterial->SetParameter("hasNormalTex", 1);
@@ -869,6 +879,17 @@ bool InitEngine()
 	gGBufferMaterial->SetParameter("hasRoughnessTex", 0);
 	gGBufferMaterial->SetParameter("hasMaskTex", 0);
 	gGBufferMaterial->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
+	
+	gAlphaBlendBasicMaterial->SetParameter("tintColor", Vector4(1.f), 4);
+	gAlphaBlendBasicMaterial->SetParameter("hasDiffuseTex", 1);
+	gAlphaBlendBasicMaterial->SetParameter("diffuseTex", gDiffuseMap);
+	gAlphaBlendBasicMaterial->SetParameter("hasNormalTex", 1);
+	gAlphaBlendBasicMaterial->SetParameter("normalTex", gNormalMap);
+	gAlphaBlendBasicMaterial->SetParameter("hasRoughnessTex", 0);
+	gAlphaBlendBasicMaterial->SetParameter("hasMaskTex", 0);
+	gAlphaBlendBasicMaterial->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
+	gAlphaBlendBasicMaterial->SetParameter("skyTex", gSkyboxMap);
+	gAlphaBlendBasicMaterial->bAlphaBlend = true;
 
 	// light
 	MakeLights();
@@ -1085,6 +1106,32 @@ void CullLights(RenderContext& renderContext)
 	}
 }
 
+void DrawMesh(RenderContext& renderContext, MeshRenderData& meshRenderData)
+{
+	if (!meshRenderData.material || !meshRenderData.material->shader)
+		return;
+
+	meshRenderData.material->SetParameter("prevModelMat", meshRenderData.prevModelMat);
+	meshRenderData.material->SetParameter("modelMat", meshRenderData.modelMat);
+	
+	//if(renderContext.currentMaterial != material)
+	meshRenderData.material->Use(renderContext);
+
+	if (meshRenderData.VAO != renderContext.currentVAO)
+	{
+		renderContext.currentVAO = meshRenderData.VAO;
+		glBindVertexArray(meshRenderData.VAO);
+	}
+	if (meshRenderData.material->bBothSide && renderContext.currentRenderState->bCullFace)
+		glDisable(GL_CULL_FACE);
+	//glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_TRIANGLES, meshRenderData.idxCount, GL_UNSIGNED_INT, 0);
+	//glBindVertexArray(0);
+
+	if (meshRenderData.material->bBothSide && renderContext.currentRenderState->bCullFace)
+		glEnable(GL_CULL_FACE);
+}
+
 void GeometryPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("geometry");
@@ -1099,14 +1146,47 @@ void GeometryPass(RenderContext& renderContext)
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
-	// draw models
+	// visibility
+	// clear list
+	gOpaqueMeshRenderList.clear();
+	gAlphaBlendMeshRenderList.clear();
 	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
 		MeshComponent* meshComp = MeshComponent::gMeshComponentContainer[i];
 		if(IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, renderContext.viewPoint.frustumPlanes, 6))
 		{
-			meshComp->Draw(renderContext);
+			//meshComp->Draw(renderContext);
+			// add mesh to render list
+			MeshRenderData renderDataTmpl;
+			renderDataTmpl.prevModelMat = meshComp->prevModelMat;
+			renderDataTmpl.modelMat = meshComp->modelMat;
+			const REArray<Mesh*>& meshList = meshComp->GetMeshList();
+			for (int mi = 0, nmi = (int)meshList.size(); mi < nmi; ++mi)
+			{
+				Mesh* mesh = meshList[mi];
+
+				REArray<MeshRenderData>* listPtr = 0;
+				if (!mesh->material->bAlphaBlend)
+					listPtr = &gOpaqueMeshRenderList;
+				else
+					listPtr = &gAlphaBlendMeshRenderList;
+
+				renderDataTmpl.material = mesh->material;
+				renderDataTmpl.VAO = mesh->meshData->VAO;
+				renderDataTmpl.idxCount = mesh->meshData->idxCount;
+
+				renderDataTmpl.distToCamera =
+					(renderDataTmpl.modelMat.TransformPoint(mesh->meshData->bounds.GetCenter()) - renderContext.viewPoint.position).Size3();
+
+				listPtr->push_back(renderDataTmpl);
+			}
 		}
+	}
+
+	// draw mesh
+	for (int i = 0, ni = (int)gOpaqueMeshRenderList.size(); i < ni; ++i)
+	{
+		DrawMesh(renderContext, gOpaqueMeshRenderList[i]);
 	}
 }
 
@@ -1731,6 +1811,94 @@ void ShadowPass(RenderContext& renderContext)
 	}
 }
 
+
+void SkyboxPass(RenderContext& renderContext)
+{
+	const static RenderState renderState([](RenderState& s) {
+		// depth
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_LEQUAL;
+		s.bDepthWrite = false;
+		// draw back face
+		s.bCullFace = true;
+		s.cullFaceMode = GL_FRONT;
+	});
+
+	renderState.Apply(renderContext);
+
+	// enable blend for skybox additive
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+
+	//gSkyboxMaterial->SetParameter("cubeMap", gPointLights[1].shadowData[0].shadowMap);
+	gSkyboxMaterial->SetParameter("cubeMap", gSkyboxMap);
+
+	gCubeMesh->Draw(renderContext, gSkyboxMaterial);
+
+	glDisable(GL_BLEND);
+}
+
+void AlphaBlendPass(RenderContext& renderContext)
+{
+	//CPU_SCOPED_PROFILE("alpha blend");
+	GPU_SCOPED_PROFILE("alpha blend");
+
+	const static RenderState renderState([](RenderState& s) {
+		// don't write depth
+		s.bDepthWrite = false;
+	});
+
+	renderState.Apply(renderContext);
+
+	// enable blend for skybox additive
+	glEnable(GL_BLEND);
+	glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
+
+	// sort
+	std::sort(gAlphaBlendMeshRenderList.begin(), gAlphaBlendMeshRenderList.end(), MeshRenderData::CompareAlphaBlend);
+
+	// draw mesh
+	for (int mi = 0, nmi = (int)gAlphaBlendMeshRenderList.size(); mi < nmi; ++mi)
+	{
+		Material* material = gAlphaBlendMeshRenderList[mi].material;
+
+		material->SetParameter("lightCount", (int)gDirectionalLights.size());
+
+		// set light
+		int shadowIdx = 0;
+		for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
+		{
+			Light& light = gDirectionalLights[i];
+			material->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
+			material->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity, 3);
+			material->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams, 4);
+			// shadow
+			if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
+			{
+				int shadowCount = MAX_CASCADE_COUNT;
+				material->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
+				for (int j = 0; j < shadowCount; ++j)
+				{
+					material->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
+					material->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds, 3);
+					material->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
+				}
+				shadowIdx += shadowCount;
+			}
+			else
+			{
+				material->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), 0);
+			}
+
+		}
+
+		DrawMesh(renderContext, gAlphaBlendMeshRenderList[mi]);
+	}
+
+	glDisable(GL_BLEND);
+}
+
 void DebugForwardPass(RenderContext& renderContext)
 {
 	//GPU_SCOPED_PROFILE("debug foward");
@@ -1789,6 +1957,7 @@ void DebugForwardPass(RenderContext& renderContext)
 		}
 	}
 
+#if 0
 	Light& light = gSpotLights[0];
 	Plane frustumPlanes[6];
 
@@ -1825,7 +1994,7 @@ void DebugForwardPass(RenderContext& renderContext)
 			gCubeMesh->Draw(renderContext, gLightDebugMaterial);
 		}
 	}
-
+#endif
 
 	if (gRenderSettings.bDrawLightVolume)
 	{
@@ -1861,33 +2030,6 @@ void DebugForwardPass(RenderContext& renderContext)
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
-
-void SkyboxPass(RenderContext& renderContext)
-{
-	const static RenderState renderState([](RenderState& s) {
-		// depth
-		s.bDepthTest = true;
-		s.depthTestFunc = GL_LEQUAL;
-		s.bDepthWrite = false;
-		// draw back face
-		s.bCullFace = true;
-		s.cullFaceMode = GL_FRONT;
-	});
-
-	renderState.Apply(renderContext);
-
-	// enable blend for skybox additive
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
-
-	//gSkyboxMaterial->SetParameter("cubeMap", gPointLights[1].shadowData[0].shadowMap);
-	gSkyboxMaterial->SetParameter("cubeMap", gSkyboxMap);
-
-	gCubeMesh->Draw(renderContext, gSkyboxMaterial);
-	
-	glDisable(GL_BLEND);
-}
-
 void SwapSceneDepthHistory()
 {
 	int tmp = gSceneDepthCurrentIdx;
@@ -1918,20 +2060,19 @@ void PreparePostProcessPass(bool bClear = false)
 		glClear(GL_COLOR_BUFFER_BIT);
 	}
 }
-
-void PostProcessPass(RenderContext& renderContext)
+void PostProcessPassBeforeAlpa(RenderContext& renderContext)
 {
-	GPU_SCOPED_PROFILE("post process");
+	//GPU_SCOPED_PROFILE("post process before alpha");
 
-	const static RenderState renderState( [] (RenderState& s) {
+	const static RenderState renderState([](RenderState& s) {
 		// no depth test
 		s.bDepthTest = false;
 	});
 
 	renderState.Apply(renderContext);
-	
-	// bind post process pass textures
-	//gSceneDepthStencilTex[gSceneDepthCurrentIdx].Bind(Shader::gDepthStencilTexUnit);
+
+	// bind depth stencil tex
+	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 
 	// SSR
 	if (gRenderSettings.bSSR)
@@ -1974,12 +2115,12 @@ void PostProcessPass(RenderContext& renderContext)
 
 		glClearStencil(0);
 		glClear(GL_STENCIL_BUFFER_BIT);
-		
+
 		gSSRStencilMaterial->SetParameter("materialTex", &gMaterialTex);
-		
+
 		// draw quad
 		gFSQuadMesh->Draw(renderContext, gSSRStencilMaterial);
-		
+
 		renderStateSSR.Apply(renderContext);
 
 		gSSRMaterial->SetParameter("albedoTex", &gAlbedoTex);
@@ -1993,6 +2134,25 @@ void PostProcessPass(RenderContext& renderContext)
 		renderState.Apply(renderContext);
 #endif
 	}
+
+}
+
+void PostProcessPass(RenderContext& renderContext)
+{
+	GPU_SCOPED_PROFILE("post process");
+
+	const static RenderState renderState( [] (RenderState& s) {
+		// no depth test
+		s.bDepthTest = false;
+	});
+
+	renderState.Apply(renderContext);
+
+	// bind depth stencil tex
+	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
+
+	// bind post process pass textures
+	//gSceneDepthStencilTex[gSceneDepthCurrentIdx].Bind(Shader::gDepthStencilTexUnit);
 
 	// TAA
 	if(gRenderSettings.bUseTAA)
@@ -2243,9 +2403,15 @@ void Render()
 	if(gRenderSettings.bSkybox)
 		SkyboxPass(renderContext);
 
+	// post process before alpha
+	PostProcessPassBeforeAlpa(renderContext);
+
+	// alpha blend
+	AlphaBlendPass(renderContext);
+
 	// detach depth texture
 	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
-
+	
 	PostProcessPass(renderContext);
 
 	// copy depth buffer for debug forward

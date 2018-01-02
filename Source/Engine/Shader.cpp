@@ -29,7 +29,7 @@ bool LoadSingleShader(GLenum type, const GLchar* path, GLuint programID, ShaderI
 	if (!success)
 	{
 		glGetShaderInfoLog(outShaderID, 512, NULL, infoLog);
-		printf("Error: vertex shader %s compile fail: %s", path, infoLog);
+		printf("Error: shader %s compile fail: %s", path, infoLog);
 		// clean up
 		glDeleteShader(outShaderID);
 		if (bAssert)

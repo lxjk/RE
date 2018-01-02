@@ -108,6 +108,7 @@ public:
 	}
 
 	bool bBothSide = false;
+	bool bAlphaBlend = false;
 
 	Shader* shader;
 	REArray<char> parameterData;
@@ -123,8 +124,9 @@ public:
 	{
 		shader = otherMaterial->shader;
 		shader->referenceMaterials.insert(this);
-		parameterData = otherMaterial->parameterData;
-		parameterList = otherMaterial->parameterList;
+		*this = *otherMaterial;
+		//parameterData = otherMaterial->parameterData;
+		//parameterList = otherMaterial->parameterList;
 	}
 	~Material()
 	{

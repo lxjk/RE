@@ -8,11 +8,11 @@
 #define MAX_LIGHT_COUNT 4
 #define MAX_CSM_COUNT 3
 
-struct ShadowData
-{
-	mat4 shadowMat;
-	vec3 bounds; // x cascade width, y cascade height, z far plane
-};
+//struct ShadowData
+//{
+//	mat4 shadowMat;
+//	vec3 bounds; // x cascade width, y cascade height, z far plane
+//};
 
 in VS_OUT
 {

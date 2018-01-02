@@ -100,6 +100,8 @@ void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, E
 
 		aiMaterial* aiMaterial = scene->mMaterials[i];
 
+		material->SetParameter("tintColor", Vector4(1.f), 4);
+
 		// diffuse
 		if (aiMaterial->GetTextureCount(aiTextureType_DIFFUSE) > 0)
 		{

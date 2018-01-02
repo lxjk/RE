@@ -108,6 +108,21 @@ public:
 	void Draw(struct RenderContext& renderContext, Material* overrideMaterial = 0) const;
 };
 
+struct MeshRenderData
+{
+public:
+	Matrix4 prevModelMat;	// 16 x 4
+	Matrix4 modelMat;		// 16 x 4
+	Material* material;		// 8
+	GLuint VAO;				// 4
+	GLsizei idxCount;		// 4
+	float distToCamera;		// 4
+
+	static bool CompareAlphaBlend(const MeshRenderData& a, const MeshRenderData& b)
+	{
+		return a.distToCamera > b.distToCamera;
+	}
+};
 
 static void MakeCube(MeshData& meshData)
 {
