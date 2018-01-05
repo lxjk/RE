@@ -144,6 +144,7 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 
 	// uniform buffer index
 	BindUniformBlock("RenderInfo", RenderInfoBP);
+	BindUniformBlock("GlobalLightsRenderInfo", GlobalLightsRenderInfoBP);
 
 	// process uniforms
 	nextTexUnit = 0;

@@ -26,20 +26,6 @@ struct RenderContext
 	Viewpoint viewPoint;
 };
 
-struct RenderInfo
-{
-	Matrix4 View;			// 16 * 4
-	Matrix4 Proj;			// 16 * 4
-	Matrix4 ViewProj;		// 16 * 4
-	Matrix4 InvView;		// 16 * 4
-	Matrix4 PrevView;		// 16 * 4
-	Matrix4 PrevProj;		// 16 * 4
-	Matrix4 PrevViewProj;	// 16 * 4
-	Vector4 Resolution;		// 16
-	float Time;				// 4
-	float Exposure;			// 4
-};
-
 struct RenderState
 {
 	bool bColorWrite = true;
@@ -126,4 +112,47 @@ struct RenderSettings
 	bool bSkybox				= true;
 
 	//RenderSettings() {};
+};
+
+
+
+struct RenderInfo
+{
+	Matrix4 View;			// 16 * 4
+	Matrix4 Proj;			// 16 * 4
+	Matrix4 ViewProj;		// 16 * 4
+	Matrix4 InvView;		// 16 * 4
+	Matrix4 PrevView;		// 16 * 4
+	Matrix4 PrevProj;		// 16 * 4
+	Matrix4 PrevViewProj;	// 16 * 4
+	Vector4 Resolution;		// 16
+	float Time;				// 4
+	float Exposure;			// 4
+};
+
+// must match shader define
+
+#define MAX_DIRECTIONAL_LIGHT_COUNT 4
+#define MAX_CSM_COUNT 3
+
+struct LightRenderInfo
+{
+	Vector4 positionInvR; // xyz position, w invRadius
+	Vector4 directionRAB; // xyz direction, w radial attenuation blend value
+	Vector4 color;
+	Vector4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
+	int shadowDataCount;
+};
+
+struct ShadowDataRenderInfo
+{
+	Matrix4 shadowMat;
+	Vector4 bounds; // x cascade width, y cascade height, z far plane
+};
+
+struct GlobalLightsRenderInfo
+{
+	int globalLightCount;
+	LightRenderInfo globalLights[MAX_DIRECTIONAL_LIGHT_COUNT];
+	ShadowDataRenderInfo globalShadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
 };

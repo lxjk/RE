@@ -15,4 +15,31 @@ layout(std140) uniform RenderInfo
 	float exposure;
 };
 
+struct Light 
+{
+	vec4 positionInvR; // xyz position, w invRadius
+	vec4 directionRAB; // xyz direction, w radial attenuation blend value
+	vec4 color;
+	vec4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
+	int shadowDataCount;
+};
+
+struct ShadowData
+{
+	mat4 shadowMat;
+	vec4 bounds; // x cascade width, y cascade height, z far plane
+};
+
+#define MAX_DIRECTIONAL_LIGHT_COUNT 4
+#define MAX_CSM_COUNT 3
+
+layout(std140) uniform GlobalLightsRenderInfo
+{
+	int globalLightCount;
+	Light globalLights[MAX_DIRECTIONAL_LIGHT_COUNT];
+	ShadowData globalShadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
+};
+
+//uniform sampler2D globalShadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
+
 #endif

@@ -2,15 +2,7 @@
 #define DEFERRED_LIGHTING_INCL
 
 #include "Common.incl"
-
-struct Light 
-{
-	vec4 positionInvR; // xyz position, w invRadius
-	vec4 directionRAB; // xyz direction, w radial attenuation blend value
-	vec3 color;
-	vec4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
-	int shadowDataCount;
-};
+#include "CommonUBO.incl"
 
 float DistributionGGX(float NdotH, float roughness)
 {
@@ -218,10 +210,10 @@ vec3 CalcLight(Light lightData, vec3 normal, vec3 pos, vec3 view, vec3 albedo, f
 	float attenuation;
 	GetAttenuationAndLightDir(lightData, pos, attenuation, light);	
 	
-	//return CalcLightBlinnPhong(light, normal, view, lightData.color, albedo, attenuation);
-	//return CalcLightPBR(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);
-	//return CalcLightPBR_op(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);
-	return CalcLightPBR2(light, normal, view, lightData.color, albedo, metallic, roughness, attenuation);
+	//return CalcLightBlinnPhong(light, normal, view, lightData.color.rgb, albedo, attenuation);
+	//return CalcLightPBR(light, normal, view, lightData.color.rgb, albedo, metallic, roughness, attenuation);
+	//return CalcLightPBR_op(light, normal, view, lightData.color.rgb, albedo, metallic, roughness, attenuation);
+	return CalcLightPBR2(light, normal, view, lightData.color.rgb, albedo, metallic, roughness, attenuation);
 }
 
 #endif

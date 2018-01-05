@@ -13,15 +13,10 @@ in VS_OUT
 	vec4 posVS;
 } fs_in;
 
-#define MAX_LIGHT_COUNT 4
-#define MAX_CSM_COUNT 3
 
 out vec4 color;
 
-uniform int lightCount;
-uniform Light lights[MAX_LIGHT_COUNT];
-uniform ShadowData shadowData[MAX_LIGHT_COUNT * MAX_CSM_COUNT];
-uniform sampler2D shadowMap[MAX_LIGHT_COUNT * MAX_CSM_COUNT];
+uniform sampler2D shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
 
 uniform samplerCube skyTex;
 
@@ -46,21 +41,20 @@ void main()
 	vec3 ambient = albedo * (0.035);
 	vec3 result = ambient;
 	int shadowCount = 0;
-	int clampedLightCount = min(lightCount, MAX_LIGHT_COUNT);
-	for(int i = 0; i < clampedLightCount; ++i)
+	for(int i = 0; i < globalLightCount; ++i)
 	{
 		float shadowFactor = 1;
-		for(int c = 0; c < lights[i].shadowDataCount; ++c)
+		for(int c = 0; c < globalLights[i].shadowDataCount; ++c)
 		{
-			if(-fs_in.posVS.z <= shadowData[shadowCount+c].bounds.z)
+			if(-fs_in.posVS.z <= globalShadowData[shadowCount+c].bounds.z)
 			{
-				shadowFactor = CalcShadow(position, normal, -lights[i].directionRAB.xyz, shadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025);
+				shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025);
 				break;
 			}
 		}
-		shadowCount += lights[i].shadowDataCount;
+		shadowCount += globalLights[i].shadowDataCount;
 		//shadowFactor = 1;
-		result += CalcLight(lights[i], normal, position, view, albedo, metallic, roughness) * shadowFactor;
+		result += CalcLight(globalLights[i], normal, position, view, albedo, metallic, roughness) * shadowFactor;
 		//result = vec3(shadowFactor);
 	}
 	

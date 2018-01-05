@@ -5,15 +5,6 @@
 #include "Include/DeferredPassTex.incl"
 #include "Include/Shadow.incl"
 
-#define MAX_LIGHT_COUNT 4
-#define MAX_CSM_COUNT 3
-
-//struct ShadowData
-//{
-//	mat4 shadowMat;
-//	vec3 bounds; // x cascade width, y cascade height, z far plane
-//};
-
 in VS_OUT
 {
 	vec3 positionVS;
@@ -22,11 +13,11 @@ in VS_OUT
 
 out vec4 color;
 
-uniform int lightCount;
-uniform Light lights[MAX_LIGHT_COUNT];
-uniform ShadowData shadowData[MAX_LIGHT_COUNT * MAX_CSM_COUNT];
-//uniform sampler2DShadow shadowMap[MAX_LIGHT_COUNT * MAX_CSM_COUNT];
-uniform sampler2D shadowMap[MAX_LIGHT_COUNT * MAX_CSM_COUNT];
+//uniform int lightCount;
+//uniform Light lights[MAX_DIRECTIONAL_LIGHT_COUNT];
+//uniform ShadowData shadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
+//uniform sampler2DShadow shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
+uniform sampler2D shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
 
 const vec3 csmColor[MAX_CSM_COUNT] =
 {
@@ -57,22 +48,21 @@ void main()
 	vec3 result = ambient;
 	vec3 csmColorCode = vec3(0);
 	int shadowCount = 0;
-	int clampedLightCount = min(lightCount, MAX_LIGHT_COUNT);
-	for(int i = 0; i < clampedLightCount; ++i)
+	for(int i = 0; i < globalLightCount; ++i)
 	{
 		float shadowFactor = 1;
-		for(int c = 0; c < lights[i].shadowDataCount; ++c)
+		for(int c = 0; c < globalLights[i].shadowDataCount; ++c)
 		{
-			if(-position.z <= shadowData[shadowCount+c].bounds.z)
+			if(-position.z <= globalShadowData[shadowCount+c].bounds.z)
 			{
-				shadowFactor = CalcShadow(position, normal, -lights[i].directionRAB.xyz, shadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025);
+				shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025);
 				csmColorCode = csmColor[c];
 				break;
 			}
 		}
-		shadowCount += lights[i].shadowDataCount;
+		shadowCount += globalLights[i].shadowDataCount;
 		//shadowFactor = 0;
-		result += CalcLight(lights[i], normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);
+		result += CalcLight(globalLights[i], normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);
 		//result = vec3(shadowFactor);
 	}
 	//result = mix(result, csmColorCode, 0.05f);

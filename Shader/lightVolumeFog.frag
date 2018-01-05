@@ -74,7 +74,7 @@ void main()
 	}
 	fog = fog * fogIntensity / sampleCount;
 	
-	color = vec4(result + fog * light.color, 1.0f);
+	color = vec4(result + fog * light.color.rgb, 1.0f);
 	//color = vec4(light.color, 1.0);
 	//color = vec4(vec3(shadowFactor), 1.f);
 }

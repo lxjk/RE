@@ -55,8 +55,6 @@
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
 
-const int MAX_DIRECTIONAL_LIGHT_COUNT = 4;
-
 // the window we'll be rendering to
 SDL_Window* gWindow = NULL;
 
@@ -90,6 +88,7 @@ RenderSettings gRenderSettings;
 
 // ubo
 GLuint gUBO_Matrices = 0;
+GLuint gUBO_GlobalLights = 0;
 
 // frame buffer
 FrameBuffer gGBuffer;
@@ -114,8 +113,8 @@ float* gDebugTexBuffer;
 #endif
 
 // render globals
-REArray<MeshRenderData> gOpaqueMeshRenderList;
-REArray<MeshRenderData> gAlphaBlendMeshRenderList;
+REArray<MeshRenderData, 16> gOpaqueMeshRenderList;
+REArray<MeshRenderData, 16> gAlphaBlendMeshRenderList;
 
 // light const
 static Matrix4 gLightOmniViewMat[6];
@@ -421,17 +420,18 @@ void MakeLights()
 	);
 	gPointLights[plIdx].bCastShadow = true;
 
-	//for (int i = 0; i < 100; ++i)
+	//for (int i = 0; i < 10; ++i)
 	//{
 	//	gPointLights.push_back(
 	//		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
 	//	plIdx = (int)gPointLights.size() - 1;
 	//	gPointLights[plIdx].SetPointLight(
-	//		/*pos=*/	Vector4_3(-10, -3, 3),
+	//		/*pos=*/	Vector4_3((rand() / (float)RAND_MAX * 2 - 1) * 10, -15, 3),
 	//		/*radius=*/	10.f,
 	//		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
 	//		/*int=*/	20
 	//	);
+	//	gPointLights[plIdx].bCastShadow = true;
 
 	//}
 
@@ -761,12 +761,12 @@ void InitializeLightOmniViewMat()
 	const static Vector4_3 omniDirs[6][2] =
 	{
 #if RE_UP_AXIS == RE_Z_UP
-		{ Vector4_3(1, 0, 0),	Vector4_3(0, 0, -1) },
-		{ Vector4_3(-1, 0, 0),	Vector4_3(0, 0, -1) },
-		{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },
-		{ Vector4_3(0, 0, -1),	Vector4_3(0, 1, 0) },
-		{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },
-		{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, -1) }
+		{ Vector4_3(1, 0, 0),	Vector4_3(0, 0, -1) },	// right
+		{ Vector4_3(-1, 0, 0),	Vector4_3(0, 0, -1) },	// left
+		{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },	// top
+		{ Vector4_3(0, 0, -1),	Vector4_3(0, 1, 0) },	// bottom
+		{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },	// backward
+		{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, -1) }	// forward
 #else
 		{ Vector4_3(1, 0, 0),	Vector4_3(0, -1, 0) },
 		{ Vector4_3(-1, 0, 0),	Vector4_3(0, -1, 0) },
@@ -803,12 +803,18 @@ bool InitEngine()
 	gSceneDepthHistoryIdx = 1;
 
 	// ubo
+	// matrices
 	glGenBuffers(1, &gUBO_Matrices);
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), NULL, GL_DYNAMIC_DRAW);
-	glBindBuffer(GL_UNIFORM_BUFFER, 0);
-	// binding point
 	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::RenderInfoBP, gUBO_Matrices);
+	// global lights
+	glGenBuffers(1, &gUBO_GlobalLights);
+	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_GlobalLights);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(GlobalLightsRenderInfo), NULL, GL_DYNAMIC_DRAW);
+	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::GlobalLightsRenderInfoBP, gUBO_GlobalLights);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	
 	// shader
 	LoadShaders(false);
@@ -1165,7 +1171,7 @@ void GeometryPass(RenderContext& renderContext)
 			{
 				Mesh* mesh = meshList[mi];
 
-				REArray<MeshRenderData>* listPtr = 0;
+				REArray<MeshRenderData, 16>* listPtr = 0;
 				if (!mesh->material->bAlphaBlend)
 					listPtr = &gOpaqueMeshRenderList;
 				else
@@ -1233,35 +1239,51 @@ void DirectionalLightPass(RenderContext& renderContext)
 	glClearDepth(1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	gDirectionalLightMaterial->SetParameter("lightCount", (int)gDirectionalLights.size());
+	GlobalLightsRenderInfo globalLightsRenderInfo;
+	globalLightsRenderInfo.globalLightCount = Min((int)gDirectionalLights.size(), MAX_DIRECTIONAL_LIGHT_COUNT);
+
+	//gDirectionalLightMaterial->SetParameter("lightCount", (int)gDirectionalLights.size());
 
 	// set light
 	int shadowIdx = 0;
-	for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
+	for (int i = 0; i < globalLightsRenderInfo.globalLightCount; ++i)
 	{
 		Light& light = gDirectionalLights[i];
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity, 3);
-		gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams, 4);
+		LightRenderInfo& lightRenderInfo = globalLightsRenderInfo.globalLights[i];
+		lightRenderInfo.directionRAB = light.GetDirectionVSRAB(renderContext.viewPoint.viewMat);
+		lightRenderInfo.color = light.colorIntensity;
+		lightRenderInfo.attenParams = light.attenParams;
+		//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
+		//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity, 4);
+		//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams, 4);
 		// shadow
 		if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
 		{
-			int shadowCount = MAX_CASCADE_COUNT;
-			gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
+			int shadowCount = MAX_CSM_COUNT;
+			lightRenderInfo.shadowDataCount = shadowCount;
+			//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
 			for (int j = 0; j < shadowCount; ++j)
 			{
-				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
-				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds, 3);
+				globalLightsRenderInfo.globalShadowData[shadowIdx + j].shadowMat = light.shadowData[j].shadowMat;
+				globalLightsRenderInfo.globalShadowData[shadowIdx + j].bounds = light.shadowData[j].bounds;
+				//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
+				//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds, 4);
 				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
 			}
 			shadowIdx += shadowCount;
 		}
 		else
 		{
-			gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), 0);
+			lightRenderInfo.shadowDataCount = 0;
+			//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), 0);
 		}
 
 	}
+
+	// global light ubo
+	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_GlobalLights);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(GlobalLightsRenderInfo), &globalLightsRenderInfo);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	// draw quad
 	gDirectionalLightMesh->Draw(renderContext);
@@ -1512,7 +1534,7 @@ void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const Ren
 
 	// update ubo
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &renderInfo, GL_DYNAMIC_DRAW);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(RenderInfo), &renderInfo);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	// clear depth
@@ -1554,7 +1576,7 @@ void ShadowPass(RenderContext& renderContext)
 	// directional lights
 	if(gRenderSettings.bDrawShadowCSM)
 	{
-		const static float cascadeRatio[MAX_CASCADE_COUNT] = {
+		const static float cascadeRatio[MAX_CSM_COUNT] = {
 			0.12f, 0.36f, 1.f
 		};
 
@@ -1586,7 +1608,7 @@ void ShadowPass(RenderContext& renderContext)
 
 			Matrix4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
 
-			for (int cascadeIdx = 0; cascadeIdx < MAX_CASCADE_COUNT; ++cascadeIdx)
+			for (int cascadeIdx = 0; cascadeIdx < MAX_CSM_COUNT; ++cascadeIdx)
 			{
 				Texture2D* shadowMap = (Texture2D*)light.shadowData[cascadeIdx].shadowMap;
 				if (!shadowMap)
@@ -1862,33 +1884,21 @@ void AlphaBlendPass(RenderContext& renderContext)
 	for (int mi = 0, nmi = (int)gAlphaBlendMeshRenderList.size(); mi < nmi; ++mi)
 	{
 		Material* material = gAlphaBlendMeshRenderList[mi].material;
-
-		material->SetParameter("lightCount", (int)gDirectionalLights.size());
-
+		
 		// set light
 		int shadowIdx = 0;
 		for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
 		{
 			Light& light = gDirectionalLights[i];
-			material->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
-			material->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity, 3);
-			material->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams, 4);
 			// shadow
 			if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
 			{
-				int shadowCount = MAX_CASCADE_COUNT;
-				material->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
+				int shadowCount = MAX_CSM_COUNT;
 				for (int j = 0; j < shadowCount; ++j)
 				{
-					material->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
-					material->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds, 3);
 					material->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
 				}
 				shadowIdx += shadowCount;
-			}
-			else
-			{
-				material->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), 0);
 			}
 
 		}
@@ -2369,8 +2379,7 @@ void Render()
 	gRenderInfo.Time = (float)gTime;
 	gRenderInfo.Exposure = 1.0f;
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
-	// maybe use glBufferSubData later?
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &gRenderInfo, GL_DYNAMIC_DRAW);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(RenderInfo), &gRenderInfo);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	
 	// bind G-buffer
@@ -2425,7 +2434,7 @@ void Render()
 	debugRenderInfo.Proj.m[2][1] = 0;
 	debugRenderInfo.ViewProj = debugRenderInfo.Proj * debugRenderInfo.View;
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), &debugRenderInfo, GL_DYNAMIC_DRAW);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(RenderInfo), &debugRenderInfo);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	DebugForwardPass(renderContext);

@@ -4,15 +4,14 @@
 
 #include "Mesh.h"
 #include "Material.h"
+#include "Render.h"
 
 class Texture;
-
-#define MAX_CASCADE_COUNT 3
 
 struct ShadowData
 {
 	Texture* shadowMap = 0;
-	Vector4_3 bounds; // x cascade width, y cascade height, z far plane
+	Vector4 bounds; // x cascade width, y cascade height, z far plane
 
 	// set in shadow pass
 	// for spot/directional light this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
@@ -56,7 +55,7 @@ public:
 
 	bool bRenderVisibile = true; // for shadow/light rendering
 
-	ShadowData shadowData[MAX_CASCADE_COUNT];
+	ShadowData shadowData[MAX_CSM_COUNT];
 
 	Mesh* LightMesh;
 
@@ -156,7 +155,7 @@ public:
 
 		BuildModelMat();
 
-		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity, 3);
+		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity, 4);
 		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams, 4);
 	}
 
@@ -186,7 +185,7 @@ public:
 
 		BuildModelMat();
 
-		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity, 3);
+		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity, 4);
 		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams, 4);
 	}
 

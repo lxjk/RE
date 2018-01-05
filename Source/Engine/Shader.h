@@ -66,6 +66,7 @@ class Shader
 public:
 
 	static const GLuint RenderInfoBP = 0;
+	static const GLuint GlobalLightsRenderInfoBP = 1;
 
 	// deferred pass
 	static const GLuint gDepthStencilTexUnit = 0;
