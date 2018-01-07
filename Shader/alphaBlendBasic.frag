@@ -48,7 +48,7 @@ void main()
 		{
 			if(-fs_in.posVS.z <= globalShadowData[shadowCount+c].bounds.z)
 			{
-				shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025);
+				shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025, 0.002);
 				break;
 			}
 		}

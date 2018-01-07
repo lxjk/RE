@@ -17,10 +17,6 @@ struct ShadowData
 	// for spot/directional light this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
 	// for point light this is lightView * invCameraView, which converts VS -> WS -> LS
 	Matrix4 shadowMat;
-
-	// set in shadow pass
-	// only used for point light
-	Matrix4 lightProjRemapMat;
 };
 
 class Light
@@ -56,6 +52,10 @@ public:
 	bool bRenderVisibile = true; // for shadow/light rendering
 
 	ShadowData shadowData[MAX_CSM_COUNT];
+
+	// set in shadow pass
+	// only used for point light
+	Matrix4 lightProjRemapMat[4];
 
 	Mesh* LightMesh;
 

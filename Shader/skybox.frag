@@ -1,5 +1,7 @@
 #version 330 core
 
+#include "Include/CommonUBO.incl"
+
 in VS_OUT
 {
 	vec3 texCoords;
@@ -12,7 +14,8 @@ uniform samplerCube cubeMap;
 void main() 
 {
 	color = texture(cubeMap, fs_in.texCoords);
-	//float shadowZ = texture(cubeMap, fs_in.texCoords).r;
-	//float shadowViewZ = -0.101010107 / (-shadowZ + 1.01010108);
-	//color = vec4(-shadowViewZ / 10);
+	//float z = texture(cubeMap, fs_in.texCoords).r * 2 - 1;
+	//float linearDepth = (2 * resolution.z * resolution.w) / (resolution.w + resolution.z - z * (resolution.w - resolution.z));
+	//linearDepth = linearDepth / (resolution.w - resolution.z);
+	//color = vec4(vec3(linearDepth), 1.0);
 }

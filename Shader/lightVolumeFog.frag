@@ -39,9 +39,9 @@ void main()
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
 		if(light.attenParams.y > 0.5f)
-			shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, shadowMap, 0.00015);
+			shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, shadowMap, 0.00015, 0.0001);
 		else
-			shadowFactor = CalcShadowCube(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMapCube, 0.0005);
+			shadowFactor = CalcShadowCube(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMapCube, 0.0005, 0.0003);
 	}
 	
 	vec3 result = CalcLight(light, normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);

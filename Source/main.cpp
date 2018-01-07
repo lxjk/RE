@@ -48,9 +48,12 @@
 #include "CacheSim.h"
 
 #define SHADER_DEBUG_BUFFER 0
+#define VISUALIZE_TEXTURE 0
 #define LOAD_SCENE_MESH 1
 
 #define LOAD_CACHE_SIM 0
+
+#define USE_TETRAHEDRON_SHADOW_MAP 0
 
 int gWindowWidth = 1280;
 int gWindowHeight = 720;
@@ -117,7 +120,11 @@ REArray<MeshRenderData, 16> gOpaqueMeshRenderList;
 REArray<MeshRenderData, 16> gAlphaBlendMeshRenderList;
 
 // light const
-static Matrix4 gLightOmniViewMat[6];
+#if USE_TETRAHEDRON_SHADOW_MAP
+Matrix4 gLightOmniViewMat[4];
+#else
+Matrix4 gLightOmniViewMat[6];
+#endif
 
 // jitter
 #define JITTER_HALTON 1
@@ -141,8 +148,10 @@ Shader gGBufferShader;
 Shader gAlphaBlendBasicShader;
 Shader gPrepassShader;
 Shader gPrepassCubeShader;
+Shader gPrepassTetrahedronShader;
 Shader gDirectionalLightShader;
-Shader gLightVolumeShader;
+Shader gLightVolumePointShader;
+Shader gLightVolumeSpotShader;
 Shader gLightVolumeFogShader;
 Shader gLightDebugShader;
 Shader gSkyboxShader;
@@ -151,12 +160,14 @@ Shader gSSRShader;
 Shader gSSRStencilShader;
 Shader gToneMapShader;
 Shader gTAAShader;
+Shader gVisualizeTextureShader;
 
 // material
 Material* gGBufferMaterial;
 Material* gAlphaBlendBasicMaterial;
 Material* gPrepassMaterial;
 Material* gPrepassCubeMaterial;
+Material* gPrepassTetrahedronMaterial;
 Material* gDirectionalLightMaterial;
 Material* gLightDebugMaterial;
 Material* gSkyboxMaterial;
@@ -165,6 +176,7 @@ Material* gSSRMaterial;
 Material* gSSRStencilMaterial;
 Material* gToneMapMaterial;
 Material* gTAAMaterial;
+Material* gVisualizeTextureMaterial;
 
 // mesh data
 MeshData gCubeMeshData;
@@ -181,8 +193,6 @@ REArray<Mesh*> gNanosuitMeshes;
 REArray<Mesh*> gSceneMeshes;
 
 Mesh* gDirectionalLightMesh;
-Mesh* gPointLightMesh;
-Mesh* gSpotLightMesh;
 
 Mesh* gPointLightDebugMesh;
 Mesh* gSpotLightDebugMesh;
@@ -376,7 +386,7 @@ void MakeLights()
 	// point lights
 	int plIdx = 0;
 	//gPointLights.push_back(
-	//	Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
+	//	Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumePointShader))));
 	//plIdx = (int)gPointLights.size() - 1;
 	//gPointLights[plIdx].SetPointLight(
 	//	/*pos=*/	Vector4_3(-5, 20, 0),
@@ -387,18 +397,18 @@ void MakeLights()
 	//gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumePointShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	Vector4_3(0, -3, 2),
 		/*radius=*/	4.f,
 		/*color=*/	Vector4_3(1.f, 1.f, 1.f),
-		/*int=*/	20
+		/*int=*/	200
 	);
 	gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumePointShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	Vector4_3(10, -2, 2),
@@ -410,20 +420,32 @@ void MakeLights()
 	//gPointLights[plIdx].bVolumetricFog = true;
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumePointShader))));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	Vector4_3(-10, -3, 3),
 		/*radius=*/	10.f,
 		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
-		/*int=*/	20
+		/*int=*/	200
+	);
+	gPointLights[plIdx].bCastShadow = true;
+
+
+	gPointLights.push_back(
+		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumePointShader))));
+	plIdx = (int)gPointLights.size() - 1;
+	gPointLights[plIdx].SetPointLight(
+		/*pos=*/	Vector4_3(-94, -4, 15),
+		/*radius=*/	30.f,
+		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
+		/*int=*/	80
 	);
 	gPointLights[plIdx].bCastShadow = true;
 
 	//for (int i = 0; i < 10; ++i)
 	//{
 	//	gPointLights.push_back(
-	//		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumeShader))));
+	//		Light(Mesh::Create(&gIcosahedronMeshData, Material::Create(&gLightVolumePointShader))));
 	//	plIdx = (int)gPointLights.size() - 1;
 	//	gPointLights[plIdx].SetPointLight(
 	//		/*pos=*/	Vector4_3((rand() / (float)RAND_MAX * 2 - 1) * 10, -15, 3),
@@ -438,7 +460,7 @@ void MakeLights()
 	// spot lights
 	int slIdx = 0;
 	gSpotLights.push_back(
-		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeShader))));
+		Light(Mesh::Create(&gConeMeshData, Material::Create(&gLightVolumeSpotShader))));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
 		/*pos=*/	Vector4_3(0, -10, 3),
@@ -457,7 +479,7 @@ void MakeMeshComponents()
 {
 
 	// box
-	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(gAlphaBlendBasicMaterial));
+	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
 	boxMesh->material->SetParameter("metallic", 1.0f);
 	boxMesh->material->SetParameter("roughness", 0.3f);
 	for (int i = 0; i < 3; ++i)
@@ -721,8 +743,10 @@ void LoadShaders(bool bReload)
 	gAlphaBlendBasicShader.Load("Shader/alphaBlendBasic.vert", "Shader/alphaBlendBasic.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
 	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepass.geom", "Shader/prepass.frag", !bReload);
+	gPrepassTetrahedronShader.Load("Shader/prepass.vert", "Shader/prepassTetrahedron.geom", "Shader/prepass.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
-	gLightVolumeShader.Load("Shader/lightVolume.vert", "Shader/lightVolume.frag", !bReload);
+	gLightVolumePointShader.Load("Shader/lightVolume.vert", "Shader/lightVolumePoint.frag", !bReload);
+	gLightVolumeSpotShader.Load("Shader/lightVolume.vert", "Shader/lightVolumeSpot.frag", !bReload);
 	gLightVolumeFogShader.Load("Shader/lightVolume.vert", "Shader/lightVolumeFog.frag", !bReload);
 	gLightDebugShader.Load("Shader/test.vert", "Shader/lightDebug.frag", !bReload);
 	gSkyboxShader.Load("Shader/skybox.vert", "Shader/skybox.frag", !bReload);
@@ -731,6 +755,7 @@ void LoadShaders(bool bReload)
 	gSSRStencilShader.Load("Shader/fsQuad.vert", "Shader/fsQuadSSRStencil.frag", !bReload);
 	gToneMapShader.Load("Shader/fsQuad.vert", "Shader/fsQuadToneMap.frag", !bReload);
 	gTAAShader.Load("Shader/fsQuad.vert", "Shader/fsQuadTAA.frag", !bReload);
+	gVisualizeTextureShader.Load("Shader/fsQuad.vert", "Shader/fsQuadVisualizeTexture.frag", !bReload);
 }
 
 float HaltonSeq(int prime, int index = 1)
@@ -758,28 +783,51 @@ void InitializeHalton_2_3()
 
 void InitializeLightOmniViewMat()
 {
-	const static Vector4_3 omniDirs[6][2] =
+#if USE_TETRAHEDRON_SHADOW_MAP
+	const float a = 0.457745343f;//0.57735026f;
+	const float b = 0.889066577f;//0.81649661f;
+	// in view space
+	const Vector4_3 omniDirs[4] =
 	{
-#if RE_UP_AXIS == RE_Z_UP
-		{ Vector4_3(1, 0, 0),	Vector4_3(0, 0, -1) },	// right
-		{ Vector4_3(-1, 0, 0),	Vector4_3(0, 0, -1) },	// left
-		{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },	// top
-		{ Vector4_3(0, 0, -1),	Vector4_3(0, 1, 0) },	// bottom
-		{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },	// backward
-		{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, -1) }	// forward
+		//Vector4_3(0.f, b, -a),	// forward
+		//Vector4_3(0.f, -b, -a),	// backward
+		//Vector4_3(b, 0.f, a),	// right
+		//Vector4_3(-b, 0.f, a)	// left
+		Vector4_3(0.f, -a, -b),	// forward
+		Vector4_3(0.f, -a, b),	// backward
+		Vector4_3(b, a, 0.f),	// right
+		Vector4_3(-b, a, 0.f)	// left
+	};
+
+	//Vector4_3 Forward = EulerToQuat(Vector4_3(-27.36780516f, 0.f, 0.f)).Rotate(Vector4_3(0,1,0));
+	//printf("%f, %f, %f\n", Forward.x, Forward.y, Forward.z);
+
+	for (int i = 0; i < 4; ++i)
+	{
+		gLightOmniViewMat[i] = MakeMatrixFromViewForward(omniDirs[i]).GetTransposed3();
+	}
 #else
+	// in view space
+	const Vector4_3 omniDirs[6][2] =
+	{
+		//{ Vector4_3(1, 0, 0),	Vector4_3(0, 0, -1) },	// right
+		//{ Vector4_3(-1, 0, 0),	Vector4_3(0, 0, -1) },	// left
+		//{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },	// top
+		//{ Vector4_3(0, 0, -1),	Vector4_3(0, 1, 0) },	// bottom
+		//{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },	// backward
+		//{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, -1) }	// forward
 		{ Vector4_3(1, 0, 0),	Vector4_3(0, -1, 0) },
 		{ Vector4_3(-1, 0, 0),	Vector4_3(0, -1, 0) },
 		{ Vector4_3(0, 1, 0),	Vector4_3(0, 0, 1) },
 		{ Vector4_3(0, -1, 0),	Vector4_3(0, 0, -1) },
 		{ Vector4_3(0, 0, 1),	Vector4_3(0, -1, 0) },
 		{ Vector4_3(0, 0, -1),	Vector4_3(0, -1, 0) }
-#endif
 	};
 	for (int i = 0; i < 6; ++i)
 	{
-		gLightOmniViewMat[i] = ToInvViewMatrix(MakeMatrixFromForward(omniDirs[i][0], omniDirs[i][1])).GetTransposed3();
+		gLightOmniViewMat[i] = MakeMatrixFromViewForward(omniDirs[i][0], omniDirs[i][1]).GetTransposed3();
 	}
+#endif
 }
 
 bool InitEngine()
@@ -826,6 +874,7 @@ bool InitEngine()
 	gAlphaBlendBasicMaterial = Material::Create(&gAlphaBlendBasicShader);
 	gPrepassMaterial = Material::Create(&gPrepassShader);
 	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
+	gPrepassTetrahedronMaterial = Material::Create(&gPrepassTetrahedronShader);
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
 	gLightDebugMaterial = Material::Create(&gLightDebugShader);
 	gSkyboxMaterial = Material::Create(&gSkyboxShader);
@@ -834,6 +883,7 @@ bool InitEngine()
 	gSSRStencilMaterial = Material::Create(&gSSRStencilShader);
 	gToneMapMaterial = Material::Create(&gToneMapShader);
 	gTAAMaterial = Material::Create(&gTAAShader);
+	gVisualizeTextureMaterial = Material::Create(&gVisualizeTextureShader);
 
 	// mesh data
 	MakeCube(gCubeMeshData);
@@ -854,8 +904,6 @@ bool InitEngine()
 #endif
 
 	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, gDirectionalLightMaterial);
-	gPointLightMesh = Mesh::Create(&gIcosahedronMeshData);
-	gSpotLightMesh = Mesh::Create(&gConeMeshData);
 
 	gPointLightDebugMesh = Mesh::Create(&gIcosahedronMeshData, gLightDebugMaterial);
 	gSpotLightDebugMesh = Mesh::Create(&gConeMeshData, gLightDebugMaterial);
@@ -1313,8 +1361,14 @@ void SetupLightVolumeMaterial(RenderContext& renderContext, const Light& light)
 		}
 		else
 		{
+#if USE_TETRAHEDRON_SHADOW_MAP
+			light.LightMesh->material->SetParameter("shadowMap", light.shadowData[0].shadowMap);
+			for(int i = 0; i < 4; ++i)
+				light.LightMesh->material->SetParameter(ShaderNameBuilder("lightProjRemapMat")[i].c_str(), light.lightProjRemapMat[i]);
+#else
 			light.LightMesh->material->SetParameter("shadowMapCube", light.shadowData[0].shadowMap);
-			light.LightMesh->material->SetParameter("lightProjRemapMat", light.shadowData[0].lightProjRemapMat);
+			light.LightMesh->material->SetParameter(ShaderNameBuilder("lightProjRemapMat")[0].c_str(), light.lightProjRemapMat[0]);
+#endif
 		}
 	}
 	else
@@ -1714,7 +1768,7 @@ void ShadowPass(RenderContext& renderContext)
 		}
 	}
 	
-	const float lightNearPlane = 0.1f;
+	const float lightNearPlane = 0.01f;
 
 	// spot lights
 	if (gRenderSettings.bDrawShadowSpot)
@@ -1775,12 +1829,69 @@ void ShadowPass(RenderContext& renderContext)
 	// point lights
 	if (gRenderSettings.bDrawShadowPoint)
 	{
+#if USE_TETRAHEDRON_SHADOW_MAP
+		Material* omniShadowMaterial = gPrepassTetrahedronMaterial;
+
+		// enable custom clipping planes, clip distance is sent in geometry shader via gl_ClipDistance
+		glEnable(GL_CLIP_DISTANCE0);
+		glEnable(GL_CLIP_DISTANCE1);
+		glEnable(GL_CLIP_DISTANCE2);
+#else
+		Material* omniShadowMaterial = gPrepassCubeMaterial;
+#endif
+
 		for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
 		{
 			Light& light = gPointLights[lightIdx];
 			if (!light.bCastShadow || !light.bRenderVisibile)
 				continue;
+			
+			// update render info, only do view, since we proj in geometry shader
+			shadowRenderInfo.View = light.lightViewMat;
+			shadowRenderInfo.Proj = Matrix4::Identity();
+			shadowRenderInfo.ViewProj = light.lightViewMat;
 
+#if USE_TETRAHEDRON_SHADOW_MAP
+			Texture2D* shadowMap = (Texture2D*)light.shadowData[0].shadowMap;
+			if (!shadowMap)
+			{
+				shadowMap = Texture2D::Create();
+				shadowMap->AllocateForFrameBuffer(512, 512, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
+				light.shadowData[0].shadowMap = shadowMap;
+			}
+
+			const float tetrahedronFov = DegToRad(143.98570868f);
+			const float tetrahedronWidth = 1.59245026f; //tan(DegToRad(143.98570868 * 0.5)) / tan(DegToRad(125.26438968 * 0.5));
+			const float jitterScale = 2.f;
+
+			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
+				tetrahedronFov,
+				tetrahedronWidth * (float)shadowMap->width, (float)shadowMap->height,
+				lightNearPlane, light.radius,
+				viewPoint.jitterX * jitterScale, viewPoint.jitterY * jitterScale);
+			
+			const Matrix4 gLightOmniTextureProjMat[4] =
+			{
+				// forwad to texture bottom
+				Matrix4(Vector4(1.f,0.f,0.f,0.f), Vector4(0.f,0.5f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.f,-0.5f,0.f,1.f)),
+				// backward to texture right
+				Matrix4(Vector4(0.f,1.f,0.f,0.f), Vector4(-0.5f,0.f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.5f,0.f,0.f,1.f)),
+				// right to texture top
+				Matrix4(Vector4(1.f,0.f,0.f,0.f), Vector4(0.f,0.5f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.f,0.5f,0.f,1.f)),
+				// left to texture left
+				Matrix4(Vector4(0.f,1.f,0.f,0.f), Vector4(-0.5f,0.f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(-0.5f,0.f,0.f,1.f)),
+			};
+
+
+			light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
+
+			for (int i = 0; i < 4; ++i)
+			{
+				Matrix4 lightViewProjMat = gLightOmniTextureProjMat[i] * lightProjMat * gLightOmniViewMat[i];
+				light.lightProjRemapMat[i] = remapMat * lightViewProjMat;
+				omniShadowMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightViewProjMat);
+			}
+#else
 			TextureCube* shadowMap = (TextureCube*)light.shadowData[0].shadowMap;
 			if (!shadowMap)
 			{
@@ -1794,19 +1905,15 @@ void ShadowPass(RenderContext& renderContext)
 				(float)shadowMap->width, (float)shadowMap->height,
 				lightNearPlane, light.radius,
 				viewPoint.jitterX, viewPoint.jitterY);
-
-			light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
-			light.shadowData[0].lightProjRemapMat = remapMat * lightProjMat;
-
-			// update render info, only do view, since we proj in geometry shader
-			shadowRenderInfo.View = light.lightViewMat;
-			shadowRenderInfo.Proj = Matrix4::Identity();
-			shadowRenderInfo.ViewProj = light.lightViewMat;
 			
+			light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
+			light.lightProjRemapMat[0] = remapMat * lightProjMat;
+
 			for (int i = 0; i < 6; ++i)
 			{
-				gPrepassCubeMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightProjMat * gLightOmniViewMat[i]);
+				omniShadowMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightProjMat * gLightOmniViewMat[i]);
 			}
+#endif
 			
 			bool bHasMeshToRender = false;
 			// process scene bounds and do frustum culling
@@ -1828,8 +1935,15 @@ void ShadowPass(RenderContext& renderContext)
 			}
 
 			if(bHasMeshToRender)
-				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassCubeMaterial, MeshComponent::gMeshComponentContainer);
+				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, omniShadowMaterial, MeshComponent::gMeshComponentContainer);
 		}
+
+#if USE_TETRAHEDRON_SHADOW_MAP
+		// disable custom clipping planes
+		glDisable(GL_CLIP_DISTANCE0);
+		glDisable(GL_CLIP_DISTANCE1);
+		glDisable(GL_CLIP_DISTANCE2);
+#endif
 	}
 }
 
@@ -1971,7 +2085,7 @@ void DebugForwardPass(RenderContext& renderContext)
 	Light& light = gSpotLights[0];
 	Plane frustumPlanes[6];
 
-	const float lightNearPlane = 0.1f;
+	const float lightNearPlane = 0.01f;
 	Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
 		DegToRad(light.outerHalfAngle) * 2,
 		512, 512,
@@ -2233,6 +2347,31 @@ void PostProcessPass(RenderContext& renderContext)
 	}
 }
 
+void VisualizeTexturePass(RenderContext& renderContext)
+{
+	const static RenderState renderState([](RenderState& s) {
+		// no depth test
+		s.bDepthTest = false;
+	});
+
+	renderState.Apply(renderContext);
+	
+	// unbind frame buffer, draw to screen
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	Texture2D* vTex = (Texture2D*)(gPointLights[2].shadowData[0].shadowMap);
+	//assert(gPointLights[2].shadowData[0].shadowMap->textureType == GL_TEXTURE_2D);
+	//assert(vTex->textureType == GL_TEXTURE_2D);
+	gVisualizeTextureMaterial->SetParameter("depthParams", 
+		//Vector4_3(renderContext.viewPoint.nearPlane, renderContext.viewPoint.farPlane, 1.f), 3);
+		Vector4_3(0.01f, gPointLights[2].radius, 1.f), 3);
+	gVisualizeTextureMaterial->SetParameter("texSize", Vector4_2((float)vTex->width, (float)vTex->height), 2);
+	gVisualizeTextureMaterial->SetParameter("tex", vTex);
+
+	// draw quad
+	gFSQuadMesh->Draw(renderContext, gVisualizeTextureMaterial);
+}
+
 void UIPass()
 {
 	//GPU_SCOPED_PROFILE("UI");
@@ -2438,6 +2577,10 @@ void Render()
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	DebugForwardPass(renderContext);
+
+#if VISUALIZE_TEXTURE
+	VisualizeTexturePass(renderContext);
+#endif
 
 	UIPass();
 }

@@ -15,5 +15,6 @@ void main()
 	// unjitter
 	posCS.xy += projMat[2].xy * posCS.w;
 	gl_Position = posCS.xyww;
-	vs_out.texCoords = GetCubeMapCoord(position);
+	// from world coord to view coord
+	vs_out.texCoords = ToViewCoord(position);
 }

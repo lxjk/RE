@@ -328,6 +328,9 @@ __forceinline Vector4	Ceil(Vector4 a) { return VecCeil(a.m128); }
 __forceinline Vector4	Round(Vector4 a) { return VecRound(a.m128); }
 __forceinline Vector4	Trunc(Vector4 a) { return VecTrunc(a.m128); }
 
+
+__forceinline int		Min(int a, int b) { return (a < b) ? a : b; }
+__forceinline int		Max(int a, int b) { return (a > b) ? a : b; }
 __forceinline float		Min(float a, float b) {	return (a < b) ? a : b; }
 __forceinline float		Max(float a, float b) { return (a > b) ? a : b; }
 // per component min
@@ -478,6 +481,28 @@ inline Matrix4 MakeMatrixFromForward(const Vector4_3& forward)
 #else
 	return MakeMatrixFromForward(forward, Vector4_3(0.f, 1.f, 0.f));
 #endif
+}
+
+
+inline Matrix4 MakeMatrixFromViewForward(const Vector4_3& forward, const Vector4_3& up)
+{
+	Vector4_3 right = forward.Cross3(up);
+
+	right = VectorSelectLE(right.SizeSqr3(), KINDA_SMALL_NUMBER,
+		Vector4_3(1.f, 0.f, 0.f),
+		right.GetNormalized3());
+	Vector4_3 newUp = right.Cross3(forward);
+
+	Matrix4 r = Matrix4::Identity();
+
+	r.SetAxes(right, newUp, -forward);
+
+	return r;
+}
+
+inline Matrix4 MakeMatrixFromViewForward(const Vector4_3& forward)
+{
+	return MakeMatrixFromViewForward(forward, Vector4_3(0.f, 1.f, 0.f));
 }
 
 inline Matrix4 MakeMatrixPerspectiveProj(float fov, float width, float height, float zNear, float zFar, float jitterX = 0, float jitterY = 0)

@@ -3,17 +3,18 @@
 layout (triangles) in;
 layout (triangle_strip, max_vertices=18) out;
 
-uniform mat4 lightViewProjMat[6]; // right(+x), left(-x), top(+z), bottom(-z), backward(-y), forward(+y)
+uniform mat4 lightViewProjMat[6]; // right(+x), left(-x), top(+y), bottom(-y), backward(+z), forward(-z)
 
 // since all culling plane pass origin, we just need to store plane normal
 #define rh 0.70710678
+// in view space
 const vec3 cullingPlanes[6][4] = vec3[][](
   vec3[](vec3(rh, rh, 0), 	vec3(rh, -rh, 0), 	vec3(rh, 0, rh), 	vec3(rh, 0, -rh)	),
   vec3[](vec3(-rh, rh, 0), 	vec3(-rh, -rh, 0),	vec3(-rh, 0, rh), 	vec3(-rh, 0, -rh)	),
-  vec3[](vec3(rh, 0, rh), 	vec3(-rh, 0, rh), 	vec3(0, rh, rh), 	vec3(0, -rh, rh)	),
-  vec3[](vec3(rh, 0, -rh), 	vec3(-rh, 0, -rh), 	vec3(0, rh, -rh), 	vec3(0, -rh, -rh)	),
+  vec3[](vec3(rh, rh, 0), 	vec3(-rh, rh, 0),	vec3(0, rh, rh), 	vec3(0, rh, -rh)	),
   vec3[](vec3(rh, -rh, 0), 	vec3(-rh, -rh, 0),	vec3(0, -rh, rh), 	vec3(0, -rh, -rh)	),
-  vec3[](vec3(rh, rh, 0), 	vec3(-rh, rh, 0),	vec3(0, rh, rh), 	vec3(0, rh, -rh)	)
+  vec3[](vec3(rh, 0, rh), 	vec3(-rh, 0, rh), 	vec3(0, rh, rh), 	vec3(0, -rh, rh)	),
+  vec3[](vec3(rh, 0, -rh), 	vec3(-rh, 0, -rh), 	vec3(0, rh, -rh), 	vec3(0, -rh, -rh)	)
  );
 
 void main()

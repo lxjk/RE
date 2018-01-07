@@ -1,0 +1,18 @@
+#ifndef BASIC_LIGHT_VOLUME_FRAG_INCL
+#define BASIC_LIGHT_VOLUME_FRAG_INCL
+
+void GetGBufferValue(in vec2 uv, in vec3 positionVS, out vec3 outNormal, out vec3 outPosition, out vec3 outView, out vec4 outAlbedo, 
+	out float outMetallic, out float outRoughness, out float outAo)
+{	
+	outNormal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
+	float depth = texture(gDepthStencilTex, uv).r;
+	outPosition = GetPositionVSFromDepth(depth, projMat, positionVS);
+	outView = normalize(-outPosition);	
+	outAlbedo = texture(gAlbedoTex, uv);
+	vec4 material = texture(gMaterialTex, uv);
+	outMetallic = material.r;
+	outRoughness = material.g;
+	outAo = material.a;
+}
+
+#endif

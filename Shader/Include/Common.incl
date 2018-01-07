@@ -104,7 +104,7 @@ float Luminance(vec4 c)
 	return dot(c.xyz, vec3(0.3, 0.59, 0.11));
 }
 
-vec3 GetCubeMapCoord(vec3 inCoord)
+vec3 ToViewCoord(vec3 inCoord)
 {
 #if RE_Z_UP
 	return vec3(inCoord.x, inCoord.z, -inCoord.y);
