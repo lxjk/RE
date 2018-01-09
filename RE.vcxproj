@@ -28,6 +28,7 @@
     <ClCompile Include="Source\Engine\Texture.cpp" />
     <ClCompile Include="Source\Engine\Texture2D.cpp" />
     <ClCompile Include="Source\Engine\TextureCube.cpp" />
+    <ClCompile Include="Source\Engine\TextureCubeArray.cpp" />
     <ClCompile Include="Source\imgui\imgui.cpp" />
     <ClCompile Include="Source\imgui\imgui_demo.cpp" />
     <ClCompile Include="Source\imgui\imgui_draw.cpp" />
@@ -55,6 +56,7 @@
     <ClInclude Include="Source\Engine\Texture.h" />
     <ClInclude Include="Source\Engine\Texture2D.h" />
     <ClInclude Include="Source\Engine\TextureCube.h" />
+    <ClInclude Include="Source\Engine\TextureCubeArray.h" />
     <ClInclude Include="Source\Engine\Util.h" />
     <ClInclude Include="Source\Engine\Viewpoint.h" />
     <ClInclude Include="Source\imgui\imconfig.h" />

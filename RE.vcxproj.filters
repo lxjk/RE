@@ -67,6 +67,7 @@
     <ClCompile Include="Source\Engine\FileWatcher.cpp">
       <Filter>Source\Engine</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Engine\TextureCubeArray.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Engine\Camera.h">
@@ -181,6 +182,7 @@
     <ClInclude Include="Source\Containers\Containers.h">
       <Filter>Source\Containers</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Engine\TextureCubeArray.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
