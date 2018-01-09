@@ -28,6 +28,7 @@ public:
 	GLuint textureID;
 	int width;
 	int height;
+	int count = 0; // used for arrays
 	GLint internalFormat;
 	GLenum format;
 	GLenum type;

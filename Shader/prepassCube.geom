@@ -3,6 +3,7 @@
 layout (triangles) in;
 layout (triangle_strip, max_vertices=18) out;
 
+uniform int cubeMapArrayIndex;
 uniform mat4 lightViewProjMat[6]; // right(+x), left(-x), top(+y), bottom(-y), backward(+z), forward(-z)
 
 // since all culling plane pass origin, we just need to store plane normal
@@ -44,7 +45,7 @@ void main()
 		// inside == 0 if all 3 verts are outside of any plane
 		if(inside > 0)
 		{
-			gl_Layer = face;
+			gl_Layer = cubeMapArrayIndex * 6 + face;
 			for(int i = 0; i < 3; ++i)
 			{
 				gl_Position = lightViewProjMat[face] * gl_in[i].gl_Position;

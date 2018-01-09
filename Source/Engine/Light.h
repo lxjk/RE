@@ -49,6 +49,7 @@ public:
 	Matrix4 lightInvViewMat;
 	Matrix4 lightViewMat;
 
+	int shadowMapIndex = 0;
 	bool bRenderVisibile = true; // for shadow/light rendering
 	bool bUseTetrahedronShadowMap = false; // for point light shadow map
 

@@ -164,6 +164,21 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 	}
 	dependentFileNames.clear();
 
+	const char* const samplers[] =
+	{
+		"sampler1D",
+		"sampler2D",
+		"sampler3D",
+		"samplerCube",
+		"sampler2DRect",
+		"sampler1DArray",
+		"sampler2DArray",
+		"samplerCubeArray",
+		"samplerBuffer",
+		"sampler2DMS",
+		"sampler2DMSArray"
+	};
+
 	TexUnitList.clear();
 	UniformLocationList.clear();
 	for (int shaderInfoIdx = 0; shaderInfoIdx < shaderInfoCount; ++shaderInfoIdx)
@@ -178,9 +193,16 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 			for (int nameIdx = 0; nameIdx < it->second.size(); ++nameIdx)
 			{
 				UniformLocationList.push_back(ValuePair(it->second[nameIdx].c_str(), -1));
-				if (it->first.compare("sampler2D") == 0 || 
-					it->first.compare("samplerCube") == 0 ||
-					it->first.compare("sampler2DShadow") == 0)
+				bool bTexUniform = false;
+				for (int i = 0; i < _countof(samplers); ++i)
+				{
+					if (it->first.compare(samplers[i]) == 0)
+					{
+						bTexUniform = true;
+						break;
+					}
+				}
+				if (bTexUniform)
 				{
 					// custom texture unit, init to be -1, don't bind it unless used
 					TexUnitList.push_back(ValuePair(it->second[nameIdx].c_str(), -1));
