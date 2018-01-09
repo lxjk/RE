@@ -1,7 +1,7 @@
 #version 430 core
 
 layout (triangles) in;
-layout (triangle_strip, max_vertices=18) out;
+layout (triangle_strip, max_vertices=12) out;
 
 uniform mat4 lightViewProjMat[4]; // forward(-z), backward(+z), right(+x), left(-x)
 

@@ -50,6 +50,7 @@ public:
 	Matrix4 lightViewMat;
 
 	bool bRenderVisibile = true; // for shadow/light rendering
+	bool bUseTetrahedronShadowMap = false; // for point light shadow map
 
 	ShadowData shadowData[MAX_CSM_COUNT];
 
@@ -133,9 +134,6 @@ public:
 		attenParams.w = invDiffCosHalfAngle;
 
 		BuildModelMat();
-
-		//LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity);
-		//LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams);
 	}
 
 	void SetPointLight(Vector4_3 inPos, float inRadius, Vector4_3 inColor, float inIntensity)
@@ -154,9 +152,6 @@ public:
 		attenParams.w = invDiffCosHalfAngle;
 
 		BuildModelMat();
-
-		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity, 4);
-		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams, 4);
 	}
 
 	void SetSpotLight(Vector4_3 inPos, Vector4_3 inDir, float inRadius, float inOuterHalfAngle, float inInnerHalfAngle, Vector4_3 inColor, float inIntensity)
@@ -184,9 +179,6 @@ public:
 		attenParams.w = invDiffCosHalfAngle;
 
 		BuildModelMat();
-
-		LightMesh->material->SetParameter(ShaderNameBuilder("light")("color").c_str(), colorIntensity, 4);
-		LightMesh->material->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), attenParams, 4);
 	}
 
 	void SetPosition(const Vector4_3& inPosition)
