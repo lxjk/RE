@@ -19,6 +19,7 @@ public:
 	float jitterY; // in pixel scale
 
 	float nearRadius;
+	float screenScale; // use to calculate pixel size of a sphere on screen
 
 	Matrix4 viewMat;
 	Matrix4 invViewMat;
@@ -46,6 +47,8 @@ public:
 
 		float tanHalfFOV = Tan(fov * 0.5f);
 		nearRadius = nearPlane * Sqrt(1 + tanHalfFOV * tanHalfFOV * (1 + height * height / width / width));
+
+		screenScale = Max(projMat.m[0][0] * 0.5f * width, projMat.m[1][1] * 0.5f * height);
 		
 		GetFrustumPlanes(viewMat, projMat.m[0][0], projMat.m[1][1], nearPlane, farPlane, frustumPlanes);
 	}

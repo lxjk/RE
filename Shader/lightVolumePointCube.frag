@@ -17,7 +17,6 @@ uniform Light light;
 uniform mat4 shadowMat;
 uniform mat4 lightProjRemapMat;
 uniform int cubeMapArrayIndex;
-uniform samplerCubeArray shadowMapCubeArray;
 
 void main() 
 {	
@@ -33,7 +32,7 @@ void main()
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
 		//shadowFactor = CalcShadowCube(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMapCube, 0.0002, 0.0003);
-		shadowFactor = CalcShadowCubeArray(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMapCubeArray, cubeMapArrayIndex, 0.0002, 0.0003);
+		shadowFactor = CalcShadowCubeArray(position, normal, lightDir, lightProjRemapMat, shadowMat, gShadowCubeTexArray, cubeMapArrayIndex, 0.0002, 0.0003);
 	}
 	
 	vec3 result = CalcLight(light, normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);

@@ -1,6 +1,7 @@
 #pragma once
 
 //#include <stdio.h>
+#include <stdlib.h>
 
 #include "MathUtil.h"
 #include "Vector4.h"
@@ -405,6 +406,17 @@ __forceinline Vector4 VectorSelectGE(float a, float b, const Vector4& T, const V
 __forceinline Vector4 VectorSelectGT(float a, float b, const Vector4& T, const Vector4& F)
 {
 	return VecBlendVar(F.m128, T.m128, VecCmpGT(VecSet1(a), VecSet1(b)));
+}
+
+// [0.f, 1.f]
+__forceinline float RandF()
+{
+	return rand() / (float)RAND_MAX;
+}
+
+__forceinline float RandRange(float minR, float maxR)
+{
+	return minR + RandF() * (maxR - minR);
 }
 
 

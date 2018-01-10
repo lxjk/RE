@@ -49,7 +49,7 @@
 #include "CacheSim.h"
 
 #define SHADER_DEBUG_BUFFER 0
-#define VISUALIZE_TEXTURE 0
+#define VISUALIZE_TEXTURE 1
 #define LOAD_SCENE_MESH 1
 
 #define LOAD_CACHE_SIM 0
@@ -108,6 +108,7 @@ int gSceneDepthCurrentIdx, gSceneDepthHistoryIdx;
 
 FrameBuffer gDepthOnlyBuffer;
 TextureCubeArray gShadowCubeTexArray;
+Texture2D gShadowTiledTex;
 
 #if SHADER_DEBUG_BUFFER
 Texture2D gDebugTex;
@@ -117,6 +118,7 @@ float* gDebugTexBuffer;
 // render globals
 REArray<MeshRenderData, 16> gOpaqueMeshRenderList;
 REArray<MeshRenderData, 16> gAlphaBlendMeshRenderList;
+REArray<LightRenderData> gVisibleLightList;
 
 int gShadowCubeMapCount;
 
@@ -145,6 +147,7 @@ int gJitterIdx = 0;
 Shader gGBufferShader;
 Shader gAlphaBlendBasicShader;
 Shader gPrepassShader;
+Shader gPrepassTiledShader;
 Shader gPrepassCubeShader;
 Shader gPrepassTetrahedronShader;
 Shader gDirectionalLightShader;
@@ -165,6 +168,7 @@ Shader gVisualizeTextureShader;
 Material* gGBufferMaterial;
 Material* gAlphaBlendBasicMaterial;
 Material* gPrepassMaterial;
+Material* gPrepassTiledMaterial;
 Material* gPrepassCubeMaterial;
 Material* gPrepassTetrahedronMaterial;
 Material* gDirectionalLightMaterial;
@@ -444,20 +448,19 @@ void MakeLights()
 	);
 	gPointLights[plIdx].bCastShadow = true;
 
-	//for (int i = 0; i < 10; ++i)
-	//{
-	//	gPointLights.push_back(
-	//		Light(Mesh::Create(&gIcosahedronMeshData)));
-	//	plIdx = (int)gPointLights.size() - 1;
-	//	gPointLights[plIdx].SetPointLight(
-	//		/*pos=*/	Vector4_3((rand() / (float)RAND_MAX * 2 - 1) * 10, -15, 3),
-	//		/*radius=*/	10.f,
-	//		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
-	//		/*int=*/	20
-	//	);
-	//	gPointLights[plIdx].bCastShadow = true;
-
-	//}
+	for (int i = 0; i < 10; ++i)
+	{
+		gPointLights.push_back(
+			Light(Mesh::Create(&gIcosahedronMeshData)));
+		plIdx = (int)gPointLights.size() - 1;
+		gPointLights[plIdx].SetPointLight(
+			/*pos=*/	Vector4_3(RandRange(-10.f, 10.f), RandRange(-15.f, 5.f), 3),
+			/*radius=*/	10.f,
+			/*color=*/	Vector4_3(1.f, 0.f, 0.f),
+			/*int=*/	20
+		);
+		gPointLights[plIdx].bCastShadow = true;
+	}
 
 	// spot lights
 	int slIdx = 0;
@@ -731,6 +734,7 @@ void SetupFrameBuffers()
 	{
 		gDepthOnlyBuffer.StartSetup();
 		gDepthOnlyBuffer.FinishSetup();
+		gShadowTiledTex.AllocateForFrameBuffer(4096, 4096, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -744,6 +748,7 @@ void LoadShaders(bool bReload)
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
 	gAlphaBlendBasicShader.Load("Shader/alphaBlendBasic.vert", "Shader/alphaBlendBasic.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
+	gPrepassTiledShader.Load("Shader/prepassTiled.vert", "Shader/prepass.frag", !bReload);
 	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepassCube.geom", "Shader/prepass.frag", !bReload);
 	gPrepassTetrahedronShader.Load("Shader/prepass.vert", "Shader/prepassTetrahedron.geom", "Shader/prepass.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
@@ -867,6 +872,7 @@ bool InitEngine()
 	gGBufferMaterial = Material::Create(&gGBufferShader);
 	gAlphaBlendBasicMaterial = Material::Create(&gAlphaBlendBasicShader);
 	gPrepassMaterial = Material::Create(&gPrepassShader);
+	gPrepassTiledMaterial = Material::Create(&gPrepassTiledShader);
 	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
 	gPrepassTetrahedronMaterial = Material::Create(&gPrepassTetrahedronShader);
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
@@ -1134,37 +1140,146 @@ void Update(float deltaTime)
 	ImGui_Impl_NewFrame(gWindow);
 }
 
+void GetTiledShadowMapValue(int index, int totalSize, int& outOffsetX, int& outOffsetY, int& outSize)
+{
+	outOffsetX = 0;
+	outOffsetY = 0;
+	outSize = totalSize;
+	int offsetSize = 1;
+	while (index > 0)
+	{
+		outSize = outSize >> 1;
+		--index;
+		if (index & 0x1) outOffsetX += offsetSize;
+		if (index & 0x2) outOffsetY += offsetSize;
+		index = index >> 2;
+		offsetSize = offsetSize << 1;
+	}
+	outOffsetX *= outSize;
+	outOffsetY *= outSize;
+}
+
+void GetNormalizedTiledShadowMapValue(int index, int totalSize, float desiredTileSize, 
+	float& outNormOffsetX, float& outNormOffsetY, float& outNormSize)
+{
+	int offsetX = 0;
+	int offsetY = 0;
+	int tileSize = totalSize;
+	int offsetSize = 1;
+	while (index > 0)
+	{
+		tileSize = tileSize >> 1;
+		--index;
+		if (index & 0x1) offsetX += offsetSize;
+		if (index & 0x2) offsetY += offsetSize;
+		index = index >> 2;
+		offsetSize = offsetSize << 1;
+	}
+	outNormOffsetX = (float)(tileSize * offsetX) / totalSize;
+	outNormOffsetY = (float)(tileSize * offsetY) / totalSize;
+	outNormSize = (float)tileSize / totalSize;
+}
+
 void CullLights(RenderContext& renderContext)
 {
 	CPU_SCOPED_PROFILE("cull lights");
 
-	int cubeMapIdx = 0;
+	Viewpoint& viewPoint = renderContext.viewPoint;
+
+	gVisibleLightList.clear();
+
+	LightRenderData lightDataTmpl;
 
 	// point lights
+	lightDataTmpl.bSpot = false;
+	lightDataTmpl.bUseTetrahedronShadowMap = true;
 	for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
 	{
 		Light& light = gPointLights[lightIdx];
-		light.bRenderVisibile =
-			IsSphereIntersectFrustum(light.position, light.radius, renderContext.viewPoint.frustumPlanes, 6);
-
-		// tmp assign shadow index
-		if (!light.bUseTetrahedronShadowMap)
+		if (IsSphereIntersectFrustum(light.position, light.radius, viewPoint.frustumPlanes, 6))
 		{
-			light.shadowMapIndex = cubeMapIdx;
-			++cubeMapIdx;
+			lightDataTmpl.light = &light;
+			lightDataTmpl.bActualCastShadow = light.bCastShadow;
+			float lightDist = (light.position - viewPoint.position).Size3();
+			lightDataTmpl.shadowMapSize = light.sphereBounds.centerRadius.w * viewPoint.screenScale / Max(lightDist, 1.f) * 1.25f;
+			gVisibleLightList.push_back(lightDataTmpl);
 		}
 	}
-	gShadowCubeMapCount = cubeMapIdx;
 
 	// spot lights
+	lightDataTmpl.bSpot = true;
+	lightDataTmpl.bUseTetrahedronShadowMap = false;
 	Vector4 packedFrustumVerts[6];
 	for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
 	{
 		Light& light = gSpotLights[lightIdx];
 		MakeFrustumPackedVerts(light.lightInvViewMat, 0, light.radius, light.outerTanHalfAngle, 1.f, packedFrustumVerts);
-		light.bRenderVisibile =
-			IsFrustumIntersectFrustum(packedFrustumVerts, renderContext.viewPoint.frustumPlanes, 6);
+		if (IsFrustumIntersectFrustum(packedFrustumVerts, viewPoint.frustumPlanes, 6))
+		{
+			lightDataTmpl.light = &light;
+			lightDataTmpl.bActualCastShadow = light.bCastShadow;
+			float lightDist = (light.position - viewPoint.position).Size3();
+			lightDataTmpl.shadowMapSize = light.sphereBounds.centerRadius.w * viewPoint.screenScale / Max(lightDist, 1.f) * 0.5f;
+			gVisibleLightList.push_back(lightDataTmpl);
+		}
 	}
+
+	// sort
+	std::sort(gVisibleLightList.begin(), gVisibleLightList.end(), LightRenderData::CompareShadowIndex);
+
+	const float minCubeMapScreenSize = 400.f;
+	const int maxCubeMapCount = 4;
+	const float minTileSize = 128;
+	const float maxTileSize = 1024;
+	int cubeMapIdx = 0;
+	int currentTileIndex = 0;
+	int currentTileMaxIndex = 0;
+	int totalSize = gShadowTiledTex.width;
+	int nextTileSize = totalSize >> 1;
+	// assign shadow index
+	for (int lightIdx = 0, nlightIdx = (int)gVisibleLightList.size(); lightIdx < nlightIdx; ++lightIdx)
+	{
+		LightRenderData& lightData = gVisibleLightList[lightIdx];
+
+		// we reached non shadow caster, break
+		if (!lightData.bActualCastShadow)
+			break;
+
+		// tmp assign shadow index
+		if (!lightData.bSpot && lightData.shadowMapSize > minCubeMapScreenSize && cubeMapIdx < maxCubeMapCount)
+		{
+			lightData.bUseTetrahedronShadowMap = false;
+			lightData.shadowMapIndex = cubeMapIdx;
+			++cubeMapIdx;
+			continue;
+		}
+		
+		// if we used up all tiles, no more shadow
+		if (currentTileIndex > currentTileMaxIndex)
+		{
+			lightData.bActualCastShadow = false;
+			continue;
+		}
+
+		lightData.shadowMapSize = Clamp(lightData.shadowMapSize, minTileSize, maxTileSize);
+		// find the right level
+		while (lightData.shadowMapSize <= (float)nextTileSize)
+		{
+			// to next level
+			nextTileSize = nextTileSize >> 1;
+			currentTileIndex = (currentTileIndex << 2) + 1;
+			currentTileMaxIndex = (currentTileMaxIndex + 1) << 2;
+		}
+		lightData.shadowMapIndex = currentTileIndex;
+		//GetTiledShadowMapValue(lightData.shadowMapIndex, totalSize,
+		//	lightData.offsetX, lightData.offsetY, lightData.size);
+
+		++currentTileIndex;
+	}
+	gShadowCubeMapCount = cubeMapIdx;
+
+	// sort
+	std::sort(gVisibleLightList.begin(), gVisibleLightList.end(), LightRenderData::CompareRender);
 }
 
 void DrawMesh(RenderContext& renderContext, MeshRenderData& meshRenderData)
@@ -1344,47 +1459,43 @@ void DirectionalLightPass(RenderContext& renderContext)
 	gDirectionalLightMesh->Draw(renderContext);
 }
 
-Material* SetupLightVolumeMaterial(RenderContext& renderContext, const Light& light)
+Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRenderData& lightData)
 {
-	bool bSpot = (light.attenParams.y > 0);
+	Light& light = *lightData.light;
 
-	Material* lightVolumeMaterial = bSpot ? gLightVolumeSpotMaterial :
-		(light.bUseTetrahedronShadowMap ? gLightVolumePointTetrahedronMaterial : gLightVolumePointCubeMaterial);
+	Material* lightVolumeMaterial = lightData.bSpot ? gLightVolumeSpotMaterial :
+		(lightData.bUseTetrahedronShadowMap ? gLightVolumePointTetrahedronMaterial : gLightVolumePointCubeMaterial);
 
+	lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("color").c_str(), light.colorIntensity, 4);
+	lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), light.attenParams, 4);
 	lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat), 4);
 	lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
 	lightVolumeMaterial->SetParameter("modelMat", light.modelMat);
 
-	bool bDrawShadow = gRenderSettings.bDrawShadow && light.bCastShadow;
-	if (bSpot)
+	bool bDrawShadow = gRenderSettings.bDrawShadow && lightData.bActualCastShadow;
+	if (lightData.bSpot)
 		bDrawShadow &= gRenderSettings.bDrawShadowSpot;
 	else
 		bDrawShadow &= gRenderSettings.bDrawShadowPoint;
 	// shadow
 	if (bDrawShadow)
 	{
-		lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("color").c_str(), light.colorIntensity, 4);
-		lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("attenParams").c_str(), light.attenParams, 4);
 		lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
 		lightVolumeMaterial->SetParameter("shadowMat", light.shadowData[0].shadowMat);
-		if (bSpot)
+		if (lightData.bSpot)
 		{
-			lightVolumeMaterial->SetParameter("shadowMap", light.shadowData[0].shadowMap);
 		}
 		else
 		{
-			if (light.bUseTetrahedronShadowMap)
+			if (lightData.bUseTetrahedronShadowMap)
 			{
-				lightVolumeMaterial->SetParameter("shadowMap", light.shadowData[0].shadowMap);
 				for (int i = 0; i < 4; ++i)
 					lightVolumeMaterial->SetParameter(ShaderNameBuilder("lightProjRemapMat")[i].c_str(), light.lightProjRemapMat[i]);
 			}
 			else
 			{
-				//lightVolumeMaterial->SetParameter("shadowMapCube", light.shadowData[0].shadowMap);
 				lightVolumeMaterial->SetParameter("lightProjRemapMat", light.lightProjRemapMat[0]);
-				lightVolumeMaterial->SetParameter("cubeMapArrayIndex", light.shadowMapIndex);
-				lightVolumeMaterial->SetParameter("shadowMapCubeArray", &gShadowCubeTexArray);
+				lightVolumeMaterial->SetParameter("cubeMapArrayIndex", lightData.shadowMapIndex);
 			}
 		}
 	}
@@ -1396,9 +1507,9 @@ Material* SetupLightVolumeMaterial(RenderContext& renderContext, const Light& li
 	return lightVolumeMaterial;
 }
 
-void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
+void LightVolumePass(RenderContext& renderContext)
 {
-	//GPU_SCOPED_PROFILE("light volume");
+	GPU_SCOPED_PROFILE("light volume");
 
 	// prepass render state
 	const static RenderState prepassRenderState( [] (RenderState& s) {
@@ -1459,7 +1570,7 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 
 	int stencilBits = 8;
 
-	for (int i = 0, ni = (int)lights.size(); i < ni; i += stencilBits)
+	for (int i = 0, ni = (int)gVisibleLightList.size(); i < ni; i += stencilBits)
 	{
 		// prepass
 		prepassRenderState.Apply(renderContext);
@@ -1475,15 +1586,8 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 			int lightIdx = i + j;
 			char mask = 1 << j;
 
-			const Light& light = lights[lightIdx];
+			const Light& light = *gVisibleLightList[lightIdx].light;
 			bool bSpot = (light.attenParams.y > 0);
-
-			// not visible?
-			if(!light.bRenderVisibile)
-			{
-				skipFlag |= mask;
-				continue;
-			}
 
 			// volumetric?
 			if (light.bVolumetricFog)
@@ -1535,8 +1639,7 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 			int lightIdx = i + j;
 			char mask = 1 << j;
 
-			const Light& light = lights[lightIdx];
-			bool bSpot = (light.attenParams.y > 0);
+			const LightRenderData& lightData = gVisibleLightList[lightIdx];
 
 			if (skipFlag & mask)
 				continue;
@@ -1544,8 +1647,8 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 			// set mask
 			glStencilFunc(lightingRenderState.stencilTestFunc, mask, mask);
 
-			Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, light);
-			light.LightMesh->Draw(renderContext, lightVolumeMaterial);
+			Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData);
+			lightData.light->LightMesh->Draw(renderContext, lightVolumeMaterial);
 		}
 	}
 
@@ -1553,30 +1656,18 @@ void LightVolumePass(RenderContext& renderContext, const REArray<Light>& lights)
 	onePassVolumeRenderState.Apply(renderContext);
 	for (int i = 0, ni = (int)cameraInsideLight.size(); i < ni; ++i)
 	{
-		const Light& light = lights[cameraInsideLight[i]];
-		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, light);
-		light.LightMesh->Draw(renderContext, lightVolumeMaterial);
+		const LightRenderData& lightData = gVisibleLightList[cameraInsideLight[i]];
+		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData);
+		lightData.light->LightMesh->Draw(renderContext, lightVolumeMaterial);
 	}
 
 	frontFogVolumeRenderState.Apply(renderContext);
 	for (int i = 0, ni = (int)volumetricLight.size(); i < ni; ++i)
 	{
-		const Light& light = lights[volumetricLight[i]];
-		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, light);
-		light.LightMesh->Draw(renderContext, lightVolumeMaterial);
+		const LightRenderData& lightData = gVisibleLightList[volumetricLight[i]];
+		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData);
+		lightData.light->LightMesh->Draw(renderContext, lightVolumeMaterial);
 	}
-}
-
-void PointLightPass(RenderContext& renderContext)
-{
-	GPU_SCOPED_PROFILE("point light");
-	LightVolumePass(renderContext, gPointLights);
-}
-
-void SpotLightPass(RenderContext& renderContext)
-{
-	GPU_SCOPED_PROFILE("spot light");
-	LightVolumePass(renderContext, gSpotLights);
 }
 
 void LightPass(RenderContext& renderContext)
@@ -1589,17 +1680,16 @@ void LightPass(RenderContext& renderContext)
 
 	// must have directional light pass, it clears color and write depth
 	DirectionalLightPass(renderContext);
-	PointLightPass(renderContext);
-	SpotLightPass(renderContext);
+	LightVolumePass(renderContext);
 
 	// disable blend
 	glDisable(GL_BLEND);
 }
 
 void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const RenderInfo& renderInfo, Material* material,
-	REArray<MeshComponent*>& involvedMeshComps, bool bNewShadowMap = true)
+	REArray<MeshComponent*>& involvedMeshComps)
 {
-	if (bNewShadowMap)
+	if (shadowMap)
 	{
 		// attach to frame buffers
 		gDepthOnlyBuffer.AttachDepth(shadowMap, false);
@@ -1790,164 +1880,74 @@ void ShadowPass(RenderContext& renderContext)
 		}
 	}
 	
+
+
+	// enable custom clipping planes, clip distance is sent in vertex shader or geometry shader via gl_ClipDistance
+	glEnable(GL_CLIP_DISTANCE0);
+	glEnable(GL_CLIP_DISTANCE1);
+	glEnable(GL_CLIP_DISTANCE2);
+	glEnable(GL_CLIP_DISTANCE3);
+
 	const float lightNearPlane = 0.01f;
 
-	// spot lights
-	if (gRenderSettings.bDrawShadowSpot)
+	bool bSpotLightPass = false;
+	bool bTetrahedronMapPass = false;
+	bool bCubeMapPass = false;
+	for (int lightIdx = 0, nlightIdx = (int)gVisibleLightList.size(); lightIdx < nlightIdx; ++lightIdx)
 	{
-		Plane frustumPlanes[6];
+		LightRenderData& lightData = gVisibleLightList[lightIdx];
+		Light& light = *lightData.light;
 
-		for (int lightIdx = 0, nlightIdx = (int)gSpotLights.size(); lightIdx < nlightIdx; ++lightIdx)
+		// we reach the end of shadow caster
+		if (!lightData.bActualCastShadow)
+			break;
+
+		bool bShouldInitTiledShadowMap = false;
+		bool bShouldInitCubeMapArray = false;
+		if (!bSpotLightPass && lightData.bSpot && gRenderSettings.bDrawShadowSpot)
 		{
-			Light& light = gSpotLights[lightIdx];
-			if (!light.bCastShadow || !light.bRenderVisibile)
-				continue;
-
-			Texture2D* shadowMap = (Texture2D*)light.shadowData[0].shadowMap;
-			if (!shadowMap)
-			{
-				shadowMap = Texture2D::Create();
-				shadowMap->AllocateForFrameBuffer(512, 512, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
-				light.shadowData[0].shadowMap = shadowMap;
-			}
-
-			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
-				DegToRad(light.outerHalfAngle) * 2,
-				(float)shadowMap->width, (float)shadowMap->height, 
-				lightNearPlane, light.radius,
-				viewPoint.jitterX, viewPoint.jitterY);
-
-			light.shadowData[0].shadowMat = remapMat * lightProjMat * light.lightViewMat * viewPoint.invViewMat;
-
-			// update render info
-			shadowRenderInfo.View = light.lightViewMat;
-			shadowRenderInfo.Proj = lightProjMat;
-			shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
-
-			// culling
-			GetFrustumPlanes(light.lightViewMat, lightProjMat.m[0][0], lightProjMat.m[1][1], 
-				lightNearPlane, light.radius, frustumPlanes);
-
-			bool bHasMeshToRender = false;
-			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
-			{
-				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
-				if(IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, frustumPlanes, 6))
-				{
-					meshComp->bRenderVisibile = true;
-					bHasMeshToRender = true;
-				}
-				else
-				{
-					meshComp->bRenderVisibile = false;
-				}
-			}
-
-			if(bHasMeshToRender)
-				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
+			// init spot light pass
+			bSpotLightPass = true;
+			bShouldInitTiledShadowMap = true;
 		}
-	}
-	
-	// point lights
-	if (gRenderSettings.bDrawShadowPoint)
-	{
-		// first process tetrahedron maps
-
-		// enable custom clipping planes, clip distance is sent in geometry shader via gl_ClipDistance
-		glEnable(GL_CLIP_DISTANCE0);
-		glEnable(GL_CLIP_DISTANCE1);
-		glEnable(GL_CLIP_DISTANCE2);
-
-		for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
+		if (!bTetrahedronMapPass && !lightData.bSpot && lightData.bUseTetrahedronShadowMap && gRenderSettings.bDrawShadowPoint)
 		{
-			Light& light = gPointLights[lightIdx];
-			if (!light.bCastShadow || !light.bRenderVisibile)
-				continue;
-
-			if (!light.bUseTetrahedronShadowMap)
-				continue;
-		
-			// update render info, only do view, since we proj in geometry shader
-			shadowRenderInfo.View = light.lightViewMat;
-			shadowRenderInfo.Proj = Matrix4::Identity();
-			shadowRenderInfo.ViewProj = light.lightViewMat;
-						
-			Texture2D* shadowMap = (Texture2D*)light.shadowData[0].shadowMap;
-			if (!shadowMap)
-			{
-				shadowMap = Texture2D::Create();
-				shadowMap->AllocateForFrameBuffer(512, 512, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
-				light.shadowData[0].shadowMap = shadowMap;
-			}
-
-			const float tetrahedronFov = DegToRad(143.98570868f);
-			const float tetrahedronWidth = 1.59245026f; //tan(DegToRad(143.98570868 * 0.5)) / tan(DegToRad(125.26438968 * 0.5));
-			const float jitterScale = 2.f;
-
-			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
-				tetrahedronFov,
-				tetrahedronWidth * (float)shadowMap->width, (float)shadowMap->height,
-				lightNearPlane, light.radius,
-				viewPoint.jitterX * jitterScale, viewPoint.jitterY * jitterScale);
-
-			const Matrix4 gLightOmniTextureProjMat[4] =
-			{
-				// forwad to texture bottom
-				Matrix4(Vector4(1.f,0.f,0.f,0.f), Vector4(0.f,0.5f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.f,-0.5f,0.f,1.f)),
-				// backward to texture right
-				Matrix4(Vector4(0.f,1.f,0.f,0.f), Vector4(-0.5f,0.f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.5f,0.f,0.f,1.f)),
-				// right to texture top
-				Matrix4(Vector4(1.f,0.f,0.f,0.f), Vector4(0.f,0.5f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.f,0.5f,0.f,1.f)),
-				// left to texture left
-				Matrix4(Vector4(0.f,1.f,0.f,0.f), Vector4(-0.5f,0.f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(-0.5f,0.f,0.f,1.f)),
-			};
-
-
-			light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
-
-			for (int i = 0; i < 4; ++i)
-			{
-				Matrix4 lightViewProjMat = gLightOmniTextureProjMat[i] * lightProjMat * gLightTetrahedronViewMat[i];
-				light.lightProjRemapMat[i] = remapMat * lightViewProjMat;
-				gPrepassTetrahedronMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightViewProjMat);
-			}
+			// init tetrahedron map pass
+			bTetrahedronMapPass = true;
+			if (!bSpotLightPass)
+				bShouldInitTiledShadowMap = true;
 			
-			bool bHasMeshToRender = false;
-			// process scene bounds and do frustum culling
-			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
-			{
-				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
-				if(IsOBBIntersectSphere(
-					meshComp->OBB.permutedAxisCenter, meshComp->OBB.center, meshComp->OBB.extent,
-					light.position, light.radius
-				))
-				{
-					bHasMeshToRender = true;
-					meshComp->bRenderVisibile = true;
-				}
-				else
-				{
-					meshComp->bRenderVisibile = false;
-				}
-			}
+			// only need 3 clipping planes
+			glDisable(GL_CLIP_DISTANCE3);
+		}
+		if (!bCubeMapPass && !lightData.bSpot && !lightData.bUseTetrahedronShadowMap && gRenderSettings.bDrawShadowPoint)
+		{
+			// init cube map pass
+			bCubeMapPass = true;
+			bShouldInitCubeMapArray = true;
 
+			// disable custom clipping planes
+			glDisable(GL_CLIP_DISTANCE0);
+			glDisable(GL_CLIP_DISTANCE1);
+			glDisable(GL_CLIP_DISTANCE2);
+			glDisable(GL_CLIP_DISTANCE3);
 
-			if (bHasMeshToRender)
-			{
-				DrawShadowScene(renderContext, light.shadowData[0].shadowMap, shadowRenderInfo, gPrepassTetrahedronMaterial, MeshComponent::gMeshComponentContainer);
-			}			
 		}
 
-		// disable custom clipping planes
-		glDisable(GL_CLIP_DISTANCE0);
-		glDisable(GL_CLIP_DISTANCE1);
-		glDisable(GL_CLIP_DISTANCE2);
-
-		// now process cube maps
-		const int cubeMapSize = 512;
-		// TODO: deallocate when count drop to 0 ?
-		if (gShadowCubeMapCount > 0)
+		if (bShouldInitTiledShadowMap)
 		{
+			// attach to frame buffers
+			gDepthOnlyBuffer.AttachDepth(&gShadowTiledTex, false);
+			// set viewport
+			glViewport(0, 0, gShadowTiledTex.width, gShadowTiledTex.height);
+			// clear depth
+			glClearDepth(1);
+			glClear(GL_DEPTH_BUFFER_BIT);
+		}
+		if (bShouldInitCubeMapArray)
+		{
+			const int cubeMapSize = 512;
+			// TODO: deallocate when count drop to 0 ?
 			if (gShadowCubeTexArray.count == 0)
 			{
 				gShadowCubeTexArray.AllocateForFrameBuffer(cubeMapSize, cubeMapSize, gShadowCubeMapCount, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
@@ -1956,31 +1956,129 @@ void ShadowPass(RenderContext& renderContext)
 			{
 				gShadowCubeTexArray.Reallocate(cubeMapSize, cubeMapSize, gShadowCubeMapCount);
 			}
-			
+
 			// attach to frame buffers
 			gDepthOnlyBuffer.AttachDepth(&gShadowCubeTexArray, false);
-
 			// set viewport
 			glViewport(0, 0, gShadowCubeTexArray.width, gShadowCubeTexArray.height);
-
 			// clear depth
 			glClearDepth(1);
 			glClear(GL_DEPTH_BUFFER_BIT);
+		}
 
-			for (int lightIdx = 0, nlightIdx = (int)gPointLights.size(); lightIdx < nlightIdx; ++lightIdx)
+
+		// spot lights
+		if (lightData.bSpot && gRenderSettings.bDrawShadowSpot)
+		{
+			Plane frustumPlanes[6];
+
+			int totalSize = gShadowTiledTex.width;
+			float offsetX = 0.f, offsetY = 0.f, tileSize = 0.f;
+			GetNormalizedTiledShadowMapValue(lightData.shadowMapIndex, totalSize, lightData.shadowMapSize, 
+				offsetX, offsetY, tileSize);
+
+			Matrix4 tileMat = Matrix4(
+				Vector4(tileSize, 0.f, 0.f, 0.f),
+				Vector4(0.f, tileSize, 0.f, 0.f),
+				Vector4(0.f, 0.f, 1.f, 0.f),
+				Vector4(tileSize + 2.f * offsetX - 1.f, tileSize + 2.f * offsetY - 1.f, 0.f, 1.f)
+			);
+
+			gPrepassTiledMaterial->SetParameter("clippingValue", 
+				Vector4(offsetX, offsetX + tileSize, offsetY, offsetY + tileSize) * 2.f - 1.f,
+				4);
+
+			Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
+				DegToRad(light.outerHalfAngle) * 2,
+				lightData.shadowMapSize, lightData.shadowMapSize,
+				lightNearPlane, light.radius,
+				viewPoint.jitterX, viewPoint.jitterY);
+
+			light.shadowData[0].shadowMat = remapMat * tileMat * lightProjMat * light.lightViewMat * viewPoint.invViewMat;
+
+			// update render info
+			shadowRenderInfo.View = light.lightViewMat;
+			shadowRenderInfo.Proj = tileMat * lightProjMat;
+			shadowRenderInfo.ViewProj = tileMat * lightProjMat * light.lightViewMat;
+
+			// culling
+			GetFrustumPlanes(light.lightViewMat, lightProjMat.m[0][0], lightProjMat.m[1][1],
+				lightNearPlane, light.radius, frustumPlanes);
+
+			bool bHasMeshToRender = false;
+			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 			{
-				Light& light = gPointLights[lightIdx];
-				if (!light.bCastShadow || !light.bRenderVisibile)
-					continue;
+				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
+				if (IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, frustumPlanes, 6))
+				{
+					meshComp->bRenderVisibile = true;
+					bHasMeshToRender = true;
+				}
+				else
+				{
+					meshComp->bRenderVisibile = false;
+				}
+			}
 
-				if (light.bUseTetrahedronShadowMap)
-					continue;
+			if (bHasMeshToRender)
+				DrawShadowScene(renderContext, 0, shadowRenderInfo, gPrepassTiledMaterial, MeshComponent::gMeshComponentContainer);
+		}
+		// point lights
+		else if (!lightData.bSpot && gRenderSettings.bDrawShadowPoint)
+		{
+			// update render info, only do view, since we proj in geometry shader
+			shadowRenderInfo.View = light.lightViewMat;
+			shadowRenderInfo.Proj = Matrix4::Identity();
+			shadowRenderInfo.ViewProj = light.lightViewMat;
 
-				// update render info, only do view, since we proj in geometry shader
-				shadowRenderInfo.View = light.lightViewMat;
-				shadowRenderInfo.Proj = Matrix4::Identity();
-				shadowRenderInfo.ViewProj = light.lightViewMat;
+			if(lightData.bUseTetrahedronShadowMap)
+			{
+				int totalSize = gShadowTiledTex.width;
+				float offsetX = 0.f, offsetY = 0.f, tileSize = 0.f;
+				GetNormalizedTiledShadowMapValue(lightData.shadowMapIndex, totalSize, lightData.shadowMapSize,
+					offsetX, offsetY, tileSize);
 
+				Matrix4 tileMat = Matrix4(
+					Vector4(tileSize, 0.f, 0.f, 0.f),
+					Vector4(0.f, tileSize, 0.f, 0.f),
+					Vector4(0.f, 0.f, 1.f, 0.f),
+					Vector4(tileSize + 2.f * offsetX - 1.f, tileSize + 2.f * offsetY - 1.f, 0.f, 1.f)
+				);
+
+				const float tetrahedronFov = DegToRad(143.98570868f);
+				const float tetrahedronWidth = 1.59245026f; //tan(DegToRad(143.98570868 * 0.5)) / tan(DegToRad(125.26438968 * 0.5));
+				const float jitterScale = 2.f;
+
+				Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
+					tetrahedronFov,
+					tetrahedronWidth * lightData.shadowMapSize, lightData.shadowMapSize,
+					lightNearPlane, light.radius,
+					viewPoint.jitterX * jitterScale, viewPoint.jitterY * jitterScale);
+
+				const Matrix4 gLightOmniTextureProjMat[4] =
+				{
+					// forwad to texture bottom
+					Matrix4(Vector4(1.f,0.f,0.f,0.f), Vector4(0.f,0.5f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.f,-0.5f,0.f,1.f)),
+					// backward to texture right
+					Matrix4(Vector4(0.f,1.f,0.f,0.f), Vector4(-0.5f,0.f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.5f,0.f,0.f,1.f)),
+					// right to texture top
+					Matrix4(Vector4(1.f,0.f,0.f,0.f), Vector4(0.f,0.5f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(0.f,0.5f,0.f,1.f)),
+					// left to texture left
+					Matrix4(Vector4(0.f,1.f,0.f,0.f), Vector4(-0.5f,0.f,0.f,0.f), Vector4(0.f,0.f,1.f,0.f), Vector4(-0.5f,0.f,0.f,1.f)),
+				};
+
+
+				light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
+
+				for (int i = 0; i < 4; ++i)
+				{
+					Matrix4 lightViewProjMat = tileMat * gLightOmniTextureProjMat[i] * lightProjMat * gLightTetrahedronViewMat[i];
+					light.lightProjRemapMat[i] = remapMat * lightViewProjMat;
+					gPrepassTetrahedronMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightViewProjMat);
+				}
+			}
+			else
+			{
 				Matrix4 lightProjMat = MakeMatrixPerspectiveProj(
 					DegToRad(90.f),
 					(float)gShadowCubeTexArray.width, (float)gShadowCubeTexArray.height,
@@ -1994,35 +2092,43 @@ void ShadowPass(RenderContext& renderContext)
 				{
 					gPrepassCubeMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightProjMat * gLightCubeViewMat[i]);
 				}
-				gPrepassCubeMaterial->SetParameter("cubeMapArrayIndex", light.shadowMapIndex);
+				gPrepassCubeMaterial->SetParameter("cubeMapArrayIndex", lightData.shadowMapIndex);
+			}
 
-				bool bHasMeshToRender = false;
-				// process scene bounds and do frustum culling
-				for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+			bool bHasMeshToRender = false;
+			// process scene bounds and do frustum culling
+			for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
+			{
+				MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
+				if (IsOBBIntersectSphere(
+					meshComp->OBB.permutedAxisCenter, meshComp->OBB.center, meshComp->OBB.extent,
+					light.position, light.radius))
 				{
-					MeshComponent*& meshComp = MeshComponent::gMeshComponentContainer[i];
-					if (IsOBBIntersectSphere(
-						meshComp->OBB.permutedAxisCenter, meshComp->OBB.center, meshComp->OBB.extent,
-						light.position, light.radius
-					))
-					{
-						bHasMeshToRender = true;
-						meshComp->bRenderVisibile = true;
-					}
-					else
-					{
-						meshComp->bRenderVisibile = false;
-					}
+					bHasMeshToRender = true;
+					meshComp->bRenderVisibile = true;
 				}
-
-
-				if (bHasMeshToRender)
+				else
 				{
-					DrawShadowScene(renderContext, &gShadowCubeTexArray, shadowRenderInfo, gPrepassCubeMaterial, MeshComponent::gMeshComponentContainer, false);
+					meshComp->bRenderVisibile = false;
 				}
 			}
-		}
 
+			if (bHasMeshToRender)
+			{
+				DrawShadowScene(renderContext, 0, shadowRenderInfo, 
+					lightData.bUseTetrahedronShadowMap ? gPrepassTetrahedronMaterial : gPrepassCubeMaterial,
+					MeshComponent::gMeshComponentContainer);
+			}
+		}
+	}
+
+	if (!bCubeMapPass)
+	{
+		// disable custom clipping planes
+		glDisable(GL_CLIP_DISTANCE0);
+		glDisable(GL_CLIP_DISTANCE1);
+		glDisable(GL_CLIP_DISTANCE2);
+		glDisable(GL_CLIP_DISTANCE3);
 	}
 }
 
@@ -2212,7 +2318,6 @@ void DebugForwardPass(RenderContext& renderContext)
 			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
 
 			gPointLightDebugMesh->Draw(renderContext);
-
 		}
 
 		for (int i = 0; i < gSpotLights.size(); ++i)
@@ -2226,7 +2331,32 @@ void DebugForwardPass(RenderContext& renderContext)
 			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
 
 			gSpotLightDebugMesh->Draw(renderContext);
+		}
 
+		for (int i = 0; i < gPointLights.size(); ++i)
+		{
+			// model
+			Matrix4 modelMat = Matrix4::Identity();
+			modelMat.SetTranslation(gSpotLights[i].sphereBounds.centerRadius);
+			modelMat.ApplyScale(gSpotLights[i].sphereBounds.centerRadius.w);
+
+			gLightDebugMaterial->SetParameter("modelMat", modelMat);
+			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
+
+			gPointLightDebugMesh->Draw(renderContext);
+		}
+
+		for (int i = 0; i < gSpotLights.size(); ++i)
+		{
+			// model
+			Matrix4 modelMat = MakeMatrixFromForward(gSpotLights[i].direction);
+			modelMat.SetTranslation(gSpotLights[i].sphereBounds.centerRadius);
+			modelMat.ApplyScale(gSpotLights[i].sphereBounds.centerRadius.w);
+
+			gLightDebugMaterial->SetParameter("modelMat", modelMat);
+			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
+
+			gPointLightDebugMesh->Draw(renderContext);
 		}
 	}
 
@@ -2438,12 +2568,12 @@ void VisualizeTexturePass(RenderContext& renderContext)
 	// unbind frame buffer, draw to screen
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	Texture2D* vTex = (Texture2D*)(gPointLights[2].shadowData[0].shadowMap);
+	Texture2D* vTex = &gShadowTiledTex;//(Texture2D*)(gPointLights[2].shadowData[0].shadowMap);
 	//assert(gPointLights[2].shadowData[0].shadowMap->textureType == GL_TEXTURE_2D);
 	//assert(vTex->textureType == GL_TEXTURE_2D);
 	gVisualizeTextureMaterial->SetParameter("depthParams", 
 		//Vector4_3(renderContext.viewPoint.nearPlane, renderContext.viewPoint.farPlane, 1.f), 3);
-		Vector4_3(0.01f, gPointLights[2].radius, 1.f), 3);
+		Vector4_3(0.01f, 40.f, 1.f), 3);
 	gVisualizeTextureMaterial->SetParameter("texSize", Vector4_2((float)vTex->width, (float)vTex->height), 2);
 	gVisualizeTextureMaterial->SetParameter("tex", vTex);
 
@@ -2624,6 +2754,9 @@ void Render()
 	// attach write texture
 	gSceneBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
 	//gSceneBuffer.AttachDepth(&gSceneDepthStencilTex[gSceneDepthCurrentIdx], true);
+
+	gShadowTiledTex.Bind(Shader::gShadowTiledTexUnit);
+	gShadowCubeTexArray.Bind(Shader::gShadowCubeTexArrayUnit);
 	
 	LightPass(renderContext);
 

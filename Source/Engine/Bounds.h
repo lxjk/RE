@@ -131,3 +131,14 @@ public:
 
 	}
 };
+
+class SphereBounds
+{
+public:
+	Vector4 centerRadius; // radius in w
+
+	void SetBounds(const Vector4_3& center, float radius)
+	{
+		centerRadius = Vector4(center, radius);
+	}
+};

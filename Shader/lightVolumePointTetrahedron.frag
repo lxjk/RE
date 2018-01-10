@@ -16,7 +16,6 @@ out vec4 color;
 uniform Light light;
 uniform mat4 shadowMat;
 uniform mat4 lightProjRemapMat[4];
-uniform sampler2D shadowMap;
 
 void main() 
 {	
@@ -31,7 +30,7 @@ void main()
 	if(light.shadowDataCount > 0)
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
-		shadowFactor = CalcShadowTetrahedron(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMap, 0.00015, 0.00025);
+		shadowFactor = CalcShadowTetrahedron(position, normal, lightDir, lightProjRemapMat, shadowMat, gShadowTiledTex, 0.00025, 0.0004);
 	}
 	
 	vec3 result = CalcLight(light, normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);

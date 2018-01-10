@@ -49,9 +49,7 @@ public:
 	Matrix4 lightInvViewMat;
 	Matrix4 lightViewMat;
 
-	int shadowMapIndex = 0;
-	bool bRenderVisibile = true; // for shadow/light rendering
-	bool bUseTetrahedronShadowMap = false; // for point light shadow map
+	SphereBounds sphereBounds;
 
 	ShadowData shadowData[MAX_CSM_COUNT];
 
@@ -102,6 +100,17 @@ public:
 			lightViewMat = lightInvViewMat.GetTransformInverseNoScale();
 
 			modelMat.ApplyScale(endRadius, radius, endRadius);
+			
+			if (outerTanHalfAngle >= 1.f)
+			{
+				float offset = radius * outerCosHalfAngle;
+				sphereBounds.SetBounds(position + direction * offset, offset * outerTanHalfAngle);
+			}
+			else
+			{
+				float offset = radius * 0.5f / outerCosHalfAngle;
+				sphereBounds.SetBounds(position + direction * offset, offset);
+			}
 		}
 		else if (attenParams.x > 0)
 		{
@@ -113,6 +122,8 @@ public:
 			lightViewMat = lightInvViewMat.GetTransformInverseNoScale();
 
 			modelMat.ApplyScale(radius);
+
+			sphereBounds.SetBounds(position, radius);
 		}
 		else
 		{
@@ -208,4 +219,44 @@ public:
 		result.w = radialAttenuationBlend;
 		return result;
 	}
+};
+
+struct LightRenderData
+{
+	Light* light;
+	float shadowMapSize;
+	int shadowMapIndex;
+	bool bActualCastShadow;
+	bool bSpot;
+	bool bUseTetrahedronShadowMap;
+
+	//int offsetX, offsetY, size;
+
+	static bool CompareShadowIndex(const LightRenderData& a, const LightRenderData& b)
+	{
+		// shadow caster before non shadow caster
+		// within shadow casters, large map size goes first
+		return !b.bActualCastShadow || (a.bActualCastShadow && a.shadowMapSize > b.shadowMapSize);
+	}
+
+	// spot shadow -> tetrahedron -> cube -> spot non-shadow -> point non-shadow
+	static bool CompareRender(const LightRenderData& a, const LightRenderData& b)
+	{
+		// shadow caster first
+		if (a.bActualCastShadow != b.bActualCastShadow)
+		{
+			return a.bActualCastShadow;
+		}
+		// within non shadow caster, spot light first
+		else if (!a.bActualCastShadow)
+		{
+			return a.bSpot;
+		}
+		// within shadow caster, spot light first, then tetrahedron, then cube
+		else
+		{
+			return a.bSpot || (!b.bSpot && a.bUseTetrahedronShadowMap);
+		}
+	}
+
 };

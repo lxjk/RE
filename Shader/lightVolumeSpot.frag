@@ -15,7 +15,6 @@ out vec4 color;
 
 uniform Light light;
 uniform mat4 shadowMat;
-uniform sampler2D shadowMap;
 
 void main() 
 {	
@@ -30,7 +29,7 @@ void main()
 	if(light.shadowDataCount > 0)
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
-		shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, shadowMap, 0.00015, 0.0001);
+		shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, gShadowTiledTex, 0.00015, 0.0001);
 	}
 	
 	vec3 result = CalcLight(light, normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);
