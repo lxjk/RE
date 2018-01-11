@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 #include "Include/CommonUBO.incl"
 #include "Include/CommonVertexInput.incl"

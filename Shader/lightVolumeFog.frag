@@ -35,7 +35,7 @@ void main()
 	float ao = material.a;
 	
 	float shadowFactor = 1;
-	if(light.shadowDataCount > 0)
+	if(light.shadowParamA >= 0)
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
 		if(light.attenParams.y > 0.5f)
@@ -62,7 +62,7 @@ void main()
 		float atten;
 		vec3 lightDir;
 		GetAttenuationAndLightDir(light, samplePoint, atten, lightDir);
-		if(light.shadowDataCount > 0)
+		if(light.shadowParamA >= 0)
 		{
 			if(light.attenParams.y > 0.5f)
 				shadowFactor = CalcShadowFog(samplePoint, lightDir, shadowMat, shadowMap, 0.000002);

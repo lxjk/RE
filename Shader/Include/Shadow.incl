@@ -212,7 +212,7 @@ const vec3 tetrahedronDirs[4] = vec3[]
 	vec3(-tetraB, tetraA, 0.0)		// left
 );
 
-vec4 GetTetrahedronProj(vec4 posLVS, mat4 lightProjRemapMat[4])
+int GetTetrahedronIndex(vec4 posLVS)
 {
 	float dots[4];
 	dots[0] = dot(posLVS.xyz, tetrahedronDirs[0]);
@@ -226,8 +226,22 @@ vec4 GetTetrahedronProj(vec4 posLVS, mat4 lightProjRemapMat[4])
 	else if(maxDot == dots[2]) idx = 2;
 	else if(maxDot == dots[3]) idx = 3;
 	
-	return lightProjRemapMat[idx] * posLVS;	
+	return idx;	
 }
+
+vec4 GetTetrahedronProj(vec4 posLVS, mat4 lightProjRemapMat[4])
+{	
+	return lightProjRemapMat[GetTetrahedronIndex(posLVS)] * posLVS;	
+}
+
+float CalcShadowBasicTetrahedronSingle(vec4 posLVS, mat4 lightProjRemapMat, mat4 shadowMat, sampler2D shadowMap, float bias)
+{	
+	vec4 posLCS = lightProjRemapMat * posLVS;	
+	posLCS.z -= posLCS.w * bias;
+	posLCS /= posLCS.w;
+	vec2 uv = posLCS.xy;
+	return posLCS.z <= texture(shadowMap, uv).r ? 1 : 0;
+} 
 
 float CalcShadowBasicTetrahedron(vec3 viewPos, mat4 lightProjRemapMat[4], mat4 shadowMat, sampler2D shadowMap, float bias)
 {
@@ -316,6 +330,12 @@ float CalcShadowTetrahedron(vec3 viewPos, vec3 normal, vec3 light, mat4 lightPro
 	float bias = GetBias(normal, light, biasFactor, biasMin);
 	//return CalcShadowPoissonTetrahedron(viewPos, lightProjRemapMat, shadowMat, shadowMap, bias);
 	return CalcShadowBasicTetrahedron(viewPos, lightProjRemapMat, shadowMat, shadowMap, bias);
+}
+
+float CalcShadowTetrahedronSingle(vec4 posLVS, vec3 normal, vec3 light, mat4 lightProjRemapMat, mat4 shadowMat, sampler2D shadowMap, float biasFactor, float biasMin)
+{
+	float bias = GetBias(normal, light, biasFactor, biasMin);
+	return CalcShadowBasicTetrahedronSingle(posLVS, lightProjRemapMat, shadowMat, shadowMap, bias);
 }
 
 #endif

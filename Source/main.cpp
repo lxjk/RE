@@ -92,6 +92,14 @@ RenderSettings gRenderSettings;
 GLuint gUBO_Matrices = 0;
 GLuint gUBO_GlobalLights = 0;
 
+// ssbo
+GLuint gSSBO_LocalLights = 0;
+GLuint gSSBO_LocalLightsShadowMatrices = 0;
+
+int gPrevLocalLightCapacity = 0;
+int gPrevLocalLightShadowMatCapacity = 0;
+int gCurLocalLightShadowMatCount = 0;
+
 // frame buffer
 FrameBuffer gGBuffer;
 Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gVelocityTex, gDepthStencilTex;
@@ -862,6 +870,17 @@ bool InitEngine()
 	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::GlobalLightsRenderInfoBP, gUBO_GlobalLights);
 
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	// ssbo
+	glGenBuffers(1, &gSSBO_LocalLights);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLights);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsRenderInfoBP, gSSBO_LocalLights);
+
+	glGenBuffers(1, &gSSBO_LocalLightsShadowMatrices);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsShadowMatrices);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsShadowMatrixInfoBP, gSSBO_LocalLightsShadowMatrices);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	
 	// shader
 	LoadShaders(false);
@@ -1199,7 +1218,7 @@ void CullLights(RenderContext& renderContext)
 		if (IsSphereIntersectFrustum(light.position, light.radius, viewPoint.frustumPlanes, 6))
 		{
 			lightDataTmpl.light = &light;
-			lightDataTmpl.bActualCastShadow = light.bCastShadow;
+			lightDataTmpl.bActualCastShadow = light.bCastShadow && gRenderSettings.bDrawShadowPoint;
 			float lightDist = (light.position - viewPoint.position).Size3();
 			lightDataTmpl.shadowMapSize = light.sphereBounds.centerRadius.w * viewPoint.screenScale / Max(lightDist, 1.f) * 1.25f;
 			gVisibleLightList.push_back(lightDataTmpl);
@@ -1217,7 +1236,7 @@ void CullLights(RenderContext& renderContext)
 		if (IsFrustumIntersectFrustum(packedFrustumVerts, viewPoint.frustumPlanes, 6))
 		{
 			lightDataTmpl.light = &light;
-			lightDataTmpl.bActualCastShadow = light.bCastShadow;
+			lightDataTmpl.bActualCastShadow = light.bCastShadow && gRenderSettings.bDrawShadowSpot;
 			float lightDist = (light.position - viewPoint.position).Size3();
 			lightDataTmpl.shadowMapSize = light.sphereBounds.centerRadius.w * viewPoint.screenScale / Max(lightDist, 1.f) * 0.5f;
 			gVisibleLightList.push_back(lightDataTmpl);
@@ -1236,8 +1255,9 @@ void CullLights(RenderContext& renderContext)
 	int currentTileMaxIndex = 0;
 	int totalSize = gShadowTiledTex.width;
 	int nextTileSize = totalSize >> 1;
+	int visibleLightCount = (int)gVisibleLightList.size();
 	// assign shadow index
-	for (int lightIdx = 0, nlightIdx = (int)gVisibleLightList.size(); lightIdx < nlightIdx; ++lightIdx)
+	for (int lightIdx = 0; lightIdx < visibleLightCount; ++lightIdx)
 	{
 		LightRenderData& lightData = gVisibleLightList[lightIdx];
 
@@ -1280,6 +1300,44 @@ void CullLights(RenderContext& renderContext)
 
 	// sort
 	std::sort(gVisibleLightList.begin(), gVisibleLightList.end(), LightRenderData::CompareRender);
+
+	// now fill in local light data
+	REArray<LightRenderInfo> localLights;
+	localLights.reserve(visibleLightCount);
+	LightRenderInfo lightTmpl;
+	int shadowMatIdx = 0;
+	for (int lightIdx = 0; lightIdx < visibleLightCount; ++lightIdx)
+	{
+		LightRenderData& lightData = gVisibleLightList[lightIdx];
+		Light& light = *lightData.light;
+		lightTmpl.positionInvR = light.GetPositionVSInvR(viewPoint.viewMat);
+		lightTmpl.directionRAB = light.GetDirectionVSRAB(viewPoint.viewMat);
+		lightTmpl.color = light.colorIntensity;
+		lightTmpl.attenParams = light.attenParams;
+		lightTmpl.shadowParamA = lightData.bActualCastShadow ? shadowMatIdx : -1;
+		lightTmpl.shadowParamB = (!lightData.bSpot && !lightData.bUseTetrahedronShadowMap) ? lightData.shadowMapIndex : -1;
+
+		localLights.push_back(lightTmpl);
+
+		if (lightData.bActualCastShadow)
+		{
+			shadowMatIdx += (lightData.bSpot ? 1 : (lightData.bUseTetrahedronShadowMap ? 5 : 2));
+		}
+	}
+	gCurLocalLightShadowMatCount = shadowMatIdx;
+
+	// send ssbo
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLights);
+	if (visibleLightCount <= gPrevLocalLightCapacity)
+	{
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(LightRenderInfo) * visibleLightCount, localLights.data());
+	}
+	else
+	{
+		gPrevLocalLightCapacity = visibleLightCount;
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(LightRenderInfo) * visibleLightCount, localLights.data(), GL_DYNAMIC_DRAW);
+	}
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
 void DrawMesh(RenderContext& renderContext, MeshRenderData& meshRenderData)
@@ -1423,29 +1481,22 @@ void DirectionalLightPass(RenderContext& renderContext)
 		lightRenderInfo.directionRAB = light.GetDirectionVSRAB(renderContext.viewPoint.viewMat);
 		lightRenderInfo.color = light.colorIntensity;
 		lightRenderInfo.attenParams = light.attenParams;
-		//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
-		//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("color").c_str(), light.colorIntensity, 4);
-		//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("attenParams").c_str(), light.attenParams, 4);
 		// shadow
 		if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
 		{
 			int shadowCount = MAX_CSM_COUNT;
-			lightRenderInfo.shadowDataCount = shadowCount;
-			//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), shadowCount);
+			lightRenderInfo.shadowParamA = shadowCount;
 			for (int j = 0; j < shadowCount; ++j)
 			{
 				globalLightsRenderInfo.globalShadowData[shadowIdx + j].shadowMat = light.shadowData[j].shadowMat;
 				globalLightsRenderInfo.globalShadowData[shadowIdx + j].bounds = light.shadowData[j].bounds;
-				//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("shadowMat").c_str(), light.shadowData[j].shadowMat);
-				//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowData")[shadowIdx + j]("bounds").c_str(), light.shadowData[j].bounds, 4);
 				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
 			}
 			shadowIdx += shadowCount;
 		}
 		else
 		{
-			lightRenderInfo.shadowDataCount = 0;
-			//gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("lights")[i]("shadowDataCount").c_str(), 0);
+			lightRenderInfo.shadowParamA = 0;
 		}
 
 	}
@@ -1459,7 +1510,7 @@ void DirectionalLightPass(RenderContext& renderContext)
 	gDirectionalLightMesh->Draw(renderContext);
 }
 
-Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRenderData& lightData)
+Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRenderData& lightData, int lightIndex)
 {
 	Light& light = *lightData.light;
 
@@ -1471,6 +1522,7 @@ Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRend
 	lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("positionInvR").c_str(), light.GetPositionVSInvR(renderContext.viewPoint.viewMat), 4);
 	lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("directionRAB").c_str(), light.GetDirectionVSRAB(renderContext.viewPoint.viewMat), 4);
 	lightVolumeMaterial->SetParameter("modelMat", light.modelMat);
+	//lightVolumeMaterial->SetParameter("lightIndex", lightIndex);
 
 	bool bDrawShadow = gRenderSettings.bDrawShadow && lightData.bActualCastShadow;
 	if (lightData.bSpot)
@@ -1480,7 +1532,7 @@ Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRend
 	// shadow
 	if (bDrawShadow)
 	{
-		lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 1);
+		lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("shadowParamA").c_str(), 1);
 		lightVolumeMaterial->SetParameter("shadowMat", light.shadowData[0].shadowMat);
 		if (lightData.bSpot)
 		{
@@ -1495,13 +1547,13 @@ Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRend
 			else
 			{
 				lightVolumeMaterial->SetParameter("lightProjRemapMat", light.lightProjRemapMat[0]);
-				lightVolumeMaterial->SetParameter("cubeMapArrayIndex", lightData.shadowMapIndex);
+				lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("shadowParamB").c_str(), lightData.shadowMapIndex);
 			}
 		}
 	}
 	else
 	{
-		lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("shadowDataCount").c_str(), 0);
+		lightVolumeMaterial->SetParameter(ShaderNameBuilder("light")("shadowParamA").c_str(), -1);
 	}
 
 	return lightVolumeMaterial;
@@ -1647,7 +1699,7 @@ void LightVolumePass(RenderContext& renderContext)
 			// set mask
 			glStencilFunc(lightingRenderState.stencilTestFunc, mask, mask);
 
-			Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData);
+			Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData, lightIdx);
 			lightData.light->LightMesh->Draw(renderContext, lightVolumeMaterial);
 		}
 	}
@@ -1656,16 +1708,18 @@ void LightVolumePass(RenderContext& renderContext)
 	onePassVolumeRenderState.Apply(renderContext);
 	for (int i = 0, ni = (int)cameraInsideLight.size(); i < ni; ++i)
 	{
-		const LightRenderData& lightData = gVisibleLightList[cameraInsideLight[i]];
-		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData);
+		int lightIndex = cameraInsideLight[i];
+		const LightRenderData& lightData = gVisibleLightList[lightIndex];
+		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData, lightIndex);
 		lightData.light->LightMesh->Draw(renderContext, lightVolumeMaterial);
 	}
 
 	frontFogVolumeRenderState.Apply(renderContext);
 	for (int i = 0, ni = (int)volumetricLight.size(); i < ni; ++i)
 	{
-		const LightRenderData& lightData = gVisibleLightList[volumetricLight[i]];
-		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData);
+		int lightIndex = volumetricLight[i];
+		const LightRenderData& lightData = gVisibleLightList[lightIndex];
+		Material* lightVolumeMaterial = SetupLightVolumeMaterial(renderContext, lightData, lightIndex);
 		lightData.light->LightMesh->Draw(renderContext, lightVolumeMaterial);
 	}
 }
@@ -1888,6 +1942,9 @@ void ShadowPass(RenderContext& renderContext)
 	glEnable(GL_CLIP_DISTANCE2);
 	glEnable(GL_CLIP_DISTANCE3);
 
+	REArray<Matrix4, 16> shadowMatrices;
+	shadowMatrices.reserve(gCurLocalLightShadowMatCount);
+
 	const float lightNearPlane = 0.01f;
 
 	bool bSpotLightPass = false;
@@ -1995,6 +2052,7 @@ void ShadowPass(RenderContext& renderContext)
 				viewPoint.jitterX, viewPoint.jitterY);
 
 			light.shadowData[0].shadowMat = remapMat * tileMat * lightProjMat * light.lightViewMat * viewPoint.invViewMat;
+			shadowMatrices.push_back(light.shadowData[0].shadowMat);
 
 			// update render info
 			shadowRenderInfo.View = light.lightViewMat;
@@ -2069,11 +2127,13 @@ void ShadowPass(RenderContext& renderContext)
 
 
 				light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
+				shadowMatrices.push_back(light.shadowData[0].shadowMat);
 
 				for (int i = 0; i < 4; ++i)
 				{
 					Matrix4 lightViewProjMat = tileMat * gLightOmniTextureProjMat[i] * lightProjMat * gLightTetrahedronViewMat[i];
 					light.lightProjRemapMat[i] = remapMat * lightViewProjMat;
+					shadowMatrices.push_back(light.lightProjRemapMat[i]);
 					gPrepassTetrahedronMaterial->SetParameter(ShaderNameBuilder("lightViewProjMat")[i].c_str(), lightViewProjMat);
 				}
 			}
@@ -2087,6 +2147,8 @@ void ShadowPass(RenderContext& renderContext)
 
 				light.shadowData[0].shadowMat = light.lightViewMat * viewPoint.invViewMat;
 				light.lightProjRemapMat[0] = remapMat * lightProjMat;
+				shadowMatrices.push_back(light.shadowData[0].shadowMat);
+				shadowMatrices.push_back(light.lightProjRemapMat[0]);
 
 				for (int i = 0; i < 6; ++i)
 				{
@@ -2130,6 +2192,21 @@ void ShadowPass(RenderContext& renderContext)
 		glDisable(GL_CLIP_DISTANCE2);
 		glDisable(GL_CLIP_DISTANCE3);
 	}
+
+	assert(shadowMatrices.size() == gCurLocalLightShadowMatCount);
+
+	// send ssbo
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsShadowMatrices);
+	if (gCurLocalLightShadowMatCount <= gPrevLocalLightShadowMatCapacity)
+	{
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Matrix4) * gCurLocalLightShadowMatCount, shadowMatrices.data());
+	}
+	else
+	{
+		gPrevLocalLightShadowMatCapacity = gCurLocalLightShadowMatCount;
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Matrix4) * gCurLocalLightShadowMatCount, shadowMatrices.data(), GL_DYNAMIC_DRAW);
+	}
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
 

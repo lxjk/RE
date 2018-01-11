@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 #include "Include/PostProcessPassTex.incl"
 #include "Include/CommonUBO.incl"

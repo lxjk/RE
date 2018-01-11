@@ -142,9 +142,13 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 		glDeleteProgram(programID);
 	programID = newProgramID;
 
-	// uniform buffer index
+	// uniform block index
 	BindUniformBlock("RenderInfo", RenderInfoBP);
 	BindUniformBlock("GlobalLightsRenderInfo", GlobalLightsRenderInfoBP);
+
+	// shader storage buffer index
+	BindShaderStorageBlock("LocalLightsRenderInfo", LocalLightsRenderInfoBP);
+	BindShaderStorageBlock("LocalLightsShadowMatrixInfo", LocalLightsShadowMatrixInfoBP);
 
 	// process uniforms
 	nextTexUnit = 0;
@@ -294,6 +298,13 @@ void Shader::BindUniformBlock(const GLchar* name, GLuint bindingPoint)
 	GLuint blockIdx = glGetUniformBlockIndex(programID, name);
 	if (blockIdx != GL_INVALID_INDEX)
 		glUniformBlockBinding(programID, blockIdx, bindingPoint);
+}
+
+void Shader::BindShaderStorageBlock(const GLchar* name, GLuint bindingPoint)
+{
+	GLuint blockIdx = glGetProgramResourceIndex(programID, GL_SHADER_STORAGE_BLOCK, name);
+	if (blockIdx != GL_INVALID_INDEX)
+		glShaderStorageBlockBinding(programID, blockIdx, bindingPoint);
 }
 
 void Shader::SetTextureUnit(const GLchar* name, GLuint texUnit, bool bSilent)

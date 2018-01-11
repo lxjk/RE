@@ -13,6 +13,7 @@ in VS_OUT
 
 out vec4 color;
 
+//uniform int lightIndex;
 uniform Light light;
 uniform mat4 shadowMat;
 uniform mat4 lightProjRemapMat[4];
@@ -26,11 +27,19 @@ void main()
 	float metallic, roughness, ao;	
 	GetGBufferValue(uv, fs_in.positionVS, normal, position, view, albedo, metallic, roughness, ao);
 	
+	//Light light = localLights[lightIndex];
+	//int matIdx = light.shadowParamA;
+	//mat4 shadowMat = localLightsShadowMatrices[matIdx];
+	
 	float shadowFactor = 1;
-	if(light.shadowDataCount > 0)
+	if(light.shadowParamA >= 0)
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
-		shadowFactor = CalcShadowTetrahedron(position, normal, lightDir, lightProjRemapMat, shadowMat, gShadowTiledTex, 0.00025, 0.0004);
+		vec4 posLVS = shadowMat * vec4(position, 1.f);
+		int faceIndex = GetTetrahedronIndex(posLVS);
+		shadowFactor = CalcShadowTetrahedronSingle(posLVS, normal, lightDir, lightProjRemapMat[faceIndex], shadowMat, gShadowTiledTex, 0.00025, 0.0004);
+		//shadowFactor = CalcShadowTetrahedronSingle(posLVS, normal, lightDir, localLightsShadowMatrices[matIdx + 1 + faceIndex], shadowMat, gShadowTiledTex, 0.00025, 0.0004);
+		//shadowFactor = CalcShadowTetrahedron(position, normal, lightDir, lightProjRemapMat, shadowMat, gShadowTiledTex, 0.00025, 0.0004);
 	}
 	
 	vec3 result = CalcLight(light, normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);

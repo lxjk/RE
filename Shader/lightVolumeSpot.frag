@@ -13,6 +13,7 @@ in VS_OUT
 
 out vec4 color;
 
+//uniform int lightIndex;
 uniform Light light;
 uniform mat4 shadowMat;
 
@@ -25,8 +26,12 @@ void main()
 	float metallic, roughness, ao;	
 	GetGBufferValue(uv, fs_in.positionVS, normal, position, view, albedo, metallic, roughness, ao);
 	
+	//Light light = localLights[lightIndex];
+	//int matIdx = light.shadowParamA;
+	//mat4 shadowMat = localLightsShadowMatrices[matIdx];
+	
 	float shadowFactor = 1;
-	if(light.shadowDataCount > 0)
+	if(light.shadowParamA >= 0)
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
 		shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, gShadowTiledTex, 0.00015, 0.0001);

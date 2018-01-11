@@ -44,7 +44,8 @@ void main()
 	for(int i = 0; i < globalLightCount; ++i)
 	{
 		float shadowFactor = 1;
-		for(int c = 0; c < globalLights[i].shadowDataCount; ++c)
+		int shadowDataCount = globalLights[i].shadowParamA;
+		for(int c = 0; c < shadowDataCount; ++c)
 		{
 			if(-fs_in.posVS.z <= globalShadowData[shadowCount+c].bounds.z)
 			{
@@ -52,7 +53,7 @@ void main()
 				break;
 			}
 		}
-		shadowCount += globalLights[i].shadowDataCount;
+		shadowCount += shadowDataCount;
 		//shadowFactor = 1;
 		result += CalcLight(globalLights[i], normal, position, view, albedo, metallic, roughness) * shadowFactor;
 		//result = vec3(shadowFactor);

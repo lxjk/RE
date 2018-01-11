@@ -13,10 +13,10 @@ in VS_OUT
 
 out vec4 color;
 
+//uniform int lightIndex;
 uniform Light light;
 uniform mat4 shadowMat;
 uniform mat4 lightProjRemapMat;
-uniform int cubeMapArrayIndex;
 
 void main() 
 {	
@@ -27,12 +27,17 @@ void main()
 	float metallic, roughness, ao;	
 	GetGBufferValue(uv, fs_in.positionVS, normal, position, view, albedo, metallic, roughness, ao);
 	
+	//Light light = localLights[lightIndex];
+	//int matIdx = light.shadowParamA;
+	//mat4 shadowMat = localLightsShadowMatrices[matIdx];
+	//mat4 lightProjRemapMat = localLightsShadowMatrices[matIdx + 1];
+	
 	float shadowFactor = 1;
-	if(light.shadowDataCount > 0)
+	if(light.shadowParamA >= 0)
 	{
 		vec3 lightDir = normalize(light.positionInvR.xyz - position);
 		//shadowFactor = CalcShadowCube(position, normal, lightDir, lightProjRemapMat, shadowMat, shadowMapCube, 0.0002, 0.0003);
-		shadowFactor = CalcShadowCubeArray(position, normal, lightDir, lightProjRemapMat, shadowMat, gShadowCubeTexArray, cubeMapArrayIndex, 0.0002, 0.0003);
+		shadowFactor = CalcShadowCubeArray(position, normal, lightDir, lightProjRemapMat, shadowMat, gShadowCubeTexArray, light.shadowParamB, 0.0002, 0.0003);
 	}
 	
 	vec3 result = CalcLight(light, normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);

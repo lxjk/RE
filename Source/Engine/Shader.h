@@ -68,6 +68,9 @@ public:
 	static const GLuint RenderInfoBP = 0;
 	static const GLuint GlobalLightsRenderInfoBP = 1;
 
+	static const GLuint LocalLightsRenderInfoBP = 0;
+	static const GLuint LocalLightsShadowMatrixInfoBP = 1;
+
 	// deferred pass
 	static const GLuint gDepthStencilTexUnit = 0;
 	static const GLuint gNormalTexUnit = 1;
@@ -133,6 +136,7 @@ public:
 	GLint GetUniformLocation(const GLchar* name, bool bSilent = false);
 
 	void BindUniformBlock(const GLchar* name, GLuint bindingPoint);
+	void BindShaderStorageBlock(const GLchar* name, GLuint bindingPoint);
 
 	void SetTextureUnit(const GLchar* name, GLuint texUnit, bool bSilent = false);
 
