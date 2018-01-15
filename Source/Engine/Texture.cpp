@@ -14,6 +14,11 @@ void Texture::Bind(GLuint textureUnitOffset)
 	glBindTexture(textureType, textureID);
 }
 
+void Texture::BindImage(GLuint imageUnit)
+{
+	glBindImageTexture(imageUnit, textureID, 0, GL_FALSE, 0, access, internalFormat);
+}
+
 bool Texture::HasAlpha()
 {
 	return format == GL_RGBA || format == GL_ALPHA;

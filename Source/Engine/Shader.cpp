@@ -46,7 +46,7 @@ bool LoadSingleShader(GLenum type, const GLchar* path, GLuint programID, ShaderI
 	return true;
 }
 
-void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, bool bAssert)
+void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, const GLchar* computePath, bool bAssert)
 {
 	GLuint newProgramID = glCreateProgram();
 
@@ -84,6 +84,18 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 		shaderInfoList.emplace_back();
 		shaderIDList.emplace_back();
 		if (!LoadSingleShader(GL_GEOMETRY_SHADER, geometryPath, newProgramID, shaderInfoList[idx], shaderIDList[idx], bAssert))
+		{
+			glDeleteProgram(newProgramID);
+			return;
+		}
+		++idx;
+	}
+	if (computePath && computePath[0])
+	{
+		strcpy_s(computeFilePath, computePath);
+		shaderInfoList.emplace_back();
+		shaderIDList.emplace_back();
+		if (!LoadSingleShader(GL_COMPUTE_SHADER, computePath, newProgramID, shaderInfoList[idx], shaderIDList[idx], bAssert))
 		{
 			glDeleteProgram(newProgramID);
 			return;
@@ -157,6 +169,8 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 	else if (bUsePostProcessPassTex)
 		nextTexUnit = postProcessPassTexCount;
 
+	nextImgUnit = 0;
+
 	// unregister shader
 	for (auto& dependent : dependentFileNames)
 	{
@@ -183,7 +197,23 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 		"sampler2DMSArray"
 	};
 
+	const char* const images[] =
+	{
+		"image1D",
+		"image2D",
+		"image3D",
+		"imageCube",
+		"image2DRect",
+		"image1DArray",
+		"image2DArray",
+		"imageCubeArray",
+		"imageBuffer",
+		"image2DMS",
+		"image2DMSArray"
+	};
+
 	TexUnitList.clear();
+	ImgUnitList.clear();
 	UniformLocationList.clear();
 	for (int shaderInfoIdx = 0; shaderInfoIdx < shaderInfoCount; ++shaderInfoIdx)
 	{
@@ -210,6 +240,23 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 				{
 					// custom texture unit, init to be -1, don't bind it unless used
 					TexUnitList.push_back(ValuePair(it->second[nameIdx].c_str(), -1));
+					continue;
+				}
+
+				bool bImgUniform = false;
+				for (int i = 0; i < _countof(images); ++i)
+				{
+					if (it->first.compare(images[i]) == 0)
+					{
+						bImgUniform = true;
+						break;
+					}
+				}
+				if (bImgUniform)
+				{
+					// custom texture unit, init to be -1, don't bind it unless used
+					ImgUnitList.push_back(ValuePair(it->second[nameIdx].c_str(), -1));
+					continue;
 				}
 			}
 		}
@@ -261,7 +308,10 @@ GLint Shader::GetAttribuleLocation(const GLchar* name, bool bSilent)
 	location = glGetAttribLocation(programID, name);
 	if (location == -1 && !bSilent)
 	{
-		printf("%s is not a valid glsl program variable! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
+		if (computeFilePath[0])
+			printf("%s is not a valid glsl program variable! (comp: %s)\n", name, computeFilePath);
+		else
+			printf("%s is not a valid glsl program variable! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
 	}
 	return location;
 }
@@ -272,7 +322,10 @@ GLint Shader::GetUniformLocation_Internal(const GLchar* name, bool bSilent)
 	location = glGetUniformLocation(programID, name);
 	if (location == -1 && !bSilent)
 	{
-		printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
+		if (computeFilePath[0])
+			printf("%s is not a valid glsl program uniform! (comp: %s)\n", name, computeFilePath);
+		else
+			printf("%s is not a valid glsl program uniform! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
 	}
 	return location;
 }
@@ -331,6 +384,32 @@ GLint Shader::GetTextureUnit(const GLchar* name)
 			return pair.value;
 		}
 	}
-	printf("%s is not a valid texture name! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
+	if(computeFilePath[0])
+		printf("%s is not a valid texture name! (comp: %s)\n", name, computeFilePath);
+	else
+		printf("%s is not a valid texture name! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
+	return -1;
+}
+
+GLint Shader::GetImageUnit(const GLchar* name)
+{
+	for (int i = 0, ni = (int)ImgUnitList.size(); i < ni; ++i)
+	{
+		ValuePair& pair = ImgUnitList[i];
+		if (strcmp(pair.key, name) == 0)
+		{
+			if (pair.value < 0)
+			{
+				pair.value = nextImgUnit;
+				SetTextureUnit(pair.key, pair.value);
+				++nextImgUnit;
+			}
+			return pair.value;
+		}
+	}
+	if (computeFilePath[0])
+		printf("%s is not a valid image name! (comp: %s)\n", name, computeFilePath);
+	else
+		printf("%s is not a valid image name! (vert: %s frag: %s)\n", name, vertexFilePath, fragmentFilePath);
 	return -1;
 }

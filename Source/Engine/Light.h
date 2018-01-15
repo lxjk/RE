@@ -219,6 +219,13 @@ public:
 		result.w = radialAttenuationBlend;
 		return result;
 	}
+
+	Vector4 GetSphereBoundVS(const Matrix4& viewMat) const
+	{
+		Vector4 result = viewMat.TransformPoint(sphereBounds.centerRadius);
+		result.w = sphereBounds.centerRadius.w;
+		return result;
+	}
 };
 
 struct LightRenderData

@@ -110,6 +110,7 @@ struct RenderSettings
 	bool bSSAO					= true;
 	bool bSSR					= true;
 	bool bSkybox				= true;
+	bool bTileBasedDeferred		= true;
 
 	//RenderSettings() {};
 };
@@ -140,7 +141,8 @@ struct LightRenderInfo
 	Vector4 positionInvR; // xyz position, w invRadius
 	Vector4 directionRAB; // xyz direction, w radial attenuation blend value
 	Vector4 color;
-	Vector4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
+	Vector4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle
+	Vector4 sphereBound;
 	int shadowParamA; // shadowDataCount for direction light, shadow matrix index for local light (-1 if no shadow)
 	int shadowParamB; // for point light only, this is cube map index (-1 if use tetrahedron map)
 };

@@ -12,10 +12,8 @@ REArray<Texture2D*> Texture2D::gTexture2DContainer;
 
 void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLint minFilter, GLint magFilter)
 {
-	if (!textureID)
-	{
+	if (textureID == GL_INVALID_VALUE)
 		glGenTextures(1, &textureID);
-	}
 
 	SDL_Surface* image = IMG_Load(name);
 	if (!image)
@@ -78,9 +76,8 @@ void Texture2D::AllocateForFrameBuffer(int width, int height, GLint internalForm
 	this->format = format;
 	this->type = type;
 
-	if (textureID)
-		glDeleteTextures(1, &textureID);
-	glGenTextures(1, &textureID);
+	if (textureID == GL_INVALID_VALUE)
+		glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_2D, textureID);
 	if(width > 0 && height > 0)
 		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);

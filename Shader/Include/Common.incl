@@ -48,6 +48,14 @@ vec3 GetPositionVSFromDepth(float depth, mat4 projMat, vec3 fragPosVS)
 	// https://mynameismjp.wordpress.com/2010/03/22/attack-of-the-depth-buffer/
 }
 
+float GetLinearDepth(float depth, float near, float far)
+{
+	float z = depth * 2 - 1;
+	float linearDepth = (2 * near * far) / (far + near - z * (far - near));
+	linearDepth = linearDepth / (far - near);
+	return linearDepth;
+}
+
 // for velocity rendering, motionblur and temporal AA
 // velocity needs to support -2..2 screen space range for x and y
 // texture is 16bit 0..1 range per channel

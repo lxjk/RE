@@ -40,6 +40,15 @@ void Material::Use(RenderContext& renderContext)
 	renderContext.currentMaterial = this;
 }
 
+void Material::DispatchCompute(struct RenderContext& renderContext, int x, int y, int z)
+{
+	if (!shader || !shader->computeFilePath[0])
+		return;
+
+	Use(renderContext);
+	glDispatchCompute((GLuint)x, (GLuint)y, (GLuint)z);
+}
+
 void Material::SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type)
 {
 	MaterialParameter* params = 0;

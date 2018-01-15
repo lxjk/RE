@@ -14,9 +14,9 @@ class FrameBuffer
 {
 public:
 	
-	inline void Bind()
+	inline void Bind(GLenum target = GL_FRAMEBUFFER)
 	{
-		glBindFramebuffer(GL_FRAMEBUFFER, frameBufferID);
+		glBindFramebuffer(target, frameBufferID);
 	}
 
 	void StartSetup()

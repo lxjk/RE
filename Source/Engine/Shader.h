@@ -92,16 +92,19 @@ public:
 	EVertexType vertexType;
 
 	GLuint nextTexUnit;
+	GLuint nextImgUnit;
 
 	GLchar vertexFilePath[256];
 	GLchar fragmentFilePath[256];
 	GLchar geometryFilePath[256];
+	GLchar computeFilePath[256];
 
 	RESet<std::string> dependentFileNames;
 
 	RESet<Material*> referenceMaterials;
 
 	REArray<ValuePair> TexUnitList;
+	REArray<ValuePair> ImgUnitList;
 	REArray<ValuePair> UniformLocationList;
 
 	Shader()
@@ -109,6 +112,7 @@ public:
 		memset(vertexFilePath, 0, _countof(vertexFilePath) * sizeof(GLchar));
 		memset(fragmentFilePath, 0, _countof(fragmentFilePath) * sizeof(GLchar));
 		memset(geometryFilePath, 0, _countof(geometryFilePath) * sizeof(GLchar));
+		memset(computeFilePath, 0, _countof(computeFilePath) * sizeof(GLchar));
 	}
 
 	Shader(const GLchar* vertexPath, const GLchar* fragmentPath) : Shader()
@@ -118,15 +122,31 @@ public:
 
 	void Reload()
 	{
-		printf("Shader Reload: %s %s %s\n", vertexFilePath, geometryFilePath, fragmentFilePath);
-		Load(vertexFilePath, geometryFilePath, fragmentFilePath, false);
+		if (computeFilePath[0])
+		{
+			printf("Shader Reload: %s\n", computeFilePath);
+			Load(computeFilePath, false);
+		}
+		else
+		{
+			printf("Shader Reload: %s %s %s\n", vertexFilePath, geometryFilePath, fragmentFilePath);
+			Load(vertexFilePath, geometryFilePath, fragmentFilePath, false);
+		}
 	}
 
+	void Load(const GLchar* computePath, bool bAssert = true)
+	{
+		Load(0, 0, 0, computePath, bAssert);
+	}
 	void Load(const GLchar* vertexPath, const GLchar* fragmentPath, bool bAssert = true)
 	{
-		Load(vertexPath, 0, fragmentPath, bAssert);
+		Load(vertexPath, 0, fragmentPath, 0, bAssert);
 	}
-	void Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, bool bAssert = true);
+	void Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, bool bAssert = true)
+	{
+		Load(vertexPath, geometryPath, fragmentPath, 0, bAssert);
+	}
+	void Load(const GLchar* vertexPath, const GLchar* geometryPath, const GLchar* fragmentPath, const GLchar* computePath, bool bAssert = true);
 	void Use();
 
 	GLint GetAttribuleLocation(const GLchar* name, bool bSilent = false);
@@ -138,7 +158,9 @@ public:
 	void BindUniformBlock(const GLchar* name, GLuint bindingPoint);
 	void BindShaderStorageBlock(const GLchar* name, GLuint bindingPoint);
 
+	// used for both texture and image
 	void SetTextureUnit(const GLchar* name, GLuint texUnit, bool bSilent = false);
 
 	GLint GetTextureUnit(const GLchar* name);
+	GLint GetImageUnit(const GLchar* name);
 };

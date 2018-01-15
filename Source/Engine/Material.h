@@ -16,6 +16,7 @@ enum class EMaterialParameterType
 	MAT3,
 	MAT4,
 	TEX,
+	IMG,
 };
 
 class MaterialParameter
@@ -43,6 +44,9 @@ public:
 			break;
 		case EMaterialParameterType::TEX:
 			location = shader->GetTextureUnit(name);
+			break;
+		case EMaterialParameterType::IMG:
+			location = shader->GetImageUnit(name);
 			break;
 		}
 
@@ -82,7 +86,10 @@ public:
 			glUniformMatrix4fv(location, 1, GL_FALSE, (GLfloat*)(parameterValues + offset));
 			break;
 		case EMaterialParameterType::TEX:
-			((Texture*)(parameterValues + offset))->Bind(location);
+			(*(Texture**)(parameterValues + offset))->Bind(location);
+			break;
+		case EMaterialParameterType::IMG:
+			(*(Texture**)(parameterValues + offset))->BindImage(location);
 			break;
 		}
 	}
@@ -137,11 +144,13 @@ public:
 	void Reload();
 	void Use(struct RenderContext& renderContext);
 
+	void DispatchCompute(struct RenderContext& renderContext, int x, int y = 1, int z = 1);
+
 	void SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type);
 
-	inline void SetParameter(const char* name, Texture* tex)
+	inline void SetParameter(const char* name, Texture* tex, bool bAsImage = false)
 	{
-		SetParameter(name, (char*)tex, sizeof(Texture*), EMaterialParameterType::TEX);
+		SetParameter(name, (char*)(&tex), sizeof(Texture*), bAsImage ? EMaterialParameterType::IMG : EMaterialParameterType::TEX);
 	}
 	
 	inline void SetParameter(const char* name, const Vector4& value, int count)

@@ -597,6 +597,7 @@ inline void GetFrustumPlanes(const Matrix4& viewMat, float w, float h, float n, 
 	Vec128 up = transViewMat.m128[1];
 	Vec128 forward = transViewMat.m128[2]; // negated at this point
 	
+	// T is translation(origin), in this case, zero vector
 	// far plane: (-forward, dot(T, forward) + f)
 	outPlanes[5] = VecAdd(forward, VecSet(0.f, 0.f, 0.f, f));
 

@@ -32,8 +32,8 @@ void main()
 	vec2 uv = fs_in.texCoords;
 	vec4 depthStencil = texture(gDepthStencilTex, uv);
 	float depth = depthStencil.r;
-	if(depth == 1)
-		discard;
+	//if(depth == 1)
+	//	discard;
 	vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
 	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
@@ -70,6 +70,6 @@ void main()
 	color = vec4(result, 1.0f);
 	//color = vec4(vec3(1-albedo_ao.a), 1.0f);
 	//color = vec4(metallic, roughness, 0.0f, 1.0f);
-	gl_FragDepth = depth;
+	//gl_FragDepth = depth;
 
 }

@@ -19,9 +19,8 @@ void TextureCubeArray::AllocateForFrameBuffer(int width, int height, int count, 
 	this->format = format;
 	this->type = type;
 
-	if (textureID)
-		glDeleteTextures(1, &textureID);
-	glGenTextures(1, &textureID);
+	if (textureID == GL_INVALID_VALUE)
+		glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, textureID);
 	if (width > 0 && height > 0 && count > 0)
 	{

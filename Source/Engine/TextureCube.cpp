@@ -59,10 +59,8 @@ void TextureCube::Load(REArray<const char*> name, bool bSRGB, GLint wrapS, GLint
 	strcpy_s(path, name[0]);
 
 
-	if (!textureID)
-	{
+	if (textureID == GL_INVALID_VALUE)
 		glGenTextures(1, &textureID);
-	}
 	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 	for (int i = 0; i < images.size(); ++i)
 	{
@@ -90,9 +88,8 @@ void TextureCube::AllocateForFrameBuffer(int width, int height, GLint internalFo
 	this->format = format;
 	this->type = type;
 
-	if (textureID)
-		glDeleteTextures(1, &textureID);
-	glGenTextures(1, &textureID);
+	if (textureID == GL_INVALID_VALUE)
+		glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 	if (width > 0 && height > 0)
 	{

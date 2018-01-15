@@ -21,6 +21,7 @@ struct Light
 	vec4 directionRAB; // xyz direction, w radial attenuation blend value
 	vec4 color;
 	vec4 attenParams; // x bRadial, y bSpot, z outerCosHalfAngle, w invDiffCosHalfAngle 
+	vec4 sphereBound;
 	int shadowParamA; // shadowDataCount for direction light, shadow matrix index for local light (-1 if no shadow)
 	int shadowParamB; // for point light only, this is cube map index (-1 if use tetrahedron map)
 };
@@ -43,6 +44,7 @@ layout(std140) uniform GlobalLightsRenderInfo
 
 layout(std430) buffer LocalLightsRenderInfo
 {
+	int localLightCount;
 	Light localLights[];
 };
 

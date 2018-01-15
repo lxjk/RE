@@ -1,5 +1,6 @@
 #version 430 core
 
+#include "Include/Common.incl"
 #include "Include/CommonUBO.incl"
 
 in VS_OUT
@@ -41,9 +42,7 @@ void main()
 	//color = vec4(uv.x, uv.y, 0.0f, 1.0f);
 	if(depthParams.z > 0.5)
 	{
-		float z = texture(tex, uv).r * 2 - 1;
-		float linearDepth = (2 * depthParams.x * depthParams.y) / (depthParams.y + depthParams.x - z * (depthParams.y - depthParams.x));
-		linearDepth = linearDepth / (depthParams.y - depthParams.x);
+		float linearDepth = GetLinearDepth(texture(tex, uv).r, depthParams.x, depthParams.y);
 		color = vec4(vec3(linearDepth), 1.0);
 	}
 	else
