@@ -75,9 +75,9 @@ void main()
 	uint threadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
 	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && lightIdx < MAX_TILE_LIGHTS; lightIdx += threadCount)
 	{
-		Light light = localLights[lightIdx];
-		vec3 boundCenter = light.sphereBound.xyz;
-		float boundRadius = light.sphereBound.w;
+		vec4 lightBounds = localLightsBounds[lightIdx];		
+		vec3 boundCenter = lightBounds.xyz;
+		float boundRadius = lightBounds.w;
 		
 		// result < 0 if light sphere bound is outside any plane
 		float result = min(dot(frustumPlanes[0], boundCenter) + boundRadius, 0.0) +

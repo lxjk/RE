@@ -160,6 +160,7 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 
 	// shader storage buffer index
 	BindShaderStorageBlock("LocalLightsRenderInfo", LocalLightsRenderInfoBP);
+	BindShaderStorageBlock("LocalLightsCullingInfo", LocalLightsCullingInfoBP);
 	BindShaderStorageBlock("LocalLightsShadowMatrixInfo", LocalLightsShadowMatrixInfoBP);
 
 	// process uniforms

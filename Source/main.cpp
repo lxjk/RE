@@ -94,6 +94,7 @@ GLuint gUBO_GlobalLights = 0;
 
 // ssbo
 GLuint gSSBO_LocalLights = 0;
+GLuint gSSBO_LocalLightsBounds = 0;
 GLuint gSSBO_LocalLightsShadowMatrices = 0;
 
 int gPrevLocalLightCapacity = 0;
@@ -910,6 +911,10 @@ bool InitEngine()
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLights);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsRenderInfoBP, gSSBO_LocalLights);
 
+	glGenBuffers(1, &gSSBO_LocalLightsBounds);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsBounds);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsCullingInfoBP, gSSBO_LocalLightsBounds);
+
 	glGenBuffers(1, &gSSBO_LocalLightsShadowMatrices);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsShadowMatrices);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsShadowMatrixInfoBP, gSSBO_LocalLightsShadowMatrices);
@@ -1341,7 +1346,9 @@ void CullLights(RenderContext& renderContext)
 
 		// now fill in local light data
 		REArray<LightRenderInfo> localLights;
+		REArray<Vector4, 16> localLightsBounds;
 		localLights.reserve(visibleLightCount);
+		localLightsBounds.reserve(visibleLightCount);
 		LightRenderInfo lightTmpl;
 		int shadowMatIdx = 0;
 		for (int lightIdx = 0; lightIdx < visibleLightCount; ++lightIdx)
@@ -1352,11 +1359,12 @@ void CullLights(RenderContext& renderContext)
 			lightTmpl.directionRAB = light.GetDirectionVSRAB(viewPoint.viewMat);
 			lightTmpl.color = light.colorIntensity;
 			lightTmpl.attenParams = light.attenParams;
-			lightTmpl.sphereBound = light.GetSphereBoundVS(viewPoint.viewMat);
 			lightTmpl.shadowParamA = lightData.bActualCastShadow ? shadowMatIdx : -1;
 			lightTmpl.shadowParamB = (!lightData.bSpot && !lightData.bUseTetrahedronShadowMap) ? lightData.shadowMapIndex : -1;
 
 			localLights.push_back(lightTmpl);
+
+			localLightsBounds.push_back(light.GetSphereBoundVS(viewPoint.viewMat));
 
 			if (lightData.bActualCastShadow)
 			{
@@ -1366,16 +1374,23 @@ void CullLights(RenderContext& renderContext)
 		gCurLocalLightShadowMatCount = shadowMatIdx;
 
 		// send ssbo
-		// notice the offset of light array is sizeof(int) * 4 because of data layout
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLights);
+		bool bNeedReallocate = false;
 		if (visibleLightCount > gPrevLocalLightCapacity)
 		{
 			gPrevLocalLightCapacity = visibleLightCount;
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(LightRenderInfo) * visibleLightCount + sizeof(int) * 4, NULL, GL_DYNAMIC_DRAW);
+			bNeedReallocate = true;
 		}
-
+		// notice the offset of light array is sizeof(int) * 4 because of data layout
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLights);
+		if (bNeedReallocate)
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(LightRenderInfo) * visibleLightCount + sizeof(int) * 4, NULL, GL_DYNAMIC_DRAW);
 		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(int), &visibleLightCount);
 		glBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * 4, sizeof(LightRenderInfo) * visibleLightCount, localLights.data());
+		
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsBounds);
+		if (bNeedReallocate)
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Vector4) * visibleLightCount, NULL, GL_DYNAMIC_DRAW);
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Vector4) * visibleLightCount, localLightsBounds.data());
 		
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	}

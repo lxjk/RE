@@ -14,5 +14,5 @@ uniform vec3 color;
 
 void main() 
 {
-	outColor = vec4(color, 1.f);
+	outColor = vec4(pow(color, vec3(2.2)), 1.f);
 }
