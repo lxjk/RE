@@ -27,6 +27,7 @@
     <ClCompile Include="Source\Engine\Shader.cpp" />
     <ClCompile Include="Source\Engine\Texture.cpp" />
     <ClCompile Include="Source\Engine\Texture2D.cpp" />
+    <ClCompile Include="Source\Engine\Texture2DArray.cpp" />
     <ClCompile Include="Source\Engine\TextureCube.cpp" />
     <ClCompile Include="Source\Engine\TextureCubeArray.cpp" />
     <ClCompile Include="Source\imgui\imgui.cpp" />
@@ -55,6 +56,7 @@
     <ClInclude Include="Source\Engine\spsc.h" />
     <ClInclude Include="Source\Engine\Texture.h" />
     <ClInclude Include="Source\Engine\Texture2D.h" />
+    <ClInclude Include="Source\Engine\Texture2DArray.h" />
     <ClInclude Include="Source\Engine\TextureCube.h" />
     <ClInclude Include="Source\Engine\TextureCubeArray.h" />
     <ClInclude Include="Source\Engine\Util.h" />
