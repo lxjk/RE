@@ -282,6 +282,7 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 		SetTextureUnit("gNormalTex", gNormalTexUnit, true);
 		SetTextureUnit("gAlbedoTex", gAlbedoTexUnit, true);
 		SetTextureUnit("gMaterialTex", gMaterialTexUnit, true);
+		SetTextureUnit("gCSMTexArray", gCSMTexArrayUnit, true);
 		SetTextureUnit("gShadowTiledTex", gShadowTiledTexUnit, true);
 		SetTextureUnit("gShadowCubeTexArray", gShadowCubeTexArrayUnit, true);
 	}

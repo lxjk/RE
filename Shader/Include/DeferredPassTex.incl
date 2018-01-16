@@ -7,6 +7,7 @@ uniform sampler2D gNormalTex;
 uniform sampler2D gAlbedoTex;
 uniform sampler2D gMaterialTex;
 uniform sampler2D gDepthStencilTex;
+uniform sampler2DArray gCSMTexArray;
 uniform sampler2D gShadowTiledTex;
 uniform samplerCubeArray gShadowCubeTexArray;
 

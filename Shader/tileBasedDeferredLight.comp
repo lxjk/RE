@@ -9,8 +9,6 @@ layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rgba16f) writeonly uniform image2D outColor;
 
-uniform sampler2D shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
-
 #define MAX_TILE_LIGHTS 1024
 
 shared uint maxTileDepthUintBits;
@@ -145,7 +143,7 @@ void main()
 			{
 				if(-position.z <= globalShadowData[shadowCount+c].bounds.z)
 				{
-					shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025, 0.002);
+					shadowFactor = CalcShadowArray(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, gCSMTexArray, shadowCount+c, 0.0025, 0.002);
 					break;
 				}
 			}

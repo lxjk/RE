@@ -3,9 +3,12 @@
 
 #include "Texture.h"
 
-void Texture::AttachToFrameBuffer(GLenum attachment)
+void Texture::AttachToFrameBuffer(GLenum attachment, GLint layer)
 {
-	glFramebufferTexture(GL_FRAMEBUFFER, attachment, textureID, 0);
+	if(layer >= 0)
+		glFramebufferTextureLayer(GL_FRAMEBUFFER, attachment, textureID, 0, layer);
+	else
+		glFramebufferTexture(GL_FRAMEBUFFER, attachment, textureID, 0);
 }
 
 void Texture::Bind(GLuint textureUnitOffset)

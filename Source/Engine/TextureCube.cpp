@@ -8,7 +8,7 @@
 
 #include "TextureCube.h"
 
-REArray<TextureCube*> TextureCube::gTextureCubeContainer;
+REArray<TextureCube*> TextureCube::gContainer;
 
 void TextureCube::Load(REArray<const char*> name, bool bSRGB, GLint wrapS, GLint wrapT, GLint wrapR, GLint minFilter, GLint magFilter)
 {
@@ -61,18 +61,18 @@ void TextureCube::Load(REArray<const char*> name, bool bSRGB, GLint wrapS, GLint
 
 	if (textureID == GL_INVALID_VALUE)
 		glGenTextures(1, &textureID);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+	glBindTexture(textureType, textureID);
 	for (int i = 0; i < images.size(); ++i)
 	{
 		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, internalFormat, images[i]->w, images[i]->h, 0, format, type, images[i]->pixels);
 	}
-	//glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, wrapS);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, wrapT);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, wrapR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, minFilter);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, magFilter);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	//glGenerateMipmap(textureType);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_S, wrapS);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_T, wrapT);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_R, wrapR);
+	glTexParameteri(textureType, GL_TEXTURE_MIN_FILTER, minFilter);
+	glTexParameteri(textureType, GL_TEXTURE_MAG_FILTER, magFilter);
+	glBindTexture(textureType, 0);
 
 	for (int i = 0; i < images.size(); ++i)
 	{
@@ -90,17 +90,17 @@ void TextureCube::AllocateForFrameBuffer(int width, int height, GLint internalFo
 
 	if (textureID == GL_INVALID_VALUE)
 		glGenTextures(1, &textureID);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+	glBindTexture(textureType, textureID);
 	if (width > 0 && height > 0)
 	{
 		for (int i = 0; i < 6; ++i)
 			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, internalFormat, width, height, 0, format, type, NULL);
 	}
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);	
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(textureType, GL_TEXTURE_MIN_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);
+	glTexParameteri(textureType, GL_TEXTURE_MAG_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);	
 }
 
 void TextureCube::Reallocate(int width, int height)
@@ -109,7 +109,7 @@ void TextureCube::Reallocate(int width, int height)
 	{
 		this->width = width;
 		this->height = height;
-		glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+		glBindTexture(textureType, textureID);
 		for (int i = 0; i < 6; ++i)
 			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, internalFormat, width, height, 0, format, type, NULL);
 	}

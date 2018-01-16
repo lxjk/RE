@@ -11,12 +11,12 @@ class TextureCube : public Texture
 {
 public:
 
-	static REArray<TextureCube*> gTextureCubeContainer;
+	static REArray<TextureCube*> gContainer;
 
 	static TextureCube* Create()
 	{
 		TextureCube* tex = new TextureCube();
-		gTextureCubeContainer.push_back(tex);
+		gContainer.push_back(tex);
 		return tex;
 	}
 

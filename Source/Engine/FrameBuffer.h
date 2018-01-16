@@ -99,7 +99,7 @@ public:
 			printf("Error: buffer not complete!\n");
 	}
 
-	void AttachColor(Texture* tex, int location)
+	void AttachColor(Texture* tex, int location, GLint layer = -1)
 	{
 		if (location >= colorAttachmentCount)
 		{
@@ -109,14 +109,14 @@ public:
 		if (tex)
 		{
 			GLenum attachment = GL_COLOR_ATTACHMENT0 + location;
-			tex->AttachToFrameBuffer(attachment);
+			tex->AttachToFrameBuffer(attachment, layer);
 		}
 	}
 
-	void AttachDepth(Texture* tex, bool bWithStencil)
+	void AttachDepth(Texture* tex, bool bWithStencil, GLint layer = -1)
 	{
 		if (tex)
-			tex->AttachToFrameBuffer(bWithStencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT);
+			tex->AttachToFrameBuffer(bWithStencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, layer);
 	}
 
 	GLuint frameBufferID;

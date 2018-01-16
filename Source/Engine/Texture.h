@@ -20,7 +20,7 @@ public:
 		path[0] = 0;
 	}
 
-	void AttachToFrameBuffer(GLenum attachment);
+	void AttachToFrameBuffer(GLenum attachment, GLint layer = -1);
 	void Bind(GLuint textureUnitOffset);
 	void BindImage(GLuint imageUnit);
 

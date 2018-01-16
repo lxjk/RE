@@ -77,10 +77,11 @@ public:
 	static const GLuint gNormalTexUnit = 1;
 	static const GLuint gAlbedoTexUnit = 2;
 	static const GLuint gMaterialTexUnit = 3;
-	static const GLuint gShadowTiledTexUnit = 4;
-	static const GLuint gShadowCubeTexArrayUnit = 5;
+	static const GLuint gCSMTexArrayUnit = 4;
+	static const GLuint gShadowTiledTexUnit = 5;
+	static const GLuint gShadowCubeTexArrayUnit = 6;
 
-	static const GLuint deferredPassTexCount = 6;
+	static const GLuint deferredPassTexCount = 7;
 
 	// post process pass
 	//static const GLuint gDepthStencilTexUnit = 0; reuse

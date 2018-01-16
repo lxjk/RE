@@ -103,6 +103,45 @@ float CalcShadowPoisson(vec3 viewPos, mat4 shadowMat, sampler2D shadowMap, float
 	return smoothstep(-depthRange * 0.5f, depthRange * 0.5f, depthDiff);
 }
 
+float CalcShadowBasicArray(vec3 viewPos, mat4 shadowMat, sampler2DArray shadowMapArray, int layer, float bias)
+{
+	// convert to light clip space
+	vec4 posLCS = shadowMat * vec4(viewPos, 1.f);
+	posLCS.z -= posLCS.w * bias;
+	posLCS /= posLCS.w;
+	return posLCS.z <= texture(shadowMapArray, vec3(posLCS.xy, layer)).r ? 1 : 0;
+} 
+
+float CalcShadowPoissonArray(vec3 viewPos, mat4 shadowMat, sampler2DArray shadowMapArray, int layer, float bias)
+{
+	// convert to light clip space
+	vec4 posLCS = shadowMat * vec4(viewPos, 1.f);
+	posLCS.z -= posLCS.w * bias;
+	posLCS /= posLCS.w;
+	vec3 mapSize = textureSize(shadowMapArray, 0);
+	vec2 sampleScale = 1.5 / mapSize.xy;
+	const int sampleCount = 9;
+	const float depthRange = bias;
+	float depthDiff = 0;
+	float randV = GetRandom(vec4(viewPos * 100, time));
+	float randCos = abs(randV * 2 - 1) * 2 - 1; // [0,1] -> [-1, 0 ,1] -> [1, -1, 1]
+	float randSin = sqrt(1 - randCos*randCos) * (randV > 0.5 ? -1 : 1);
+	for(int sampleIdx = 0; sampleIdx < sampleCount; ++sampleIdx)
+	{
+		vec2 offset = PoissonDisk9[sampleIdx];
+		// rotate
+		offset = vec2(
+			offset.x * randCos - offset.y * randSin,
+			offset.x * randSin + offset.y * randCos
+		);
+		vec3 uv = vec3(posLCS.xy + offset * sampleScale, layer);
+		depthDiff += clamp(texture(shadowMapArray, uv).r - posLCS.z, -depthRange, depthRange);
+	}
+	depthDiff /= float(sampleCount);
+	//return depthDiff >= 0 ? 1 : 0;
+	return smoothstep(-depthRange * 0.5f, depthRange * 0.5f, depthDiff);
+}
+
 float CalcShadowBasicCube(vec3 viewPos, mat4 lightProjRemapMat, mat4 shadowMat, samplerCube shadowMap, float bias)
 {
 	// convert to light view space
@@ -303,6 +342,13 @@ float CalcShadow(vec3 viewPos, vec3 normal, vec3 light, mat4 shadowMat, sampler2
 	return CalcShadowPoisson(viewPos, shadowMat, shadowMap, bias);
 	//return CalcShadowBasic(viewPos, shadowMat, shadowMap, bias);
 	//return CalcShadowLerp(viewPos, shadowMat, shadowMap, bias);
+}
+
+float CalcShadowArray(vec3 viewPos, vec3 normal, vec3 light, mat4 shadowMat, sampler2DArray shadowMapArray, int layer, float biasFactor, float biasMin)
+{
+	float bias = GetBias(normal, light, biasFactor, biasMin);
+	return CalcShadowPoissonArray(viewPos, shadowMat, shadowMapArray, layer, bias);
+	//return CalcShadowBasicArray(viewPos, shadowMat, shadowMapArray, layer, bias);
 }
 
 float CalcShadowCubeFog(vec3 viewPos, vec3 light, mat4 lightProjRemapMat, mat4 shadowMat, samplerCube shadowMap, float bias)

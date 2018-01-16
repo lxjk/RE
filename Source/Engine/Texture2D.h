@@ -8,12 +8,12 @@ class Texture2D : public Texture
 {
 public:
 
-	static REArray<Texture2D*> gTexture2DContainer;
+	static REArray<Texture2D*> gContainer;
 
 	static Texture2D* Create()
 	{
 		Texture2D* tex = new Texture2D();
-		gTexture2DContainer.push_back(tex);
+		gContainer.push_back(tex);
 		return tex;
 	}
 
@@ -21,10 +21,10 @@ public:
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE,
 		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_LINEAR)
 	{
-		for (int i = 0; i < gTexture2DContainer.size(); ++i)
+		for (int i = 0; i < gContainer.size(); ++i)
 		{
-			if (strcmp(gTexture2DContainer[i]->path, name) == 0)
-				return gTexture2DContainer[i];
+			if (strcmp(gContainer[i]->path, name) == 0)
+				return gContainer[i];
 		}
 		Texture2D* tex = Create();
 		tex->Load(name, bSRGB, wrapS, wrapT, minFilter, magFilter);

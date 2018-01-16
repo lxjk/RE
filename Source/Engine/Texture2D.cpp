@@ -8,7 +8,7 @@
 
 #include "Texture2D.h"
 
-REArray<Texture2D*> Texture2D::gTexture2DContainer;
+REArray<Texture2D*> Texture2D::gContainer;
 
 void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLint minFilter, GLint magFilter)
 {
@@ -57,14 +57,14 @@ void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLi
 	this->height = image->h;
 	strcpy_s(path, name);
 
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, image->w, image->h, 0, format, type, image->pixels);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindTexture(textureType, textureID);
+	glTexImage2D(textureType, 0, internalFormat, image->w, image->h, 0, format, type, image->pixels);
+	glGenerateMipmap(textureType);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_S, wrapS);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_T, wrapT);
+	glTexParameteri(textureType, GL_TEXTURE_MIN_FILTER, minFilter);
+	glTexParameteri(textureType, GL_TEXTURE_MAG_FILTER, magFilter);
+	glBindTexture(textureType, 0);
 	SDL_FreeSurface(image);
 }
 
@@ -78,17 +78,17 @@ void Texture2D::AllocateForFrameBuffer(int width, int height, GLint internalForm
 
 	if (textureID == GL_INVALID_VALUE)
 		glGenTextures(1, &textureID);
-	glBindTexture(GL_TEXTURE_2D, textureID);
+	glBindTexture(textureType, textureID);
 	if(width > 0 && height > 0)
-		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);
+		glTexImage2D(textureType, 0, internalFormat, width, height, 0, format, type, NULL);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(textureType, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(textureType, GL_TEXTURE_MIN_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);
+	glTexParameteri(textureType, GL_TEXTURE_MAG_FILTER, bLinearFilter ? GL_LINEAR : GL_NEAREST);
 	//if (bShadowMap)
 	//{
-	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	//	glTexParameteri(textureType, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	//	glTexParameteri(textureType, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 	//}
 }
 
@@ -98,7 +98,7 @@ void Texture2D::Reallocate(int width, int height)
 	{
 		this->width = width;
 		this->height = height;
-		glBindTexture(GL_TEXTURE_2D, textureID);
-		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
+		glBindTexture(textureType, textureID);
+		glTexImage2D(textureType, 0, internalFormat, width, height, 0, format, type, NULL);
 	}
 }

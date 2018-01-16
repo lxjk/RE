@@ -30,6 +30,7 @@
 #include "Engine/MeshComponent.h"
 #include "Engine/MeshLoader.h"
 #include "Engine/Texture2D.h"
+#include "Engine/Texture2DArray.h"
 #include "Engine/TextureCube.h"
 #include "Engine/TextureCubeArray.h"
 #include "Engine/Light.h"
@@ -119,6 +120,7 @@ int gSceneDepthCurrentIdx, gSceneDepthHistoryIdx;
 FrameBuffer gDepthCopyBuffer;
 
 FrameBuffer gDepthOnlyBuffer;
+Texture2DArray gCSMTexArray;
 TextureCubeArray gShadowCubeTexArray;
 Texture2D gShadowTiledTex;
 
@@ -1261,7 +1263,7 @@ void CullLights(RenderContext& renderContext)
 			if (IsSphereIntersectFrustum(light.position, light.radius, viewPoint.frustumPlanes, 6))
 			{
 				lightDataTmpl.light = &light;
-				lightDataTmpl.bActualCastShadow = light.bCastShadow && gRenderSettings.bDrawShadowPoint;
+				lightDataTmpl.bActualCastShadow = light.bCastShadow && gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowPoint;
 				float lightDist = (light.position - viewPoint.position).Size3();
 				lightDataTmpl.shadowMapSize = light.sphereBounds.centerRadius.w * viewPoint.screenScale / Max(lightDist, 1.f) * 1.25f;
 				gVisibleLightList.push_back(lightDataTmpl);
@@ -1279,7 +1281,7 @@ void CullLights(RenderContext& renderContext)
 			if (IsFrustumIntersectFrustum(packedFrustumVerts, viewPoint.frustumPlanes, 6))
 			{
 				lightDataTmpl.light = &light;
-				lightDataTmpl.bActualCastShadow = light.bCastShadow && gRenderSettings.bDrawShadowSpot;
+				lightDataTmpl.bActualCastShadow = light.bCastShadow && gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowSpot;
 				float lightDist = (light.position - viewPoint.position).Size3();
 				lightDataTmpl.shadowMapSize = light.sphereBounds.centerRadius.w * viewPoint.screenScale / Max(lightDist, 1.f) * 0.5f;
 				gVisibleLightList.push_back(lightDataTmpl);
@@ -1520,23 +1522,6 @@ void DirectionalLightPass(RenderContext& renderContext)
 	glClearColor(0, 0, 0, 0);
 	glClearDepth(1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	// set light
-	int shadowIdx = 0;
-	for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
-	{
-		Light& light = gDirectionalLights[i];
-		// shadow
-		if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
-		{
-			int shadowCount = MAX_CSM_COUNT;
-			for (int j = 0; j < shadowCount; ++j)
-			{
-				gDirectionalLightMaterial->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
-			}
-			shadowIdx += shadowCount;
-		}
-	}
 
 	// draw quad
 	gDirectionalLightMesh->Draw(renderContext);
@@ -1780,22 +1765,6 @@ void TileBasedDeferredLightPass(RenderContext& renderContext)
 	curSceneColorTex.access = GL_WRITE_ONLY;
 	gTileBasedDeferredLightCompMaterial->SetParameter("outColor", &curSceneColorTex, true);
 
-	int shadowIdx = 0;
-	for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
-	{
-		Light& light = gDirectionalLights[i];
-		// shadow
-		if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
-		{
-			int shadowCount = MAX_CSM_COUNT;
-			for (int j = 0; j < shadowCount; ++j)
-			{
-				gTileBasedDeferredLightCompMaterial->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
-			}
-			shadowIdx += shadowCount;
-		}
-	}
-
 	const int tileSize = 16;
 	int groupNumX = (curSceneColorTex.width + tileSize - 1) / tileSize;
 	int groupNumY = (curSceneColorTex.height + tileSize - 1) / tileSize;
@@ -1858,8 +1827,36 @@ void ShadowPass(RenderContext& renderContext)
 	RenderInfo shadowRenderInfo = gRenderInfo;
 
 	// directional lights
-	if(gRenderSettings.bDrawShadowCSM)
+	if(gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM)
 	{
+		// get shadow map count
+		int csmCount = 0;
+		for (int lightIdx = 0, nlightIdx = (int)gDirectionalLights.size(); lightIdx < nlightIdx; ++lightIdx)
+		{
+			Light& light = gDirectionalLights[lightIdx];
+			if (light.bCastShadow)
+				csmCount += MAX_CSM_COUNT;
+		}
+
+		const int csmMapSize = 1024;
+		// TODO: deallocate when count drop to 0 ?
+		if (gCSMTexArray.count == 0)
+		{
+			gCSMTexArray.AllocateForFrameBuffer(csmMapSize, csmMapSize, csmCount, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
+		}
+		else if (gCSMTexArray.count != csmCount)
+		{
+			gCSMTexArray.Reallocate(csmMapSize, csmMapSize, csmCount);
+		}
+
+		// attach to frame buffers
+		gDepthOnlyBuffer.AttachDepth(&gCSMTexArray, false);
+		// set viewport
+		glViewport(0, 0, gCSMTexArray.width, gCSMTexArray.height);
+		// clear depth
+		glClearDepth(1);
+		glClear(GL_DEPTH_BUFFER_BIT);
+
 		const static float cascadeRatio[MAX_CSM_COUNT] = {
 			0.12f, 0.36f, 1.f
 		};
@@ -1871,6 +1868,7 @@ void ShadowPass(RenderContext& renderContext)
 		float tanHF2 = tanHF * tanHF;
 
 		bool bFixedSize = false;
+		int csmIndex = 0;
 
 		REArray<BoxBounds, 16> lightSpaceBounds;
 		lightSpaceBounds.resize(MeshComponent::gMeshComponentContainer.size());
@@ -1892,16 +1890,9 @@ void ShadowPass(RenderContext& renderContext)
 
 			Matrix4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
 
-			for (int cascadeIdx = 0; cascadeIdx < MAX_CSM_COUNT; ++cascadeIdx)
+			const int cascadeCount = MAX_CSM_COUNT;
+			for (int cascadeIdx = 0; cascadeIdx < cascadeCount; ++cascadeIdx)
 			{
-				Texture2D* shadowMap = (Texture2D*)light.shadowData[cascadeIdx].shadowMap;
-				if (!shadowMap)
-				{
-					shadowMap = Texture2D::Create();
-					shadowMap->AllocateForFrameBuffer(1024, 1024, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, true);
-					light.shadowData[cascadeIdx].shadowMap = shadowMap;
-				}
-
 				// near and far plane for this cascade
 				float n = (cascadeIdx == 0) ? viewPoint.nearPlane : viewPoint.farPlane * cascadeRatio[cascadeIdx - 1];
 				float f = viewPoint.farPlane * cascadeRatio[cascadeIdx];
@@ -1911,7 +1902,7 @@ void ShadowPass(RenderContext& renderContext)
 					2 * f * tanHF :
 					Sqrt((f - n)*(f - n) + 2 * (f*f + n*n) * tanHF2 + (f + n)*(f + n)*tanHF2*tanHF2);
 
-				float pixelRate = diameter / shadowMap->width;
+				float pixelRate = diameter / gCSMTexArray.width;
 
 				// process frustum bounds
 				BoxBounds frustumBounds;
@@ -1979,7 +1970,7 @@ void ShadowPass(RenderContext& renderContext)
 					frustumBounds.min.x, frustumBounds.max.x,
 					frustumBounds.min.y, frustumBounds.max.y,
 					-frustumBounds.max.z, -frustumBounds.min.z,
-					(float)shadowMap->width, (float)shadowMap->height,
+					(float)gCSMTexArray.width, (float)gCSMTexArray.height,
 					viewPoint.jitterX, viewPoint.jitterY);
 
 				light.shadowData[cascadeIdx].bounds = Vector4_3(
@@ -1993,7 +1984,10 @@ void ShadowPass(RenderContext& renderContext)
 				shadowRenderInfo.Proj = lightProjMat;
 				shadowRenderInfo.ViewProj = lightProjMat * light.lightViewMat;
 
-				DrawShadowScene(renderContext, shadowMap, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
+				// attach to right layer
+				gDepthOnlyBuffer.AttachDepth(&gCSMTexArray, false, csmIndex);
+				DrawShadowScene(renderContext, 0, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
+				++csmIndex;
 			}
 		}
 	}
@@ -2049,6 +2043,8 @@ void ShadowPass(RenderContext& renderContext)
 
 	const float lightNearPlane = 0.01f;
 
+	bool bDrawShadowPoint = gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowPoint;
+	bool bDrawShadowSpot = gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowSpot;
 	bool bSpotLightPass = false;
 	bool bTetrahedronMapPass = false;
 	bool bCubeMapPass = false;
@@ -2063,13 +2059,13 @@ void ShadowPass(RenderContext& renderContext)
 
 		bool bShouldInitTiledShadowMap = false;
 		bool bShouldInitCubeMapArray = false;
-		if (!bSpotLightPass && lightData.bSpot && gRenderSettings.bDrawShadowSpot)
+		if (!bSpotLightPass && lightData.bSpot && bDrawShadowSpot)
 		{
 			// init spot light pass
 			bSpotLightPass = true;
 			bShouldInitTiledShadowMap = true;
 		}
-		if (!bTetrahedronMapPass && !lightData.bSpot && lightData.bUseTetrahedronShadowMap && gRenderSettings.bDrawShadowPoint)
+		if (!bTetrahedronMapPass && !lightData.bSpot && lightData.bUseTetrahedronShadowMap && bDrawShadowPoint)
 		{
 			// init tetrahedron map pass
 			bTetrahedronMapPass = true;
@@ -2079,7 +2075,7 @@ void ShadowPass(RenderContext& renderContext)
 			// only need 3 clipping planes
 			glDisable(GL_CLIP_DISTANCE3);
 		}
-		if (!bCubeMapPass && !lightData.bSpot && !lightData.bUseTetrahedronShadowMap && gRenderSettings.bDrawShadowPoint)
+		if (!bCubeMapPass && !lightData.bSpot && !lightData.bUseTetrahedronShadowMap && bDrawShadowPoint)
 		{
 			// init cube map pass
 			bCubeMapPass = true;
@@ -2127,7 +2123,7 @@ void ShadowPass(RenderContext& renderContext)
 
 
 		// spot lights
-		if (lightData.bSpot && gRenderSettings.bDrawShadowSpot)
+		if (lightData.bSpot && bDrawShadowSpot)
 		{
 			Plane frustumPlanes[6];
 
@@ -2184,7 +2180,7 @@ void ShadowPass(RenderContext& renderContext)
 				DrawShadowScene(renderContext, 0, shadowRenderInfo, gPrepassTiledMaterial, MeshComponent::gMeshComponentContainer);
 		}
 		// point lights
-		else if (!lightData.bSpot && gRenderSettings.bDrawShadowPoint)
+		else if (!lightData.bSpot && bDrawShadowPoint)
 		{
 			// update render info, only do view, since we proj in geometry shader
 			shadowRenderInfo.View = light.lightViewMat;
@@ -2356,24 +2352,6 @@ void AlphaBlendPass(RenderContext& renderContext)
 	for (int mi = 0, nmi = (int)gAlphaBlendMeshRenderList.size(); mi < nmi; ++mi)
 	{
 		Material* material = gAlphaBlendMeshRenderList[mi].material;
-		
-		// set light
-		int shadowIdx = 0;
-		for (int i = 0, ni = (int)gDirectionalLights.size(); i < ni; ++i)
-		{
-			Light& light = gDirectionalLights[i];
-			// shadow
-			if (gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM && light.bCastShadow)
-			{
-				int shadowCount = MAX_CSM_COUNT;
-				for (int j = 0; j < shadowCount; ++j)
-				{
-					material->SetParameter(ShaderNameBuilder("shadowMap")[shadowIdx + j].c_str(), light.shadowData[j].shadowMap);
-				}
-				shadowIdx += shadowCount;
-			}
-
-		}
 
 		DrawMesh(renderContext, gAlphaBlendMeshRenderList[mi]);
 	}
@@ -2877,12 +2855,9 @@ void Render()
 	// cull lights
 	CullLights(renderContext);
 	
-	if (gRenderSettings.bDrawShadow)
-	{
-		// bind shadow buffer
-		gDepthOnlyBuffer.Bind();
-		ShadowPass(renderContext);
-	}
+	// bind shadow buffer
+	gDepthOnlyBuffer.Bind();
+	ShadowPass(renderContext);
 
 	glViewport(0, 0, gWindowWidth, gWindowHeight);
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -2935,6 +2910,7 @@ void Render()
 
 	gAlbedoTex.Bind(Shader::gAlbedoTexUnit);
 
+	gCSMTexArray.Bind(Shader::gCSMTexArrayUnit);
 	gShadowTiledTex.Bind(Shader::gShadowTiledTexUnit);
 	gShadowCubeTexArray.Bind(Shader::gShadowCubeTexArrayUnit);
 

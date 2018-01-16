@@ -10,7 +10,6 @@ class Texture;
 
 struct ShadowData
 {
-	Texture* shadowMap = 0;
 	Vector4 bounds; // x cascade width, y cascade height, z far plane
 
 	// set in shadow pass

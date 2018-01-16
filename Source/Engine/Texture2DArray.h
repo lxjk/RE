@@ -7,27 +7,25 @@
 
 #include "Texture.h"
 
-class TextureCubeArray : public Texture
+class Texture2DArray : public Texture
 {
 public:
 
-	static REArray<TextureCubeArray*> gContainer;
+	static REArray<Texture2DArray*> gContainer;
 
-	static TextureCubeArray* Create()
+	static Texture2DArray* Create()
 	{
-		TextureCubeArray* tex = new TextureCubeArray();
+		Texture2DArray* tex = new Texture2DArray();
 		gContainer.push_back(tex);
 		return tex;
 	}
 
-	TextureCubeArray() : Texture()
+	Texture2DArray() : Texture()
 	{
-		textureType = GL_TEXTURE_CUBE_MAP_ARRAY;
+		textureType = GL_TEXTURE_2D_ARRAY;
 	}
 
-	// here count is cube map count, not face count
 	void AllocateForFrameBuffer(int width, int height, int count, GLint internalFormat, GLenum format, GLenum type, bool bLinearFilter = false);
 
-	// here count is cube map count, not face count
 	void Reallocate(int width, int height, int count);
 };

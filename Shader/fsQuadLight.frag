@@ -17,7 +17,7 @@ out vec4 color;
 //uniform Light lights[MAX_DIRECTIONAL_LIGHT_COUNT];
 //uniform ShadowData shadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
 //uniform sampler2DShadow shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
-uniform sampler2D shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
+//uniform sampler2D shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
 
 const vec3 csmColor[MAX_CSM_COUNT] =
 {
@@ -56,7 +56,8 @@ void main()
 		{
 			if(-position.z <= globalShadowData[shadowCount+c].bounds.z)
 			{
-				shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025, 0.002);
+				//shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025, 0.002);
+				shadowFactor = CalcShadowArray(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, gCSMTexArray, shadowCount+c, 0.0025, 0.002);
 				csmColorCode = csmColor[c];
 				break;
 			}

@@ -4,6 +4,8 @@
 #include "Include/DeferredLighting.incl"
 #include "Include/Shadow.incl"
 #include "Include/BasicFrag.incl"
+// TODO: change this to alpha blend tex
+#include "Include/DeferredPassTex.incl"
 
 in VS_OUT
 {
@@ -15,8 +17,6 @@ in VS_OUT
 
 
 out vec4 color;
-
-uniform sampler2D shadowMap[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
 
 uniform samplerCube skyTex;
 
@@ -49,7 +49,7 @@ void main()
 		{
 			if(-fs_in.posVS.z <= globalShadowData[shadowCount+c].bounds.z)
 			{
-				shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025, 0.002);
+				shadowFactor = CalcShadowArray(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, gCSMTexArray, shadowCount+c, 0.0025, 0.002);
 				break;
 			}
 		}
