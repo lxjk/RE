@@ -36,6 +36,7 @@ struct ShadowData
 
 layout(std140) uniform GlobalLightsRenderInfo
 {
+	int localLightCount;
 	int globalLightCount;
 	Light globalLights[MAX_DIRECTIONAL_LIGHT_COUNT];
 	ShadowData globalShadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
@@ -43,7 +44,6 @@ layout(std140) uniform GlobalLightsRenderInfo
 
 layout(std430) buffer LocalLightsRenderInfo
 {
-	int localLightCount;
 	Light localLights[];
 };
 

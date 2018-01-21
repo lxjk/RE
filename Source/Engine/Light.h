@@ -8,16 +8,6 @@
 
 class Texture;
 
-struct ShadowData
-{
-	Vector4 bounds; // x cascade width, y cascade height, z far plane
-
-	// set in shadow pass
-	// for spot/directional light this is remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
-	// for point light this is lightView * invCameraView, which converts VS -> WS -> LS
-	Matrix4 shadowMat;
-};
-
 class Light
 {
 public:
@@ -49,12 +39,13 @@ public:
 	Matrix4 lightViewMat;
 
 	SphereBounds sphereBounds;
-
-	ShadowData shadowData[MAX_CSM_COUNT];
-
+	
 	// set in shadow pass
-	// only used for point light
-	Matrix4 lightProjRemapMat[4];
+	// for directional light, there is 1 shadow mat for each cascade (total 3): remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
+	// for spot light, there is 1 shadow mat: remap * lightProj * lightView * invCameraView, which converts VS -> WS -> LS -> [-1, 1] -> [0, 1]
+	// for point light, cube map has 1 shadow mat + 1 remap mat; tetrahedron map has 1 shadow mat + 4 remap mat
+	// where shadow mat is lightView * invCameraView, which converts VS -> WS -> LS
+	Matrix4 shadowMat[5];
 
 	Mesh* LightMesh;
 

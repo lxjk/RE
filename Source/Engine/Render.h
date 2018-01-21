@@ -154,6 +154,7 @@ struct ShadowDataRenderInfo
 
 struct GlobalLightsRenderInfo
 {
+	int localLightCount;
 	int globalLightCount;
 	LightRenderInfo globalLights[MAX_DIRECTIONAL_LIGHT_COUNT];
 	ShadowDataRenderInfo globalShadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
