@@ -133,8 +133,18 @@ struct RenderInfo
 
 // must match shader define
 
-#define MAX_DIRECTIONAL_LIGHT_COUNT 4
-#define MAX_CSM_COUNT 3
+struct RenderConsts
+{
+	// shader define
+	static const int MAX_DIRECTIONAL_LIGHT_COUNT = 4;
+	static const int MAX_CSM_COUNT = 3;
+
+	// tile based lighting
+	static const int lightTileSize = 16;
+	// support up to 4k
+	static const int maxTileCountX = (3840 + lightTileSize - 1) / lightTileSize;
+	static const int maxTileCountY = (2160 + lightTileSize - 1) / lightTileSize;
+};
 
 struct LightRenderInfo
 {
@@ -156,6 +166,6 @@ struct GlobalLightsRenderInfo
 {
 	int localLightCount;
 	int globalLightCount;
-	LightRenderInfo globalLights[MAX_DIRECTIONAL_LIGHT_COUNT];
-	ShadowDataRenderInfo globalShadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
+	LightRenderInfo globalLights[RenderConsts::MAX_DIRECTIONAL_LIGHT_COUNT];
+	ShadowDataRenderInfo globalShadowData[RenderConsts::MAX_DIRECTIONAL_LIGHT_COUNT * RenderConsts::MAX_CSM_COUNT];
 };

@@ -406,7 +406,7 @@ void MakeLights()
 	);
 	gDirectionalLights[dlIdx].bCastShadow = true;
 
-	assert(gDirectionalLights.size() <= MAX_DIRECTIONAL_LIGHT_COUNT);
+	assert(gDirectionalLights.size() <= RenderConsts::MAX_DIRECTIONAL_LIGHT_COUNT);
 
 	// point lights
 	int plIdx = 0;
@@ -1717,9 +1717,8 @@ void TileBasedDeferredLightPass(RenderContext& renderContext)
 	curSceneColorTex.access = GL_WRITE_ONLY;
 	gTileBasedDeferredLightCompMaterial->SetParameter("outColor", &curSceneColorTex, true);
 
-	const int tileSize = 16;
-	int groupNumX = (curSceneColorTex.width + tileSize - 1) / tileSize;
-	int groupNumY = (curSceneColorTex.height + tileSize - 1) / tileSize;
+	int groupNumX = (curSceneColorTex.width + RenderConsts::lightTileSize - 1) / RenderConsts::lightTileSize;
+	int groupNumY = (curSceneColorTex.height + RenderConsts::lightTileSize - 1) / RenderConsts::lightTileSize;
 	gTileBasedDeferredLightCompMaterial->DispatchCompute(renderContext, groupNumX, groupNumY);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -1780,18 +1779,18 @@ void ShadowPass(RenderContext& renderContext)
 
 	GlobalLightsRenderInfo globalLightsRenderInfo;
 	globalLightsRenderInfo.localLightCount = (int)gVisibleLightList.size();
-	globalLightsRenderInfo.globalLightCount = Min((int)gDirectionalLights.size(), MAX_DIRECTIONAL_LIGHT_COUNT);
+	globalLightsRenderInfo.globalLightCount = Min((int)gDirectionalLights.size(), RenderConsts::MAX_DIRECTIONAL_LIGHT_COUNT);
 
 	// directional lights
 	if(gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowCSM)
 	{
 		// get shadow map count
 		int csmCount = 0;
-		for (int lightIdx = 0, nlightIdx = Min((int)gDirectionalLights.size(), MAX_DIRECTIONAL_LIGHT_COUNT); lightIdx < nlightIdx; ++lightIdx)
+		for (int lightIdx = 0, nlightIdx = Min((int)gDirectionalLights.size(), RenderConsts::MAX_DIRECTIONAL_LIGHT_COUNT); lightIdx < nlightIdx; ++lightIdx)
 		{
 			Light& light = gDirectionalLights[lightIdx];
 			if (light.bCastShadow)
-				csmCount += MAX_CSM_COUNT;
+				csmCount += RenderConsts::MAX_CSM_COUNT;
 		}
 
 		const int csmMapSize = 1024;
@@ -1813,7 +1812,7 @@ void ShadowPass(RenderContext& renderContext)
 		glClearDepth(1);
 		glClear(GL_DEPTH_BUFFER_BIT);
 
-		const static float cascadeRatio[MAX_CSM_COUNT] = {
+		const static float cascadeRatio[RenderConsts::MAX_CSM_COUNT] = {
 			0.12f, 0.36f, 1.f
 		};
 
@@ -1854,12 +1853,10 @@ void ShadowPass(RenderContext& renderContext)
 
 			Matrix4 viewToLight = light.lightViewMat * viewPoint.invViewMat;
 
-			const int cascadeCount = MAX_CSM_COUNT;
+			const int cascadeCount = RenderConsts::MAX_CSM_COUNT;
 
-			// set shadow count
-			lightRenderInfo.shadowParamA = cascadeCount;
-
-			for (int cascadeIdx = 0; cascadeIdx < cascadeCount; ++cascadeIdx)
+			int cascadeIdx = 0;
+			for (; cascadeIdx < cascadeCount; ++cascadeIdx)
 			{
 				// near and far plane for this cascade
 				float n = (cascadeIdx == 0) ? viewPoint.nearPlane : viewPoint.farPlane * cascadeRatio[cascadeIdx - 1];
@@ -1959,8 +1956,11 @@ void ShadowPass(RenderContext& renderContext)
 				DrawShadowScene(renderContext, 0, shadowRenderInfo, gPrepassMaterial, MeshComponent::gMeshComponentContainer);
 				++csmIndex;
 			}
+
+			// set shadow count
+			lightRenderInfo.shadowParamA = cascadeIdx;
 		}
-		assert(shadowIdx == csmCount);
+		assert(shadowIdx <= csmCount);
 	}
 	else
 	{

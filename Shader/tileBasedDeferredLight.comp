@@ -10,6 +10,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f) writeonly uniform image2D outColor;
 
 #define MAX_TILE_LIGHTS 1024
+#define SPHERE_CULLING 0
 
 shared uint maxTileDepthUintBits;
 shared uint minTileDepthUintBits;
@@ -52,6 +53,85 @@ void main()
 	if(maxTileDepth == 1.f && minTileDepth == 1.f)
 		return;
 	
+#if SPHERE_CULLING
+	// tile frustum
+	vec2 halfRes = resolution.xy * 0.5;
+	vec2 wh = vec2(projMat[0][0], projMat[1][1]) * halfRes;
+	// top left
+	vec2 tileOffset0 = (halfRes - gl_WorkGroupID.xy * gl_WorkGroupSize.xy);
+	// bottom right
+	vec2 tileOffset1 = tileOffset0 - gl_WorkGroupSize.xy;
+	
+	vec2 tileOffsetNorm0 = -tileOffset0 / wh;
+	vec2 tileOffsetNorm1 = -tileOffset1 / wh;
+	vec3 topLeft = normalize(vec3(tileOffsetNorm0.x, tileOffsetNorm0.y, -1));
+	vec3 topRight = normalize(vec3(tileOffsetNorm1.x, tileOffsetNorm0.y, -1));
+	vec3 bottomLeft = normalize(vec3(tileOffsetNorm0.x, tileOffsetNorm1.y, -1));
+	vec3 bottomRight = normalize(vec3(tileOffsetNorm1.x, tileOffsetNorm1.y, -1));	
+	
+	// left, right, top, bottom
+	vec3 sideCenters[4];
+	vec3 sideNormals[4];
+	vec3 sideTangents[4];
+	float sideSizes[4];
+	sideCenters[0] = normalize((topLeft + bottomLeft) * 0.5);
+	sideSizes[0] = dot(sideCenters[0], topLeft);
+	sideCenters[1] = normalize((topRight + bottomRight) * 0.5);
+	sideSizes[1] = dot(sideCenters[1], topRight);
+	sideCenters[2] = normalize((topLeft + topRight) * 0.5);
+	sideSizes[2] = dot(sideCenters[2], topLeft);
+	sideCenters[3] = normalize((bottomLeft + bottomRight) * 0.5);
+	sideSizes[3] = dot(sideCenters[3], bottomLeft);
+	sideNormals[0] = normalize(vec3(-wh.x, 0, tileOffset0.x));	// left
+	sideNormals[1] = normalize(vec3(wh.x, 0, -tileOffset1.x));	// right
+	sideNormals[2] = normalize(vec3(0, -wh.y, tileOffset0.y));	// top
+	sideNormals[3] = normalize(vec3(0, wh.y, -tileOffset1.y));	// bottom
+	for(int i = 0; i < 4; ++i)
+	{
+		sideTangents[i] = cross(sideNormals[i], sideCenters[i]);		
+	}
+	
+	float frustumNear = GetViewZFromDepth(minTileDepth, projMat);
+	float frustumFar = GetViewZFromDepth(maxTileDepth, projMat);
+	
+	// culling, here each thread run a light
+	uint threadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
+	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && lightIdx < MAX_TILE_LIGHTS; lightIdx += threadCount)
+	{
+		vec4 lightBounds = localLightsBounds[lightIdx];		
+		vec3 boundCenter = lightBounds.xyz;
+		float boundRadius = lightBounds.w;
+		float boundDist = length(boundCenter);
+		vec3 boundDir = boundCenter / boundDist;
+		float boundSin = boundRadius / boundDist;
+		float boundCos = sqrt(1 - boundSin * boundSin);
+		
+		float minCos = 1;
+		for(int i = 0; i < 4; ++i)
+		{
+			float LdotN = dot(boundDir, sideNormals[i]);
+			if(LdotN <= 0)
+				continue;
+				
+			vec3 boundProj = normalize(boundDir - LdotN * sideNormals[i]);
+			float cosTheta = dot(boundProj, sideCenters[i]);
+			cosTheta = max(cosTheta, sideSizes[i]);
+			float sinTheta = sqrt(1 - cosTheta * cosTheta) * sign(dot((sideCenters[i], boundProj),sideNormals[i]));
+			vec3 adjEdge = sideCenters[i] * cosTheta + sideTangents[i] * sinTheta;
+			minCos = min(minCos, dot(adjEdge, boundDir));
+		}
+		
+		if(minCos >= boundCos &&
+			boundCenter.z - frustumNear <= boundRadius &&
+			frustumFar - boundCenter.z <= boundRadius)
+		{
+		
+			// light over lap this tile
+			uint tileLightListIdx = atomicAdd(tileLightCount, 1);
+			tileLightIndices[tileLightListIdx] = lightIdx;
+		}
+	}
+#else
 	// tile frustum
 	vec2 halfRes = resolution.xy * 0.5;
 	vec2 wh = vec2(projMat[0][0], projMat[1][1]) * halfRes;
@@ -93,6 +173,7 @@ void main()
 			tileLightIndices[tileLightListIdx] = lightIdx;
 		}
 	}
+#endif
 	
 	barrier();
 	memoryBarrierShared();
