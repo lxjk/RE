@@ -10,35 +10,57 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f) writeonly uniform image2D outColor;
 
 #define MAX_TILE_LIGHTS 1024
+
 #define SPHERE_CULLING 0
+#define CONE_CULLING 1
+#define USE_CONE_DEPTH 1
 
 shared uint maxTileDepthUintBits;
 shared uint minTileDepthUintBits;
 shared uint tileLightCount;
 shared uint tileLightIndices[MAX_TILE_LIGHTS];
 
+float ConditionalMin(float A, float B)
+{
+	float minAB = min(A, B);
+	float maxAB = max(A, B);
+	return minAB < 0 ? maxAB : minAB;
+}
+
+float ConditionalMax(float A, float B)
+{
+	return max(A, B);
+}
+
 void main() 
 {	
 	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 outputSize = imageSize(outColor);
 	
-	vec2 uv = (vec2(pixel_coords) + 0.5) / resolution.xy;
+	vec2 uv = vec2(pixel_coords) / (resolution.xy - 1);
 		
 	float depth = texture(gDepthStencilTex, uv).r;
 	
 	if(gl_LocalInvocationIndex == 0)
 	{
 		maxTileDepthUintBits = 0;
-		minTileDepthUintBits = 0x3F800000; // 1.f
+		minTileDepthUintBits = 0x7F7FFFFF; // max float
 		tileLightCount = 0;
 	}	
 	barrier(); // all invocation sync to this point
 	memoryBarrierShared(); // writes to shared variables now visible for read
 	
+	float depthValue = -1;
 	// find out min/max depth
-	if(depth < 1.f)
+	if(depth < 1 && pixel_coords.x < outputSize.x && pixel_coords.y < outputSize.y)
 	{
-		uint depthUnitBits = floatBitsToInt(depth);
+		float depthValue = depth;
+#if CONE_CULLING && USE_CONE_DEPTH
+		float viewZ = GetViewZFromDepth(depth, projMat);
+		vec3 posCS = vec3((uv * 2.0 - 1.0) / vec2(projMat[0][0], projMat[1][1]), -1);
+		depthValue = length(posCS) * abs(viewZ);
+#endif
+		uint depthUnitBits = floatBitsToInt(depthValue);
 		atomicMax(maxTileDepthUintBits, depthUnitBits);
 		atomicMin(minTileDepthUintBits, depthUnitBits);
 	}
@@ -46,17 +68,16 @@ void main()
 	barrier();
 	memoryBarrierShared();
 	
-	float maxTileDepth = uintBitsToFloat(maxTileDepthUintBits);
-	float minTileDepth = uintBitsToFloat(minTileDepthUintBits);
-		
 	// skip tiles fully on skybox
-	if(maxTileDepth == 1.f && minTileDepth == 1.f)
+	if(minTileDepthUintBits == 0x7F7FFFFF)
 		return;
 	
-#if SPHERE_CULLING
-	// tile frustum
-	vec2 halfRes = resolution.xy * 0.5;
+	float maxTileDepth = uintBitsToFloat(maxTileDepthUintBits);
+	float minTileDepth = uintBitsToFloat(minTileDepthUintBits);
+			
+	vec2 halfRes = (resolution.xy - 1) * 0.5;
 	vec2 wh = vec2(projMat[0][0], projMat[1][1]) * halfRes;
+#if SPHERE_CULLING
 	// top left
 	vec2 tileOffset0 = (halfRes - gl_WorkGroupID.xy * gl_WorkGroupSize.xy);
 	// bottom right
@@ -103,7 +124,7 @@ void main()
 		float boundRadius = lightBounds.w;
 		float boundDist = length(boundCenter);
 		vec3 boundDir = boundCenter / boundDist;
-		float boundSin = boundRadius / boundDist;
+		float boundSin = clamp(boundRadius / boundDist, 0.0, 1.0);
 		float boundCos = sqrt(1 - boundSin * boundSin);
 		
 		float minCos = 1;
@@ -130,11 +151,68 @@ void main()
 			uint tileLightListIdx = atomicAdd(tileLightCount, 1);
 			tileLightIndices[tileLightListIdx] = lightIdx;
 		}
-	}
+	}	
+#elif CONE_CULLING
+	// top left
+	vec2 tileOffset0 = (halfRes - gl_WorkGroupID.xy * gl_WorkGroupSize.xy);
+	// bottom right
+	vec2 tileOffset1 = tileOffset0 - gl_WorkGroupSize.xy;
+	
+	vec2 tileOffsetNorm0 = -tileOffset0 / wh;
+	vec2 tileOffsetNorm1 = -tileOffset1 / wh;
+	vec3 sides[4];
+	sides[0] = normalize(vec3(tileOffsetNorm0.x, tileOffsetNorm0.y, -1)); // top left
+	sides[1] = normalize(vec3(tileOffsetNorm1.x, tileOffsetNorm0.y, -1)); // top right
+	sides[2] = normalize(vec3(tileOffsetNorm0.x, tileOffsetNorm1.y, -1)); // bottom left
+	sides[3] = normalize(vec3(tileOffsetNorm1.x, tileOffsetNorm1.y, -1)); // bottom right
+	vec3 center = normalize(sides[0] + sides[1] + sides[2] + sides[3]);
+	float coneCos = min(min(min(dot(center, sides[0]), dot(center, sides[1])), dot(center, sides[2])), dot(center, sides[3]));
+	float coneSin = sqrt(1 - coneCos * coneCos);
+	
+#if !USE_CONE_DEPTH
+	float frustumNear = GetViewZFromDepth(minTileDepth, projMat);
+	float frustumFar = GetViewZFromDepth(maxTileDepth, projMat);
+#endif
+	
+	// culling, here each thread run a light
+	uint threadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
+	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && lightIdx < MAX_TILE_LIGHTS; lightIdx += threadCount)
+	{
+		vec4 lightBounds = localLightsBounds[lightIdx];		
+		vec3 boundCenter = lightBounds.xyz;
+		float boundRadius = lightBounds.w;
+		float boundDistSqr = dot(boundCenter, boundCenter);
+		float boundDist = sqrt(boundDistSqr);
+		vec3 boundDir = boundCenter / boundDist;
+		float boundSin = clamp(boundRadius / boundDist, 0.0, 1.0);
+		float boundCos = sqrt(1 - boundSin * boundSin);
+		
+		float lightCos = dot(boundDir, center);
+		float lightSin = sqrt(1 - lightCos * lightCos);
+		float diffCos = (boundRadius > boundDist) ? -1.0 : coneCos * boundCos - coneSin * boundSin;
+		
+		// cone depth angle = light angle - cone angle
+		float coneDepthSin = clamp(lightSin * coneCos - lightCos * coneSin, 0.0, 1.0);
+		float coneDepthCos = (coneDepthSin == 0.0) ? 1.0 : lightCos * coneCos + lightSin * coneSin;
+		float coneDepthRadius = sqrt(boundRadius * boundRadius - boundDistSqr * coneDepthSin * coneDepthSin);
+		float coneDepthBaseLen = boundDist * coneDepthCos;
+		
+		if(lightCos >= diffCos &&
+#if !USE_CONE_DEPTH
+			boundCenter.z - frustumNear <= boundRadius &&
+			frustumFar - boundCenter.z <= boundRadius)
 #else
-	// tile frustum
-	vec2 halfRes = resolution.xy * 0.5;
-	vec2 wh = vec2(projMat[0][0], projMat[1][1]) * halfRes;
+			coneDepthBaseLen - coneDepthRadius <= maxTileDepth &&
+			coneDepthBaseLen + coneDepthRadius >= minTileDepth)
+#endif
+		{
+		
+			// light over lap this tile
+			uint tileLightListIdx = atomicAdd(tileLightCount, 1);
+			tileLightIndices[tileLightListIdx] = lightIdx;
+		}
+	}	
+#else
 	// top left
 	vec2 tileOffset0 = (halfRes - gl_WorkGroupID.xy * gl_WorkGroupSize.xy);
 	// bottom right
