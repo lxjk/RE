@@ -40,7 +40,7 @@ void Material::Use(RenderContext& renderContext)
 	renderContext.currentMaterial = this;
 }
 
-void Material::DispatchCompute(struct RenderContext& renderContext, int x, int y, int z)
+void Material::DispatchCompute(struct RenderContext& renderContext, unsigned int x, unsigned int y, unsigned int z)
 {
 	if (!shader || !shader->computeFilePath[0])
 		return;

@@ -111,6 +111,7 @@ struct RenderSettings
 	bool bSSR					= true;
 	bool bSkybox				= true;
 	bool bTileBasedDeferred		= true;
+	bool bTileInfo				= true;
 
 	//RenderSettings() {};
 };
@@ -127,6 +128,8 @@ struct RenderInfo
 	Matrix4 PrevProj;		// 16 * 4
 	Matrix4 PrevViewProj;	// 16 * 4
 	Vector4 Resolution;		// 16
+	unsigned int TileCountX; // 4
+	unsigned int TileCountY; // 4
 	float Time;				// 4
 	float Exposure;			// 4
 };
@@ -141,6 +144,10 @@ struct RenderConsts
 
 	// tile based lighting
 	static const int lightTileSize = 16;
+	static const int lightTileInfoStride = 4;
+	static const int lightSlicesPerTile = 16; // has to be either 16 or 32
+	static const int maxLightPerSlicedTile = 16;
+	static const int lightTileCullingResultOffset = 1;
 	// support up to 4k
 	static const int maxTileCountX = (3840 + lightTileSize - 1) / lightTileSize;
 	static const int maxTileCountY = (2160 + lightTileSize - 1) / lightTileSize;
@@ -165,6 +172,7 @@ struct ShadowDataRenderInfo
 struct GlobalLightsRenderInfo
 {
 	int localLightCount;
+	float maxLocalLightDist;
 	int globalLightCount;
 	LightRenderInfo globalLights[RenderConsts::MAX_DIRECTIONAL_LIGHT_COUNT];
 	ShadowDataRenderInfo globalShadowData[RenderConsts::MAX_DIRECTIONAL_LIGHT_COUNT * RenderConsts::MAX_CSM_COUNT];

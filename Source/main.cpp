@@ -53,6 +53,8 @@
 #define VISUALIZE_TEXTURE 0
 #define LOAD_SCENE_MESH 1
 
+#define DEBUG_SINGLE_LIGHT 0
+
 #define LOAD_CACHE_SIM 0
 
 int gWindowWidth = 1280;
@@ -97,6 +99,8 @@ GLuint gUBO_GlobalLights = 0;
 GLuint gSSBO_LocalLights = 0;
 GLuint gSSBO_LocalLightsBounds = 0;
 GLuint gSSBO_LocalLightsShadowMatrices = 0;
+GLuint gSSBO_LightTileInfoData = 0;
+GLuint gSSBO_LightTileCullingResultInfoData = 0;
 
 int gPrevLocalLightCapacity = 0;
 int gPrevLocalLightShadowMatCapacity = 0;
@@ -164,6 +168,7 @@ Shader gPrepassShader;
 Shader gPrepassTiledShader;
 Shader gPrepassCubeShader;
 Shader gPrepassTetrahedronShader;
+Shader gTiledDeferredLightShader;
 Shader gDirectionalLightShader;
 Shader gLightVolumePointCubeShader;
 Shader gLightVolumePointTetrahedronShader;
@@ -179,6 +184,8 @@ Shader gTAAShader;
 Shader gVisualizeTextureShader;
 
 Shader gTileBasedDeferredLightCompShader;
+Shader gLightTileReductionCompShader;
+Shader gLightTileCullingCompShader;
 
 // material
 Material* gGBufferMaterial;
@@ -187,6 +194,7 @@ Material* gPrepassMaterial;
 Material* gPrepassTiledMaterial;
 Material* gPrepassCubeMaterial;
 Material* gPrepassTetrahedronMaterial;
+Material* gTiledDeferredLightMaterial;
 Material* gDirectionalLightMaterial;
 Material* gLightVolumePointCubeMaterial;
 Material* gLightVolumePointTetrahedronMaterial;
@@ -201,6 +209,8 @@ Material* gTAAMaterial;
 Material* gVisualizeTextureMaterial;
 
 Material* gTileBasedDeferredLightCompMaterial;
+Material* gLightTileReductionCompMaterial;
+Material* gLightTileCullingCompMaterial;
 
 // mesh data
 MeshData gCubeMeshData;
@@ -213,13 +223,10 @@ MeshData gQuadMeshData;
 Mesh* gCubeMesh;
 Mesh* gSphereMesh;
 Mesh* gFSQuadMesh;
+Mesh* gIcosahedronMesh;
+Mesh* gConeMesh;
 REArray<Mesh*> gNanosuitMeshes;
 REArray<Mesh*> gSceneMeshes;
-
-Mesh* gDirectionalLightMesh;
-
-Mesh* gPointLightDebugMesh;
-Mesh* gSpotLightDebugMesh;
 
 // texture
 Texture2D* gDiffuseMap;
@@ -393,7 +400,7 @@ void MakeLights()
 {
 	// directional lights
 	int dlIdx = 0;
-	gDirectionalLights.push_back(Light(gDirectionalLightMesh));
+	gDirectionalLights.push_back(Light(0));
 	dlIdx = (int)gDirectionalLights.size() - 1;
 	gDirectionalLights[dlIdx].SetDirectionLight(
 #if LOAD_SCENE_MESH
@@ -410,19 +417,20 @@ void MakeLights()
 
 	// point lights
 	int plIdx = 0;
-	//gPointLights.push_back(
-	//	Light(Mesh::Create(&gIcosahedronMeshData)));
-	//plIdx = (int)gPointLights.size() - 1;
-	//gPointLights[plIdx].SetPointLight(
-	//	/*pos=*/	Vector4_3(-5, 20, 0),
-	//	/*radius=*/	80.f,
-	//	/*color=*/	Vector4_3(1.f, 1.f, 1.f),
-	//	/*int=*/	40
-	//);
-	//gPointLights[plIdx].bCastShadow = true;
-
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData)));
+		Light(gIcosahedronMesh));
+	plIdx = (int)gPointLights.size() - 1;
+	gPointLights[plIdx].SetPointLight(
+		/*pos=*/	Vector4_3(-10, -3, 3),
+		/*radius=*/	10.f,
+		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
+		/*int=*/	200
+	);
+	gPointLights[plIdx].bCastShadow = true;
+
+#if !DEBUG_SINGLE_LIGHT
+	gPointLights.push_back(
+		Light(gIcosahedronMesh));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	Vector4_3(0, -3, 2),
@@ -433,7 +441,7 @@ void MakeLights()
 	gPointLights[plIdx].bCastShadow = true;
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData)));
+		Light(gIcosahedronMesh));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	Vector4_3(10, -2, 2),
@@ -444,20 +452,9 @@ void MakeLights()
 	gPointLights[plIdx].bCastShadow = true;
 	//gPointLights[plIdx].bVolumetricFog = true;
 
-	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData)));
-	plIdx = (int)gPointLights.size() - 1;
-	gPointLights[plIdx].SetPointLight(
-		/*pos=*/	Vector4_3(-10, -3, 3),
-		/*radius=*/	10.f,
-		/*color=*/	Vector4_3(1.f, 0.f, 0.f),
-		/*int=*/	200
-	);
-	gPointLights[plIdx].bCastShadow = true;
-
 
 	gPointLights.push_back(
-		Light(Mesh::Create(&gIcosahedronMeshData)));
+		Light(gIcosahedronMesh));
 	plIdx = (int)gPointLights.size() - 1;
 	gPointLights[plIdx].SetPointLight(
 		/*pos=*/	Vector4_3(-94, -4, 15),
@@ -470,7 +467,7 @@ void MakeLights()
 	for (int i = 0; i < 10; ++i)
 	{
 		gPointLights.push_back(
-			Light(Mesh::Create(&gIcosahedronMeshData)));
+			Light(gIcosahedronMesh));
 		plIdx = (int)gPointLights.size() - 1;
 		gPointLights[plIdx].SetPointLight(
 			/*pos=*/	Vector4_3(RandRange(-10.f, 10.f), RandRange(-15.f, 5.f), 3),
@@ -485,7 +482,7 @@ void MakeLights()
 	for (int i = 0; i < 1000; ++i)
 	{
 		gPointLights.push_back(
-			Light(Mesh::Create(&gIcosahedronMeshData)));
+			Light(gIcosahedronMesh));
 		plIdx = (int)gPointLights.size() - 1;
 		gPointLights[plIdx].SetPointLight(
 			/*pos=*/	Vector4_3(RandRange(-50.f, 50.f), RandRange(-35.f, 25.f), RandRange(0.f, 50.f)),
@@ -499,7 +496,7 @@ void MakeLights()
 	// spot lights
 	int slIdx = 0;
 	gSpotLights.push_back(
-		Light(Mesh::Create(&gConeMeshData)));
+		Light(gConeMesh));
 	slIdx = (int)gSpotLights.size() - 1;
 	gSpotLights[slIdx].SetSpotLight(
 		/*pos=*/	Vector4_3(0, -10, 3),
@@ -512,6 +509,7 @@ void MakeLights()
 	);
 	gSpotLights[slIdx].bCastShadow = true;
 	//gSpotLights[slIdx].bVolumetricFog = true;
+#endif
 }
 
 void MakeMeshComponents()
@@ -794,6 +792,7 @@ void LoadShaders(bool bReload)
 	gPrepassTiledShader.Load("Shader/prepassTiled.vert", "Shader/prepass.frag", !bReload);
 	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepassCube.geom", "Shader/prepass.frag", !bReload);
 	gPrepassTetrahedronShader.Load("Shader/prepass.vert", "Shader/prepassTetrahedron.geom", "Shader/prepass.frag", !bReload);
+	gTiledDeferredLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadTiledLight.frag", !bReload);
 	gDirectionalLightShader.Load("Shader/fsQuad.vert", "Shader/fsQuadLight.frag", !bReload);
 	gLightVolumePointCubeShader.Load("Shader/lightVolume.vert", "Shader/lightVolumePointCube.frag", !bReload);
 	gLightVolumePointTetrahedronShader.Load("Shader/lightVolume.vert", "Shader/lightVolumePointTetrahedron.frag", !bReload);
@@ -809,6 +808,8 @@ void LoadShaders(bool bReload)
 	gVisualizeTextureShader.Load("Shader/fsQuad.vert", "Shader/fsQuadVisualizeTexture.frag", !bReload);
 
 	gTileBasedDeferredLightCompShader.Load("Shader/tileBasedDeferredLight.comp", !bReload);
+	gLightTileReductionCompShader.Load("Shader/lightTileReduction.comp", !bReload);
+	gLightTileCullingCompShader.Load("Shader/lightTileCulling.comp", !bReload);
 }
 
 float HaltonSeq(int prime, int index = 1)
@@ -921,6 +922,14 @@ bool InitEngine()
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsShadowMatrices);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsShadowMatrixInfoBP, gSSBO_LocalLightsShadowMatrices);
 
+	glGenBuffers(1, &gSSBO_LightTileInfoData);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileInfoData);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LightTileInfoBP, gSSBO_LightTileInfoData);
+
+	glGenBuffers(1, &gSSBO_LightTileCullingResultInfoData);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileCullingResultInfoData);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LightTileCullingResultInfoBP, gSSBO_LightTileCullingResultInfoData);
+
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	
 	// shader
@@ -935,6 +944,7 @@ bool InitEngine()
 	gPrepassTiledMaterial = Material::Create(&gPrepassTiledShader);
 	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
 	gPrepassTetrahedronMaterial = Material::Create(&gPrepassTetrahedronShader);
+	gTiledDeferredLightMaterial = Material::Create(&gTiledDeferredLightShader);
 	gDirectionalLightMaterial = Material::Create(&gDirectionalLightShader);
 	gLightVolumePointCubeMaterial = Material::Create(&gLightVolumePointCubeShader);
 	gLightVolumePointTetrahedronMaterial = Material::Create(&gLightVolumePointTetrahedronShader);
@@ -949,6 +959,8 @@ bool InitEngine()
 	gVisualizeTextureMaterial = Material::Create(&gVisualizeTextureShader);
 
 	gTileBasedDeferredLightCompMaterial = Material::Create(&gTileBasedDeferredLightCompShader);
+	gLightTileReductionCompMaterial = Material::Create(&gLightTileReductionCompShader);
+	gLightTileCullingCompMaterial = Material::Create(&gLightTileCullingCompShader);
 
 	// mesh data
 	MakeCube(gCubeMeshData);
@@ -960,18 +972,16 @@ bool InitEngine()
 	// mesh
 	gCubeMesh = Mesh::Create(&gCubeMeshData, gGBufferMaterial);
 	gSphereMesh = Mesh::Create(&gSphereMeshData, gGBufferMaterial);
-	gFSQuadMesh = Mesh::Create(&gQuadMeshData, gGBufferMaterial);
+
+	gFSQuadMesh = Mesh::Create(&gQuadMeshData);
+	gIcosahedronMesh = Mesh::Create(&gIcosahedronMeshData);
+	gConeMesh = Mesh::Create(&gConeMeshData);
 
 	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
 	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
 #if LOAD_SCENE_MESH
 	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
 #endif
-
-	gDirectionalLightMesh = Mesh::Create(&gQuadMeshData, gDirectionalLightMaterial);
-
-	gPointLightDebugMesh = Mesh::Create(&gIcosahedronMeshData, gLightDebugMaterial);
-	gSpotLightDebugMesh = Mesh::Create(&gConeMeshData, gLightDebugMaterial);
 
 	// texture
 	gDiffuseMap = Texture2D::FindOrCreate("Content/Texture/154.jpg", true, GL_REPEAT, GL_REPEAT);
@@ -1350,6 +1360,20 @@ void CullLights(RenderContext& renderContext)
 	}
 }
 
+void SetupLightTileBuffer(int tileCount)
+{	
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileInfoData);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * tileCount * RenderConsts::lightTileInfoStride, 0, GL_DYNAMIC_DRAW);
+
+	int tileCullingResultStride = (RenderConsts::maxLightPerSlicedTile <= 16 ? 1 : 2);
+	int tileCullingResultCount = tileCount * RenderConsts::lightSlicesPerTile * RenderConsts::maxLightPerSlicedTile;
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileCullingResultInfoData);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * tileCullingResultCount * tileCullingResultStride + RenderConsts::lightTileCullingResultOffset, 0, GL_DYNAMIC_DRAW);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
 void DrawMesh(RenderContext& renderContext, MeshRenderData& meshRenderData)
 {
 	if (!meshRenderData.material || !meshRenderData.material->shader)
@@ -1471,12 +1495,14 @@ void DirectionalLightPass(RenderContext& renderContext)
 	// directional light
 	renderState.Apply(renderContext);
 
-	glClearColor(0, 0, 0, 0);
-	glClearDepth(1);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	if (!gRenderSettings.bSkybox)
+	{
+		glClearColor(0, 0, 0, 0);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
 
 	// draw quad
-	gDirectionalLightMesh->Draw(renderContext);
+	gFSQuadMesh->Draw(renderContext, gDirectionalLightMaterial);
 }
 
 Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRenderData& lightData, int lightIndex)
@@ -1697,12 +1723,13 @@ void LightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("light");
 
+	// must have directional light pass, it put down base color (also clears color if no skybox)
+	DirectionalLightPass(renderContext);
+
 	// enable blend for light additive
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 
-	// must have directional light pass, it clears color and write depth
-	DirectionalLightPass(renderContext);
 	LightVolumePass(renderContext);
 
 	// disable blend
@@ -1713,15 +1740,51 @@ void TileBasedDeferredLightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("tile based light");
 
-	Texture2D& curSceneColorTex = gSceneColorTex[gSceneColorWriteIdx];
-	curSceneColorTex.access = GL_WRITE_ONLY;
-	gTileBasedDeferredLightCompMaterial->SetParameter("outColor", &curSceneColorTex, true);
 
-	int groupNumX = (curSceneColorTex.width + RenderConsts::lightTileSize - 1) / RenderConsts::lightTileSize;
-	int groupNumY = (curSceneColorTex.height + RenderConsts::lightTileSize - 1) / RenderConsts::lightTileSize;
-	gTileBasedDeferredLightCompMaterial->DispatchCompute(renderContext, groupNumX, groupNumY);
+	if (gRenderSettings.bTileInfo)
+	{
+		gLightTileReductionCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
 
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+		// 32 for NVidia, 64 for AMD
+		const unsigned int threadPerGroup = 128;
+		unsigned int cullingGroupCount = (gRenderInfo.TileCountX * gRenderInfo.TileCountY + threadPerGroup - 1) / threadPerGroup;
+		// for culling, 1 thread per tile, use max thread per warp/wavefront in a group
+		gLightTileCullingCompMaterial->DispatchCompute(renderContext, cullingGroupCount);
+
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+		// now render light
+		const static RenderState renderState([](RenderState& s) {
+			// depth test to skip sky box (depth == 1)
+			s.bDepthTest = true;
+			s.depthTestFunc = GL_GREATER;
+			s.bDepthWrite = false;
+		});
+
+		// directional light
+		renderState.Apply(renderContext);
+
+		if (!gRenderSettings.bSkybox)
+		{
+			glClearColor(0, 0, 0, 0);
+			glClear(GL_COLOR_BUFFER_BIT);
+		}
+
+		// draw quad
+		gFSQuadMesh->Draw(renderContext, gTiledDeferredLightMaterial);
+	}
+	else
+	{
+		Texture2D& curSceneColorTex = gSceneColorTex[gSceneColorWriteIdx];
+		curSceneColorTex.access = GL_WRITE_ONLY;
+		gTileBasedDeferredLightCompMaterial->SetParameter("outColor", &curSceneColorTex, true);
+
+		gTileBasedDeferredLightCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
+
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	}
 }
 
 void DrawShadowScene(RenderContext& renderContext, Texture* shadowMap, const RenderInfo& renderInfo, Material* material,
@@ -1976,11 +2039,6 @@ void ShadowPass(RenderContext& renderContext)
 			lightRenderInfo.shadowParamA = 0;
 		}
 	}
-
-	// global light ubo
-	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_GlobalLights);
-	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(GlobalLightsRenderInfo), &globalLightsRenderInfo);
-	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	
 
 
@@ -2004,6 +2062,8 @@ void ShadowPass(RenderContext& renderContext)
 
 	const float lightNearPlane = 0.01f;
 
+	float maxLocalLightDist = 0.f;
+
 	bool bDrawShadowPoint = gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowPoint;
 	bool bDrawShadowSpot = gRenderSettings.bDrawShadow && gRenderSettings.bDrawShadowSpot;
 	bool bSpotLightPass = false;
@@ -2023,7 +2083,10 @@ void ShadowPass(RenderContext& renderContext)
 		lightTmpl.shadowParamB = (!lightData.bSpot && !lightData.bUseTetrahedronShadowMap) ? lightData.shadowMapIndex : -1;
 
 		localLights.push_back(lightTmpl);
-		localLightsBounds.push_back(light.GetSphereBoundVS(viewPoint.viewMat));
+		Vector4 sphereBounds = light.GetSphereBoundVS(viewPoint.viewMat);
+		localLightsBounds.push_back(sphereBounds);
+
+		maxLocalLightDist = Max(maxLocalLightDist, sphereBounds.Size3() + sphereBounds.w);
 
 		if (!lightData.bActualCastShadow)
 			continue;
@@ -2265,6 +2328,14 @@ void ShadowPass(RenderContext& renderContext)
 	}
 
 	assert(shadowMatrices.size() == gCurLocalLightShadowMatCount);
+
+	// set max local light dist
+	globalLightsRenderInfo.maxLocalLightDist = maxLocalLightDist;
+
+	// global light ubo
+	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_GlobalLights);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(GlobalLightsRenderInfo), &globalLightsRenderInfo);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	
 	// send ssbo
 	bool bNeedReallocate = false;
@@ -2371,7 +2442,7 @@ void DebugForwardPass(RenderContext& renderContext)
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
 		gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
 
-		gPointLightDebugMesh->Draw(renderContext);
+		gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 	}
 
 	for (int i = 0; i < gSpotLights.size(); ++i)
@@ -2382,7 +2453,7 @@ void DebugForwardPass(RenderContext& renderContext)
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
 		gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
 
-		gSpotLightDebugMesh->Draw(renderContext);
+		gConeMesh->Draw(renderContext, gLightDebugMaterial);
 	}
 
 	// wireframes
@@ -2463,7 +2534,7 @@ void DebugForwardPass(RenderContext& renderContext)
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
 			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
 
-			gPointLightDebugMesh->Draw(renderContext);
+			gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 		}
 
 		for (int i = 0; i < gSpotLights.size(); ++i)
@@ -2476,7 +2547,7 @@ void DebugForwardPass(RenderContext& renderContext)
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
 			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
 
-			gSpotLightDebugMesh->Draw(renderContext);
+			gConeMesh->Draw(renderContext, gLightDebugMaterial);
 		}
 
 		//for (int i = 0; i < gPointLights.size(); ++i)
@@ -2489,7 +2560,7 @@ void DebugForwardPass(RenderContext& renderContext)
 		//	gLightDebugMaterial->SetParameter("modelMat", modelMat);
 		//	gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
 
-		//	gPointLightDebugMesh->Draw(renderContext);
+		//	gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 		//}
 
 		//for (int i = 0; i < gSpotLights.size(); ++i)
@@ -2502,7 +2573,7 @@ void DebugForwardPass(RenderContext& renderContext)
 		//	gLightDebugMaterial->SetParameter("modelMat", modelMat);
 		//	gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
 
-		//	gPointLightDebugMesh->Draw(renderContext);
+		//	gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 		//}
 	}
 
@@ -2793,6 +2864,7 @@ void UIPass()
 		ImGui::Checkbox("SSR", &gRenderSettings.bSSR);
 		ImGui::Checkbox("Skybox", &gRenderSettings.bSkybox);
 		ImGui::Checkbox("Tile Based", &gRenderSettings.bTileBasedDeferred);
+		ImGui::Checkbox("Tile Info", &gRenderSettings.bTileInfo);
 
 		ImGui::End();
 	}
@@ -2846,7 +2918,7 @@ void Render()
 			gJitterIdx -= gJitterCount;
 	}
 	renderContext.viewPoint = gCamera.ProcessCamera((GLfloat)gWindowWidth, (GLfloat)gWindowHeight, 0.1f, 200.f, jitterX, jitterY);
-
+	
 	// cull lights
 	CullLights(renderContext);
 	
@@ -2870,6 +2942,9 @@ void Render()
 		gRenderInfo.PrevView = gRenderInfo.View;
 		gRenderInfo.PrevProj = gRenderInfo.Proj;
 		gRenderInfo.PrevViewProj = gRenderInfo.ViewProj;
+
+		gRenderInfo.TileCountX = (gWindowWidth + RenderConsts::lightTileSize - 1) / RenderConsts::lightTileSize;
+		gRenderInfo.TileCountY = (gWindowHeight + RenderConsts::lightTileSize - 1) / RenderConsts::lightTileSize;
 	}
 	gRenderInfo.Resolution.x = renderContext.viewPoint.width;
 	gRenderInfo.Resolution.y = renderContext.viewPoint.height;
@@ -2880,6 +2955,9 @@ void Render()
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(RenderInfo), &gRenderInfo);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	if (gHasResetFrame)
+		SetupLightTileBuffer(gRenderInfo.TileCountX * gRenderInfo.TileCountY);
 	
 	// bind G-buffer
 	gGBuffer.Bind();
@@ -2909,8 +2987,7 @@ void Render()
 	gShadowTiledTex.Bind(Shader::gShadowTiledTexUnit);
 	gShadowCubeTexArray.Bind(Shader::gShadowCubeTexArrayUnit);
 
-
-	if (gRenderSettings.bTileBasedDeferred)
+	if (gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileInfo)
 		TileBasedDeferredLightPass(renderContext);
 
 	// bind Scene-buffer
@@ -2918,6 +2995,9 @@ void Render()
 	// attach write texture
 	gSceneBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
 	//gSceneBuffer.AttachDepth(&gSceneDepthStencilTex[gSceneDepthCurrentIdx], true);
+
+	if (gRenderSettings.bTileBasedDeferred && gRenderSettings.bTileInfo)
+		TileBasedDeferredLightPass(renderContext);
 
 	if (!gRenderSettings.bTileBasedDeferred)
 		LightPass(renderContext);
@@ -2990,6 +3070,10 @@ void ProcessShaderReload()
 						changedFiles.insert(childFile);
 					}
 				}
+			}
+			else
+			{
+				printf("file not found in shader cache %d: %s\n", (int)results[i].type, results[i].fileName.c_str());
 			}
 		}
 	}

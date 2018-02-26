@@ -1,0 +1,65 @@
+#version 430 core
+
+#include "Include/CommonUBO.incl"
+#include "Include/Common.incl"
+#include "Include/DeferredPassTex.incl"
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+shared uint maxTileDepthUintBits;
+shared uint minTileDepthUintBits;
+
+uint ConditionalMin(uint A, uint B)
+{
+	uint minAB = min(A, B);
+	uint maxAB = max(A, B);
+	return minAB == 0 ? maxAB : minAB;
+}
+
+void main() 
+{	
+	uint tileIdx = gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x;
+	
+	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+	
+	vec2 uv = vec2(pixel_coords) / (resolution.xy - 1);
+		
+	float depth = texture(gDepthStencilTex, uv).r;
+	
+	if(gl_LocalInvocationIndex == 0)
+	{
+		maxTileDepthUintBits = 0;
+		minTileDepthUintBits = 0x7F7FFFFF; // max float
+	}	
+	barrier(); // all invocation sync to this point
+	memoryBarrierShared(); // writes to shared variables now visible for read
+	
+	float depthValue = -1;
+	// find out min/max depth
+	if(depth < 1 && pixel_coords.x < resolution.x && pixel_coords.y < resolution.y)
+	{
+		float viewZ = GetViewZFromDepth(depth, projMat);
+		vec3 posCS = vec3((uv * 2.0 - 1.0) / vec2(projMat[0][0], projMat[1][1]), -1);
+		depthValue = length(posCS) * abs(viewZ);
+		uint depthUnitBits = floatBitsToInt(depthValue);
+		atomicMax(maxTileDepthUintBits, depthUnitBits);
+		atomicMin(minTileDepthUintBits, depthUnitBits);
+	}
+	
+	barrier();
+	memoryBarrierShared();
+	
+	// write to tile info
+	if(gl_LocalInvocationIndex == 0)
+	{
+		maxTileDepthUintBits = ConditionalMin(maxTileDepthUintBits, floatBitsToInt(maxLocalLightDist));
+		uint tileInfoDataBase = tileIdx * LIGHT_TILE_INFO_STRIDE;
+		lightTileInfoData[tileInfoDataBase] = maxTileDepthUintBits;
+		lightTileInfoData[tileInfoDataBase + 1] = minTileDepthUintBits;
+		if(tileIdx == 0)
+		{
+			// initialize culling result
+			lightTileCullingResultInfo[0] = 0;
+		}
+	}
+}

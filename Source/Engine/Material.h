@@ -144,7 +144,7 @@ public:
 	void Reload();
 	void Use(struct RenderContext& renderContext);
 
-	void DispatchCompute(struct RenderContext& renderContext, int x, int y = 1, int z = 1);
+	void DispatchCompute(struct RenderContext& renderContext, unsigned int x, unsigned int y = 1, unsigned int z = 1);
 
 	void SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type);
 

@@ -1,0 +1,132 @@
+#version 430 core
+
+#include "Include/CommonUBO.incl"
+
+layout(local_size_x = 128) in;
+
+void main() 
+{	
+#if LIGHT_SLICES_PER_TILE <= 16
+	uint tileLightIndices[MAX_TILE_LIGHTS];
+#else
+	uint tileLightIndices[MAX_TILE_LIGHTS * 2];
+#endif
+	uint tileLightCount = 0;
+	
+	uint tileCount = tileCountX * tileCountY;
+	uint tileIdx = gl_GlobalInvocationID.x;	
+	
+	if(tileIdx >= tileCount)
+		return;
+		
+	uint tileCoordY = tileIdx / tileCountX;
+	uint tileCoordX = tileIdx - tileCoordY * tileCountX;
+	vec2 tileTopLeft = vec2(tileCoordX, tileCoordY) * LIGHT_TILE_SIZE;
+	
+	uint tileInfoDataBase = tileIdx * LIGHT_TILE_INFO_STRIDE;
+	float maxTileDepth = uintBitsToFloat(lightTileInfoData[tileInfoDataBase]);
+	float minTileDepth = uintBitsToFloat(lightTileInfoData[tileInfoDataBase+1]);
+	float firstSliceMinDepth = maxTileDepth - maxTileDepth / float(LIGHT_SLICES_PER_TILE);
+	if(minTileDepth >= maxTileDepth || minTileDepth < firstSliceMinDepth)
+	{
+		minTileDepth = firstSliceMinDepth;
+		lightTileInfoData[tileInfoDataBase+1] = floatBitsToInt(minTileDepth);
+	}
+	
+	vec2 halfRes = (resolution.xy - 1) * 0.5;
+	vec2 wh = vec2(projMat[0][0], projMat[1][1]) * halfRes;
+
+	// top left
+	vec2 tileOffset0 = (halfRes - tileTopLeft);
+	// bottom right
+	vec2 tileOffset1 = tileOffset0 - LIGHT_TILE_SIZE;
+	
+	vec2 tileOffsetNorm0 = -tileOffset0 / wh;
+	vec2 tileOffsetNorm1 = -tileOffset1 / wh;
+	vec3 sides[4];
+	sides[0] = normalize(vec3(tileOffsetNorm0.x, tileOffsetNorm0.y, -1)); // top left
+	sides[1] = normalize(vec3(tileOffsetNorm1.x, tileOffsetNorm0.y, -1)); // top right
+	sides[2] = normalize(vec3(tileOffsetNorm0.x, tileOffsetNorm1.y, -1)); // bottom left
+	sides[3] = normalize(vec3(tileOffsetNorm1.x, tileOffsetNorm1.y, -1)); // bottom right
+	vec3 center = normalize(sides[0] + sides[1] + sides[2] + sides[3]);
+	float coneCos = min(min(min(dot(center, sides[0]), dot(center, sides[1])), dot(center, sides[2])), dot(center, sides[3]));
+	float coneSin = sqrt(1 - coneCos * coneCos);
+	
+	uint maxLocalLightCount = localLightCount;
+#if LIGHT_SLICES_PER_TILE <= 16
+	maxLocalLightCount = min(maxLocalLightCount, 0xFFFF);
+#endif
+	for(uint lightIdx = 0; lightIdx < maxLocalLightCount && tileLightCount < MAX_TILE_LIGHTS; ++lightIdx)
+	{
+		vec4 lightBounds = localLightsBounds[lightIdx];		
+		vec3 boundCenter = lightBounds.xyz;
+		float boundRadius = lightBounds.w;
+		float boundDistSqr = dot(boundCenter, boundCenter);
+		float boundDist = sqrt(boundDistSqr);
+		vec3 boundDir = boundCenter / boundDist;
+		float boundSin = clamp(boundRadius / boundDist, 0.0, 1.0);
+		float boundCos = sqrt(1 - boundSin * boundSin);
+		
+		float lightCos = dot(boundDir, center);
+		float lightSin = sqrt(1 - lightCos * lightCos);
+		float diffCos = (boundRadius > boundDist) ? -1.0 : coneCos * boundCos - coneSin * boundSin;
+		
+		// cone depth angle = light angle - cone angle
+		float coneDepthSin = clamp(lightSin * coneCos - lightCos * coneSin, 0.0, 1.0);
+		float coneDepthCos = (coneDepthSin == 0.0) ? 1.0 : lightCos * coneCos + lightSin * coneSin;
+		float coneDepthRadius = sqrt(boundRadius * boundRadius - boundDistSqr * coneDepthSin * coneDepthSin);
+		float coneDepthBaseLen = boundDist * coneDepthCos;
+		
+		float minConeDepth = coneDepthBaseLen - coneDepthRadius;
+		float maxConeDepth = coneDepthBaseLen + coneDepthRadius;
+		
+		if(lightCos >= diffCos &&
+			minConeDepth <= maxTileDepth &&
+			maxConeDepth >= 0)
+		{		
+			// light over lap this tile
+			uint mask = 0;
+			uint maskBit = 1;
+			float stepIncDepth = minTileDepth / float(LIGHT_SLICES_PER_TILE-1);
+			float stepMaxDepth = maxTileDepth;
+			float stepMinDepth = minTileDepth;
+
+			for(int i = 0; i < LIGHT_SLICES_PER_TILE; ++i)
+			{
+				if(minConeDepth <= stepMaxDepth && maxConeDepth >= stepMinDepth)
+					mask |= maskBit;
+				maskBit = (maskBit << 1);
+				stepMaxDepth = stepMinDepth;
+				stepMinDepth -= stepIncDepth;
+			}
+			
+#if LIGHT_SLICES_PER_TILE <= 16
+			tileLightIndices[tileLightCount] = ((lightIdx << 16) | mask);
+			++tileLightCount;
+#else
+			tileLightIndices[tileLightCount*2] = lightIdx;			
+			tileLightIndices[tileLightCount*2+1] = mask;
+			++tileLightCount;
+#endif
+		}
+	}
+	
+	// write result
+	uint maxLightCount = tileCount * LIGHT_SLICES_PER_TILE * MAX_LIGHT_PER_SLICED_TILE;
+	uint tileLightListIdx = atomicAdd(lightTileCullingResultInfo[0], tileLightCount);
+	tileLightCount = max(min(maxLightCount - tileLightListIdx, tileLightCount), 0);
+	tileLightListIdx = min(tileLightListIdx, maxLightCount-1);
+	lightTileInfoData[tileInfoDataBase + 2] = tileLightListIdx;
+	lightTileInfoData[tileInfoDataBase + 3] = tileLightCount;
+	for(uint i = 0; i < tileLightCount; ++i)
+	{
+#if LIGHT_SLICES_PER_TILE <= 16
+		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + tileLightListIdx + i;
+		lightTileCullingResultInfo[baseIdx] = tileLightIndices[i];
+#else
+		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + (tileLightListIdx + i) * 2;
+		lightTileCullingResultInfo[baseIdx] = tileLightIndices[i*2];
+		lightTileCullingResultInfo[baseIdx + 1] = tileLightIndices[i*2 + 1];
+#endif
+	}
+}

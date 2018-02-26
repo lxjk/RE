@@ -11,6 +11,8 @@ layout(std140) uniform RenderInfo
 	mat4 prevProjMat;
 	mat4 prevViewProjMat;
 	vec4 resolution; // x,y screen size, z near plane, w far plane
+	uint tileCountX;
+	uint tileCountY;
 	float time;
 	float exposure;
 };
@@ -37,6 +39,7 @@ struct ShadowData
 layout(std140) uniform GlobalLightsRenderInfo
 {
 	int localLightCount;
+	float maxLocalLightDist;
 	int globalLightCount;
 	Light globalLights[MAX_DIRECTIONAL_LIGHT_COUNT];
 	ShadowData globalShadowData[MAX_DIRECTIONAL_LIGHT_COUNT * MAX_CSM_COUNT];
@@ -57,4 +60,32 @@ layout(std430) buffer LocalLightsShadowMatrixInfo
 	mat4 localLightsShadowMatrices[];
 };
 
+#define MAX_TILE_LIGHTS 128
+
+#define LIGHT_TILE_SIZE 16
+#define LIGHT_TILE_INFO_STRIDE 4
+
+// if 16 slices, use uint16 for light index, light index and mask can packed into one uint32
+// else 32 slices, use uint32 for light index, light index and mask need two uint32
+#define LIGHT_SLICES_PER_TILE 16
+#define MAX_LIGHT_PER_SLICED_TILE 16
+#define LIGHT_TILE_CULLING_RESULT_OFFSET 1
+
+
+layout(std430) buffer LightTileInfo
+{
+	// layout as: 
+	// tile info (4 uint): max dist as uint, min dist as uint, start offset, light count
+	// min dist is to determine 1st slice, optimize for deferred pass
+	uint lightTileInfoData[];
+};
+
+layout(std430) buffer LightTileCullingResultInfo
+{
+	// layout as: 
+	// 0: reserved for increment
+	// if LIGHT_TILE_16_SLICES, one uint per light (light index in higher bits, mask in lower bits)
+	// else two uint per light, (light index, mask)
+	uint lightTileCullingResultInfo[];
+};
 #endif

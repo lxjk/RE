@@ -162,6 +162,8 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 	BindShaderStorageBlock("LocalLightsRenderInfo", LocalLightsRenderInfoBP);
 	BindShaderStorageBlock("LocalLightsCullingInfo", LocalLightsCullingInfoBP);
 	BindShaderStorageBlock("LocalLightsShadowMatrixInfo", LocalLightsShadowMatrixInfoBP);
+	BindShaderStorageBlock("LightTileInfo", LightTileInfoBP);
+	BindShaderStorageBlock("LightTileCullingResultInfo", LightTileCullingResultInfoBP);
 
 	// process uniforms
 	nextTexUnit = 0;

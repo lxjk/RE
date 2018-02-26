@@ -9,8 +9,6 @@ layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rgba16f) writeonly uniform image2D outColor;
 
-#define MAX_TILE_LIGHTS 1024
-
 #define SPHERE_CULLING 0
 #define CONE_CULLING 1
 #define USE_CONE_DEPTH 1
@@ -117,7 +115,7 @@ void main()
 	
 	// culling, here each thread run a light
 	uint threadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
-	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && lightIdx < MAX_TILE_LIGHTS; lightIdx += threadCount)
+	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && tileLightCount < MAX_TILE_LIGHTS; lightIdx += threadCount)
 	{
 		vec4 lightBounds = localLightsBounds[lightIdx];		
 		vec3 boundCenter = lightBounds.xyz;
@@ -176,7 +174,7 @@ void main()
 	
 	// culling, here each thread run a light
 	uint threadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
-	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && lightIdx < MAX_TILE_LIGHTS; lightIdx += threadCount)
+	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && tileLightCount < MAX_TILE_LIGHTS; lightIdx += threadCount)
 	{
 		vec4 lightBounds = localLightsBounds[lightIdx];		
 		vec3 boundCenter = lightBounds.xyz;
@@ -229,7 +227,7 @@ void main()
 	
 	// culling, here each thread run a light
 	uint threadCount = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
-	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && lightIdx < MAX_TILE_LIGHTS; lightIdx += threadCount)
+	for(uint lightIdx = gl_LocalInvocationIndex; lightIdx < localLightCount && tileLightCount < MAX_TILE_LIGHTS; lightIdx += threadCount)
 	{
 		vec4 lightBounds = localLightsBounds[lightIdx];		
 		vec3 boundCenter = lightBounds.xyz;
