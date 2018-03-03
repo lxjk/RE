@@ -112,6 +112,7 @@ struct RenderSettings
 	bool bSkybox				= true;
 	bool bTileBasedDeferred		= true;
 	bool bTileInfo				= true;
+	bool bTileOnePass			= true;
 
 	//RenderSettings() {};
 };

@@ -186,6 +186,7 @@ Shader gVisualizeTextureShader;
 Shader gTileBasedDeferredLightCompShader;
 Shader gLightTileReductionCompShader;
 Shader gLightTileCullingCompShader;
+Shader gLightTileReductionAndCullingCompShader;
 
 // material
 Material* gGBufferMaterial;
@@ -211,6 +212,7 @@ Material* gVisualizeTextureMaterial;
 Material* gTileBasedDeferredLightCompMaterial;
 Material* gLightTileReductionCompMaterial;
 Material* gLightTileCullingCompMaterial;
+Material* gLightTileReductionAndCullingCompMaterial;
 
 // mesh data
 MeshData gCubeMeshData;
@@ -810,6 +812,7 @@ void LoadShaders(bool bReload)
 	gTileBasedDeferredLightCompShader.Load("Shader/tileBasedDeferredLight.comp", !bReload);
 	gLightTileReductionCompShader.Load("Shader/lightTileReduction.comp", !bReload);
 	gLightTileCullingCompShader.Load("Shader/lightTileCulling.comp", !bReload);
+	gLightTileReductionAndCullingCompShader.Load("Shader/lightTileReductionAndCulling.comp", !bReload);
 }
 
 float HaltonSeq(int prime, int index = 1)
@@ -961,6 +964,7 @@ bool InitEngine()
 	gTileBasedDeferredLightCompMaterial = Material::Create(&gTileBasedDeferredLightCompShader);
 	gLightTileReductionCompMaterial = Material::Create(&gLightTileReductionCompShader);
 	gLightTileCullingCompMaterial = Material::Create(&gLightTileCullingCompShader);
+	gLightTileReductionAndCullingCompMaterial = Material::Create(&gLightTileReductionAndCullingCompShader);
 
 	// mesh data
 	MakeCube(gCubeMeshData);
@@ -1743,17 +1747,30 @@ void TileBasedDeferredLightPass(RenderContext& renderContext)
 
 	if (gRenderSettings.bTileInfo)
 	{
-		gLightTileReductionCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
+		if (!gRenderSettings.bTileOnePass)
+		{
+			GPU_SCOPED_PROFILE("tile based culling");
 
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			gLightTileReductionCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
 
-		// 32 for NVidia, 64 for AMD
-		const unsigned int threadPerGroup = 128;
-		unsigned int cullingGroupCount = (gRenderInfo.TileCountX * gRenderInfo.TileCountY + threadPerGroup - 1) / threadPerGroup;
-		// for culling, 1 thread per tile, use max thread per warp/wavefront in a group
-		gLightTileCullingCompMaterial->DispatchCompute(renderContext, cullingGroupCount);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			// 32 for NVidia, 64 for AMD
+			const unsigned int threadPerGroup = 128;
+			unsigned int cullingGroupCount = (gRenderInfo.TileCountX * gRenderInfo.TileCountY + threadPerGroup - 1) / threadPerGroup;
+			// for culling, 1 thread per tile, use max thread per warp/wavefront in a group
+			gLightTileCullingCompMaterial->DispatchCompute(renderContext, cullingGroupCount);
+
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		}
+		else
+		{
+			GPU_SCOPED_PROFILE("tile based culling");
+
+			gLightTileReductionAndCullingCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
+
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		}
 
 		// now render light
 		const static RenderState renderState([](RenderState& s) {
@@ -2865,6 +2882,7 @@ void UIPass()
 		ImGui::Checkbox("Skybox", &gRenderSettings.bSkybox);
 		ImGui::Checkbox("Tile Based", &gRenderSettings.bTileBasedDeferred);
 		ImGui::Checkbox("Tile Info", &gRenderSettings.bTileInfo);
+		ImGui::Checkbox("Tile One Pass", &gRenderSettings.bTileOnePass);
 
 		ImGui::End();
 	}
