@@ -187,6 +187,7 @@ Shader gTileBasedDeferredLightCompShader;
 Shader gLightTileReductionCompShader;
 Shader gLightTileCullingCompShader;
 Shader gLightTileReductionAndCullingCompShader;
+Shader gLightTileOnePassCompShader;
 
 // material
 Material* gGBufferMaterial;
@@ -213,6 +214,7 @@ Material* gTileBasedDeferredLightCompMaterial;
 Material* gLightTileReductionCompMaterial;
 Material* gLightTileCullingCompMaterial;
 Material* gLightTileReductionAndCullingCompMaterial;
+Material* gLightTileOnePassCompMaterial;
 
 // mesh data
 MeshData gCubeMeshData;
@@ -489,7 +491,8 @@ void MakeLights()
 		gPointLights[plIdx].SetPointLight(
 			/*pos=*/	Vector4_3(RandRange(-50.f, 50.f), RandRange(-35.f, 25.f), RandRange(0.f, 50.f)),
 			/*radius=*/	6.f,
-			/*color=*/	Vector4_3(RandRange(0.f, 1.f), RandRange(0.f, 1.f), RandRange(0.f, 1.f)),
+			/*color=*/	//Vector4_3(RandRange(0.f, 1.f), RandRange(0.f, 1.f), RandRange(0.f, 1.f)),
+						Vector4_3(HSVToRGB(Vector4_3(RandRange(0.f, 360.f), RandRange(0.5f, 1.f), 1.f))),
 			/*int=*/	20
 		);
 		//gPointLights[plIdx].bCastShadow = true;
@@ -521,6 +524,7 @@ void MakeMeshComponents()
 	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
 	boxMesh->material->SetParameter("metallic", 1.0f);
 	boxMesh->material->SetParameter("roughness", 0.3f);
+	//boxMesh->material->SetParameter("tintColor", Vector4(1.f,1.f,1.f,0.8f), 4);
 	for (int i = 0; i < 3; ++i)
 	{
 		MeshComponent* meshComp = MeshComponent::Create();
@@ -813,6 +817,7 @@ void LoadShaders(bool bReload)
 	gLightTileReductionCompShader.Load("Shader/lightTileReduction.comp", !bReload);
 	gLightTileCullingCompShader.Load("Shader/lightTileCulling.comp", !bReload);
 	gLightTileReductionAndCullingCompShader.Load("Shader/lightTileReductionAndCulling.comp", !bReload);
+	gLightTileOnePassCompShader.Load("Shader/lightTileOnePass.comp", !bReload);
 }
 
 float HaltonSeq(int prime, int index = 1)
@@ -965,6 +970,7 @@ bool InitEngine()
 	gLightTileReductionCompMaterial = Material::Create(&gLightTileReductionCompShader);
 	gLightTileCullingCompMaterial = Material::Create(&gLightTileCullingCompShader);
 	gLightTileReductionAndCullingCompMaterial = Material::Create(&gLightTileReductionAndCullingCompShader);
+	gLightTileOnePassCompMaterial = Material::Create(&gLightTileOnePassCompShader);
 
 	// mesh data
 	MakeCube(gCubeMeshData);
@@ -972,20 +978,6 @@ bool InitEngine()
 	MakeIcosahedron(gIcosahedronMeshData, 2);
 	MakeCone(gConeMeshData, 16, 2);
 	MakeQuadVS(gQuadMeshData);
-
-	// mesh
-	gCubeMesh = Mesh::Create(&gCubeMeshData, gGBufferMaterial);
-	gSphereMesh = Mesh::Create(&gSphereMeshData, gGBufferMaterial);
-
-	gFSQuadMesh = Mesh::Create(&gQuadMeshData);
-	gIcosahedronMesh = Mesh::Create(&gIcosahedronMeshData);
-	gConeMesh = Mesh::Create(&gConeMeshData);
-
-	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
-	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
-#if LOAD_SCENE_MESH
-	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", &gGBufferShader, EMeshConversion::YUpToZUP);
-#endif
 
 	// texture
 	gDiffuseMap = Texture2D::FindOrCreate("Content/Texture/154.jpg", true, GL_REPEAT, GL_REPEAT);
@@ -1023,6 +1015,20 @@ bool InitEngine()
 	gAlphaBlendBasicMaterial->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
 	gAlphaBlendBasicMaterial->SetParameter("skyTex", gSkyboxMap);
 	gAlphaBlendBasicMaterial->bAlphaBlend = true;
+	
+	// mesh
+	gCubeMesh = Mesh::Create(&gCubeMeshData, gGBufferMaterial);
+	gSphereMesh = Mesh::Create(&gSphereMeshData, gGBufferMaterial);
+
+	gFSQuadMesh = Mesh::Create(&gQuadMeshData);
+	gIcosahedronMesh = Mesh::Create(&gIcosahedronMeshData);
+	gConeMesh = Mesh::Create(&gConeMeshData);
+
+	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
+	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
+#if LOAD_SCENE_MESH
+	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", &gGBufferShader, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
+#endif
 
 	// light
 	MakeLights();
@@ -1487,7 +1493,7 @@ void SSAOPass(RenderContext& renderContext)
 
 void DirectionalLightPass(RenderContext& renderContext)
 {
-	GPU_SCOPED_PROFILE("directional light");
+	//GPU_SCOPED_PROFILE("directional light");
 
 	const static RenderState renderState([](RenderState& s) {
 		// depth test to skip sky box (depth == 1)
@@ -1560,7 +1566,7 @@ Material* SetupLightVolumeMaterial(RenderContext& renderContext, const LightRend
 
 void LightVolumePass(RenderContext& renderContext)
 {
-	GPU_SCOPED_PROFILE("light volume");
+	//GPU_SCOPED_PROFILE("light volume");
 
 	// prepass render state
 	const static RenderState prepassRenderState( [] (RenderState& s) {
@@ -1740,38 +1746,40 @@ void LightPass(RenderContext& renderContext)
 	glDisable(GL_BLEND);
 }
 
+void TileInfoPass(RenderContext& renderContext)
+{
+	GPU_SCOPED_PROFILE("light");
+	GPU_SCOPED_PROFILE("tile based culling", tileBasedCulling);
+
+	if (!gRenderSettings.bTileCullingCombined)
+	{
+		gLightTileReductionCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
+
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+		// 32 for NVidia, 64 for AMD
+		const unsigned int threadPerGroup = 128;
+		unsigned int cullingGroupCount = (gRenderInfo.TileCountX * gRenderInfo.TileCountY + threadPerGroup - 1) / threadPerGroup;
+		// for culling, 1 thread per tile, use max thread per warp/wavefront in a group
+		gLightTileCullingCompMaterial->DispatchCompute(renderContext, cullingGroupCount);
+
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	}
+	else
+	{
+		gLightTileReductionAndCullingCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
+
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	}
+}
+
 void TileBasedDeferredLightPass(RenderContext& renderContext)
 {
-	GPU_SCOPED_PROFILE("tile based light");
-
-
-	if (gRenderSettings.bTileInfo)
+	GPU_SCOPED_PROFILE("light");
+	GPU_SCOPED_PROFILE("tile based render", tileBasedRender);
+	
+	if (!gRenderSettings.bTileOnePass)
 	{
-		if (!gRenderSettings.bTileOnePass)
-		{
-			GPU_SCOPED_PROFILE("tile based culling");
-
-			gLightTileReductionCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
-
-			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-			// 32 for NVidia, 64 for AMD
-			const unsigned int threadPerGroup = 128;
-			unsigned int cullingGroupCount = (gRenderInfo.TileCountX * gRenderInfo.TileCountY + threadPerGroup - 1) / threadPerGroup;
-			// for culling, 1 thread per tile, use max thread per warp/wavefront in a group
-			gLightTileCullingCompMaterial->DispatchCompute(renderContext, cullingGroupCount);
-
-			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-		}
-		else
-		{
-			GPU_SCOPED_PROFILE("tile based culling");
-
-			gLightTileReductionAndCullingCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
-
-			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-		}
-
 		// now render light
 		const static RenderState renderState([](RenderState& s) {
 			// depth test to skip sky box (depth == 1)
@@ -1796,11 +1804,18 @@ void TileBasedDeferredLightPass(RenderContext& renderContext)
 	{
 		Texture2D& curSceneColorTex = gSceneColorTex[gSceneColorWriteIdx];
 		curSceneColorTex.access = GL_WRITE_ONLY;
+#if 0
 		gTileBasedDeferredLightCompMaterial->SetParameter("outColor", &curSceneColorTex, true);
-
 		gTileBasedDeferredLightCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
 
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+#else
+		gLightTileOnePassCompMaterial->SetParameter("outColor", &curSceneColorTex, true);
+		gLightTileOnePassCompMaterial->DispatchCompute(renderContext, gRenderInfo.TileCountX, gRenderInfo.TileCountY);
+
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+#endif
+
 	}
 }
 
@@ -2455,9 +2470,9 @@ void DebugForwardPass(RenderContext& renderContext)
 	{
 		Matrix4 modelMat = Matrix4::Identity();
 		modelMat.SetTranslation(gPointLights[i].position);
-		modelMat.ApplyScale(0.3f);
+		modelMat.ApplyScale(0.2f);
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
-		gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
+		gLightDebugMaterial->SetParameter("color", gPointLights[i].color * 2, 3);
 
 		gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 	}
@@ -2466,9 +2481,9 @@ void DebugForwardPass(RenderContext& renderContext)
 	{
 		Matrix4 modelMat = MakeMatrixFromForward(gSpotLights[i].direction);
 		modelMat.SetTranslation(gSpotLights[i].position);
-		modelMat.ApplyScale(Vector4_3(gSpotLights[i].endRadius, gSpotLights[i].radius, gSpotLights[i].endRadius) * (0.6f / gSpotLights[i].radius));
+		modelMat.ApplyScale(Vector4_3(gSpotLights[i].endRadius, gSpotLights[i].radius, gSpotLights[i].endRadius) * (0.4f / gSpotLights[i].radius));
 		gLightDebugMaterial->SetParameter("modelMat", modelMat);
-		gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
+		gLightDebugMaterial->SetParameter("color", gSpotLights[i].color * 2, 3);
 
 		gConeMesh->Draw(renderContext, gLightDebugMaterial);
 	}
@@ -2549,7 +2564,7 @@ void DebugForwardPass(RenderContext& renderContext)
 			modelMat.ApplyScale(gPointLights[i].radius);
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
-			gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
+			gLightDebugMaterial->SetParameter("color", gPointLights[i].color * 2, 3);
 
 			gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 		}
@@ -2562,7 +2577,7 @@ void DebugForwardPass(RenderContext& renderContext)
 			modelMat.ApplyScale(gSpotLights[i].endRadius, gSpotLights[i].radius, gSpotLights[i].endRadius);
 
 			gLightDebugMaterial->SetParameter("modelMat", modelMat);
-			gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
+			gLightDebugMaterial->SetParameter("color", gSpotLights[i].color * 2, 3);
 
 			gConeMesh->Draw(renderContext, gLightDebugMaterial);
 		}
@@ -2575,7 +2590,7 @@ void DebugForwardPass(RenderContext& renderContext)
 		//	modelMat.ApplyScale(gSpotLights[i].sphereBounds.centerRadius.w);
 
 		//	gLightDebugMaterial->SetParameter("modelMat", modelMat);
-		//	gLightDebugMaterial->SetParameter("color", gPointLights[i].colorIntensity, 3);
+		//	gLightDebugMaterial->SetParameter("color", gPointLights[i].color * 2, 3);
 
 		//	gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 		//}
@@ -2588,7 +2603,7 @@ void DebugForwardPass(RenderContext& renderContext)
 		//	modelMat.ApplyScale(gSpotLights[i].sphereBounds.centerRadius.w);
 
 		//	gLightDebugMaterial->SetParameter("modelMat", modelMat);
-		//	gLightDebugMaterial->SetParameter("color", gSpotLights[i].colorIntensity, 3);
+		//	gLightDebugMaterial->SetParameter("color", gSpotLights[i].color * 2, 3);
 
 		//	gIcosahedronMesh->Draw(renderContext, gLightDebugMaterial);
 		//}
@@ -2881,8 +2896,8 @@ void UIPass()
 		ImGui::Checkbox("SSR", &gRenderSettings.bSSR);
 		ImGui::Checkbox("Skybox", &gRenderSettings.bSkybox);
 		ImGui::Checkbox("Tile Based", &gRenderSettings.bTileBasedDeferred);
-		ImGui::Checkbox("Tile Info", &gRenderSettings.bTileInfo);
 		ImGui::Checkbox("Tile One Pass", &gRenderSettings.bTileOnePass);
+		ImGui::Checkbox("Tile Combined", &gRenderSettings.bTileCullingCombined);
 
 		ImGui::End();
 	}
@@ -2992,6 +3007,10 @@ void Render()
 	gMaterialTex.Bind(Shader::gMaterialTexUnit);
 	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 
+	// run compute to fill in tile info right after we have depth buffer
+	if (gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileOnePass)
+		TileInfoPass(renderContext);
+
 	// bind SSAO-buffer
 	if (gRenderSettings.bSSAO)
 	{
@@ -3005,7 +3024,7 @@ void Render()
 	gShadowTiledTex.Bind(Shader::gShadowTiledTexUnit);
 	gShadowCubeTexArray.Bind(Shader::gShadowCubeTexArrayUnit);
 
-	if (gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileInfo)
+	if (gRenderSettings.bTileBasedDeferred && gRenderSettings.bTileOnePass)
 		TileBasedDeferredLightPass(renderContext);
 
 	// bind Scene-buffer
@@ -3014,7 +3033,7 @@ void Render()
 	gSceneBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
 	//gSceneBuffer.AttachDepth(&gSceneDepthStencilTex[gSceneDepthCurrentIdx], true);
 
-	if (gRenderSettings.bTileBasedDeferred && gRenderSettings.bTileInfo)
+	if (gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileOnePass)
 		TileBasedDeferredLightPass(renderContext);
 
 	if (!gRenderSettings.bTileBasedDeferred)

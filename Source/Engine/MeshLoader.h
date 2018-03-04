@@ -4,6 +4,8 @@
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
 
+#include "Texture2D.h"
+#include "TextureCube.h"
 #include "Mesh.h"
 
 enum class EMeshConversion
@@ -74,7 +76,9 @@ void ProcessNode(REArray<Mesh*>& output, aiNode* node, const aiScene* scene, REA
 	}
 
 }
-void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, EMeshConversion conversion = EMeshConversion::None)
+void LoadMesh(REArray<Mesh*>& output, std::string path, 
+	Shader* defaultShader, Shader* defaultAlphaBlendShader, TextureCube* skyTex,
+	EMeshConversion conversion = EMeshConversion::None)
 {
 	Assimp::Importer import;
 	const aiScene* scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
@@ -95,12 +99,9 @@ void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, E
 	REArray<Material*> materials;
 	for (unsigned int i = 0; i < scene->mNumMaterials; ++i)
 	{
-		Material* material = Material::Create(defaultShader);
-		materials.push_back(material);
+		Material* material = 0;
 
 		aiMaterial* aiMaterial = scene->mMaterials[i];
-
-		material->SetParameter("tintColor", Vector4(1.f), 4);
 
 		// diffuse
 		if (aiMaterial->GetTextureCount(aiTextureType_DIFFUSE) > 0)
@@ -110,13 +111,26 @@ void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, E
 			std::string texPath = localPath;
 			texPath.append(str.C_Str());
 			Texture2D* tex = Texture2D::FindOrCreate(texPath.c_str(), true, GL_REPEAT, GL_REPEAT);
+			if (tex->HasAlpha())
+			{
+				material = Material::Create(defaultAlphaBlendShader);
+				material->bAlphaBlend = true;
+				material->SetParameter("skyTex", skyTex);
+			}
+			else
+			{
+				material = Material::Create(defaultShader);
+			}
 			material->SetParameter("hasDiffuseTex", 1);
 			material->SetParameter("diffuseTex", tex);
 		}
 		else
 		{
+			material = Material::Create(defaultShader);
 			material->SetParameter("hasDiffuseTex", 0);
 		}
+
+		material->SetParameter("tintColor", Vector4(1.f), 4);
 
 		// normal
 		if (aiMaterial->GetTextureCount(aiTextureType_HEIGHT) > 0)
@@ -169,6 +183,8 @@ void LoadMesh(REArray<Mesh*>& output, std::string path, Shader* defaultShader, E
 		}
 
 		material->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
+
+		materials.push_back(material);
 	}
 
 	ProcessNode(output, scene->mRootNode, scene, materials, conversion);

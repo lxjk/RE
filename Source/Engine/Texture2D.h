@@ -36,6 +36,8 @@ public:
 		textureType = GL_TEXTURE_2D;
 	}
 
+	bool HasAlpha()	{ return format == GL_RGBA;	}
+
 	void Load(const char* name, bool bSRGB,
 		GLint wrapS = GL_CLAMP_TO_EDGE, GLint wrapT = GL_CLAMP_TO_EDGE,
 		GLint minFilter = GL_LINEAR_MIPMAP_LINEAR, GLint magFilter = GL_LINEAR);

@@ -61,8 +61,9 @@ void main()
 	//gMaterial = vec4(metallic, hasRoughnessTex > 0 ? 1 - texture(roughnessTex, uv).r : roughness, 0, 0);	
 	
 	vec2 uv;
-	
-	GetBasicValue(fs_in.texCoords, fs_in.normal, fs_in.tangent, uv, gAlbedo, gNormal, gMaterial);
+	vec4 color;
+	GetBasicValue(fs_in.texCoords, fs_in.normal, fs_in.tangent, uv, color, gNormal, gMaterial);
+	gAlbedo = color.rgb;
 	
 	vec2 velocity = fs_in.posCS.xy / fs_in.posCS.w - fs_in.prevPosCS.xy / fs_in.prevPosCS.w;
 	gVelocity = EncodeVelocityToTexture(velocity);

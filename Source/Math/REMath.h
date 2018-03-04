@@ -789,3 +789,24 @@ inline bool IsFrustumIntersectFrustum(Vector4* packedVerts, Plane* planes, int p
 	}
 	return true;
 }
+
+
+// =================================================================
+// Geometry
+inline Vector4 HSVToRGB(const Vector4& color)
+{
+	float h = color.x / 60.f;
+	float c = color.y * color.z;
+	float x = c * (1.f - Abs((float)fmod(h, 2.f) - 1.f));
+	float m = color.z - c;
+	Vector4 result(0);
+	if (h >= 0.f && h < 1.f)	result = Vector4(c, x, 0);
+	else if (h < 2.f)			result = Vector4(x, c, 0);
+	else if (h < 3.f)			result = Vector4(0, c, x);
+	else if (h < 4.f)			result = Vector4(0, x, c);
+	else if (h < 5.f)			result = Vector4(x, 0, c);
+	else if (h < 6.f)			result = Vector4(c, 0, x);
+	result += m;
+	result.w = color.w;
+	return result;
+}

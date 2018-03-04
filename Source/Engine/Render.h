@@ -111,8 +111,8 @@ struct RenderSettings
 	bool bSSR					= true;
 	bool bSkybox				= true;
 	bool bTileBasedDeferred		= true;
-	bool bTileInfo				= true;
-	bool bTileOnePass			= true;
+	bool bTileOnePass			= false;
+	bool bTileCullingCombined	= false;
 
 	//RenderSettings() {};
 };
