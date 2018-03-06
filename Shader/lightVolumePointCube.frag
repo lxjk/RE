@@ -1,7 +1,7 @@
 #version 430 core
 
 #include "Include/CommonUBO.incl"
-#include "Include/DeferredLighting.incl"
+#include "Include/Lighting.incl"
 #include "Include/DeferredPassTex.incl"
 #include "Include/Shadow.incl"
 #include "Include/BasicLightVolumeFrag.incl"

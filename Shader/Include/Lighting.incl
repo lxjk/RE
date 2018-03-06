@@ -1,5 +1,5 @@
-#ifndef DEFERRED_LIGHTING_INCL
-#define DEFERRED_LIGHTING_INCL
+#ifndef LIGHTING_INCL
+#define LIGHTING_INCL
 
 #include "Common.incl"
 #include "CommonUBO.incl"

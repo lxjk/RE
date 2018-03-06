@@ -3,7 +3,7 @@
 #include "Include/CommonUBO.incl"
 #include "Include/PostProcessPassTex.incl"
 #include "Include/Common.incl"
-#include "Include/DeferredLighting.incl";
+#include "Include/Lighting.incl";
 
 in VS_OUT
 {

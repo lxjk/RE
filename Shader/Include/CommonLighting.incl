@@ -1,0 +1,73 @@
+#ifndef COMMON_LIGHTING_INCL
+#define COMMON_LIGHTING_INCL
+
+#include "Common.incl"
+#include "CommonUBO.incl"
+#include "Lighting.incl"
+#include "Shadow.incl"
+
+void CalcGlobalLights(inout vec3 color, vec3 position, vec3 normal, vec3 view, vec3 albedo, float metallic, float roughness, float ao)
+{
+	vec3 ambient = albedo.rgb * (0.035 * (1-ao));
+	color += ambient;
+	int shadowCount = 0;
+	for(int i = 0; i < globalLightCount; ++i)
+	{
+		float shadowFactor = 1;
+		int shadowDataCount = globalLights[i].shadowParamA;
+		for(int c = 0; c < shadowDataCount; ++c)
+		{
+			if(-position.z <= globalShadowData[shadowCount+c].bounds.z)
+			{
+				shadowFactor = CalcShadowArray(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, gCSMTexArray, shadowCount+c, 0.0025, 0.002);
+				break;
+			}
+		}
+		shadowCount += shadowDataCount;
+		color += CalcLight(globalLights[i], normal, position, view, albedo, metallic, roughness) * min(shadowFactor, 1-ao);
+	}
+}
+
+void CalcTiledLocalLights(inout vec3 color, vec2 pixelCoord, vec3 position, vec3 normal, vec3 view, vec3 albedo, float metallic, float roughness, float ao)
+{
+	uvec2 tileCoord = uvec2(pixelCoord / LIGHT_TILE_SIZE);
+	uint tileIdx = tileCoord.y * tileCountX + tileCoord.x;	
+	uint tileInfoDataBase = tileIdx * LIGHT_TILE_INFO_STRIDE;
+	float maxTileDepth = uintBitsToFloat(lightTileInfoData[tileInfoDataBase]);
+	float minTileDepth = uintBitsToFloat(lightTileInfoData[tileInfoDataBase+1]);
+	uint lightStartOffset = lightTileInfoData[tileInfoDataBase + 2];
+	uint lightCount = lightTileInfoData[tileInfoDataBase + 3];
+	
+	float pixelDepth = length(position);
+		
+	uint slice = 0;
+	if(pixelDepth < minTileDepth)
+		slice = uint(clamp((minTileDepth - pixelDepth) / minTileDepth * (LIGHT_SLICES_PER_TILE - 1) + 1, 1, LIGHT_SLICES_PER_TILE-1));
+	uint pixelMask = 1 << slice;
+	if(pixelDepth > maxLocalLightDist)
+		lightCount = 0;
+	
+	for(uint i = 0; i < lightCount; ++i)
+	{
+#if LIGHT_SLICES_PER_TILE <= 16
+		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + lightStartOffset + i;
+		uint cullingResult = lightTileCullingResultInfo[baseIdx];
+		if((cullingResult & pixelMask) == 0)
+			continue;
+		uint lightIdx = (cullingResult >> 16);
+#else
+		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + (lightStartOffset + i) * 2;
+		uint lightIdx = lightTileCullingResultInfo[baseIdx];
+		uint mask = lightTileCullingResultInfo[baseIdx + 1];
+		if((mask & pixelMask) == 0)
+			continue;
+#endif
+		Light light = localLights[lightIdx];
+		
+		vec3 localLightResult = CalcLight(light, normal, position, view, albedo, metallic, roughness);
+		float shadowFactor = CalcShadowGeneral(light, position, normal);
+		color += localLightResult * min(shadowFactor, 1-ao);
+	}
+}
+
+#endif

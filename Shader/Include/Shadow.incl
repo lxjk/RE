@@ -384,4 +384,36 @@ float CalcShadowTetrahedronSingle(vec4 posLVS, vec3 normal, vec3 light, mat4 lig
 	return CalcShadowBasicTetrahedronSingle(posLVS, lightProjRemapMat, shadowMat, shadowMap, bias);
 }
 
+float CalcShadowGeneral(Light light, vec3 position, vec3 normal)
+{
+	float shadowFactor = 1;
+	if(light.shadowParamA >= 0)
+	{
+		mat4 shadowMat = localLightsShadowMatrices[light.shadowParamA];
+		vec3 lightDir = normalize(light.positionInvR.xyz - position);
+		if(light.attenParams.y > 0.5f)
+		{
+			// spot light
+			shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, gShadowTiledTex, 0.00015, 0.0001);
+		}
+		else if(light.shadowParamB >= 0)
+		{
+			// point light cube map
+			shadowFactor = CalcShadowCubeArray(position, normal, lightDir, 
+				localLightsShadowMatrices[light.shadowParamA + 1], 
+				shadowMat, gShadowCubeTexArray, light.shadowParamB, 0.0002, 0.0003);
+		}
+		else
+		{
+			// point light tetrahedron map
+			vec4 posLVS = shadowMat * vec4(position, 1.f);
+			int faceIndex = GetTetrahedronIndex(posLVS);
+			shadowFactor = CalcShadowTetrahedronSingle(posLVS, normal, lightDir, 
+				localLightsShadowMatrices[light.shadowParamA + 1 + faceIndex], 
+				shadowMat, gShadowTiledTex, 0.00025, 0.0004);
+		}
+	}
+	return shadowFactor;
+}
+
 #endif

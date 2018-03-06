@@ -1,10 +1,7 @@
 #version 430 core
 
-#include "Include/CommonUBO.incl"
-#include "Include/Common.incl"
 #include "Include/DeferredPassTex.incl"
-#include "Include/DeferredLighting.incl"
-#include "Include/Shadow.incl"
+#include "Include/CommonLighting.incl"
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
@@ -199,31 +196,14 @@ void main()
 		vec3 lightingResult = vec3(0);
 		vec3 normal = normalize(texture(gNormalTex, uv).rgb * 2.0f - 1.0f);
 		vec3 view = -position / depthValue;//normalize(-position);
-		vec4 albedo = texture(gAlbedoTex, uv);
+		vec3 albedo = texture(gAlbedoTex, uv).rgb;
 		vec4 material = texture(gMaterialTex, uv);
 		float metallic = material.r;
 		float roughness = material.g;
 		float ao = material.a;
 		
 		// global lights
-		vec3 ambient = albedo.rgb * (0.035 * (1-ao));
-		lightingResult = ambient;
-		int shadowCount = 0;
-		for(int i = 0; i < globalLightCount; ++i)
-		{
-			float shadowFactor = 1;
-			int shadowDataCount = globalLights[i].shadowParamA;
-			for(int c = 0; c < shadowDataCount; ++c)
-			{
-				if(-position.z <= globalShadowData[shadowCount+c].bounds.z)
-				{
-					shadowFactor = CalcShadowArray(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, gCSMTexArray, shadowCount+c, 0.0025, 0.002);
-					break;
-				}
-			}
-			shadowCount += shadowDataCount;
-			lightingResult += CalcLight(globalLights[i], normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);
-		}
+		CalcGlobalLights(lightingResult, position, normal, view, albedo, metallic, roughness, ao);		
 		
 		// local lights
 		uint affectedLocalLightCount = tileLightCount;
@@ -249,36 +229,8 @@ void main()
 	#endif
 			Light light = localLights[lightIdx];
 			
-			float shadowFactor = 1;
-			vec3 localLightResult = CalcLight(light, normal, position, view, albedo.rgb, metallic, roughness);
-			int shadowParamA = light.shadowParamA;
-			if(light.shadowParamA >= 0)
-			{
-				mat4 shadowMat = localLightsShadowMatrices[light.shadowParamA];
-				vec3 lightDir = normalize(light.positionInvR.xyz - position);
-				if(light.attenParams.y > 0.5f)
-				{
-					// spot light
-					shadowFactor = CalcShadow(position, normal, lightDir, shadowMat, gShadowTiledTex, 0.00015, 0.0001);
-				}
-				else if(light.shadowParamB >= 0)
-				{
-					// point light cube map
-					shadowFactor = CalcShadowCubeArray(position, normal, lightDir, 
-						localLightsShadowMatrices[light.shadowParamA + 1], 
-						shadowMat, gShadowCubeTexArray, light.shadowParamB, 0.0002, 0.0003);
-				}
-				else
-				{
-					// point light tetrahedron map
-					vec4 posLVS = shadowMat * vec4(position, 1.f);
-					int faceIndex = GetTetrahedronIndex(posLVS);
-					shadowFactor = CalcShadowTetrahedronSingle(posLVS, normal, lightDir, 
-						localLightsShadowMatrices[light.shadowParamA + 1 + faceIndex], 
-						shadowMat, gShadowTiledTex, 0.00025, 0.0004);
-				}
-			}
-			
+			vec3 localLightResult = CalcLight(light, normal, position, view, albedo, metallic, roughness);
+			float shadowFactor = CalcShadowGeneral(light, position, normal);
 			lightingResult += localLightResult * min(shadowFactor, 1-ao);
 		}
 	

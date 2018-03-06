@@ -1,9 +1,7 @@
 #version 430 core
 
-#include "Include/CommonUBO.incl"
-#include "Include/DeferredLighting.incl"
 #include "Include/DeferredPassTex.incl"
-#include "Include/Shadow.incl"
+#include "Include/CommonLighting.incl"
 
 in VS_OUT
 {
@@ -38,35 +36,37 @@ void main()
 	//vec3 normal = texture(gNormalTex, fs_in.texCoords).rgb;
 	vec3 position = GetPositionVSFromDepth(depth, projMat, fs_in.positionVS);
 	vec3 view = normalize(-position);
-	vec4 albedo = texture(gAlbedoTex, uv);
+	vec3 albedo = texture(gAlbedoTex, uv).rgb;
 	vec4 material = texture(gMaterialTex, uv);
 	float metallic = material.r;
 	float roughness = material.g;
 	float ao = material.a;
 	
-	vec3 ambient = albedo.rgb * (0.035 * (1-ao));
-	vec3 result = ambient;
-	vec3 csmColorCode = vec3(0);
-	int shadowCount = 0;
-	for(int i = 0; i < globalLightCount; ++i)
-	{
-		float shadowFactor = 1;
-		int shadowDataCount = globalLights[i].shadowParamA;
-		for(int c = 0; c < shadowDataCount; ++c)
-		{
-			if(-position.z <= globalShadowData[shadowCount+c].bounds.z)
-			{
-				//shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025, 0.002);
-				shadowFactor = CalcShadowArray(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, gCSMTexArray, shadowCount+c, 0.0025, 0.002);
-				csmColorCode = csmColor[c];
-				break;
-			}
-		}
-		shadowCount += shadowDataCount;
-		//shadowFactor = 0;
-		result += CalcLight(globalLights[i], normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);
-		//result = vec3(shadowFactor);
-	}
+	vec3 result = vec3(0);
+	CalcGlobalLights(result, position, normal, view, albedo, metallic, roughness, ao);
+	//vec3 ambient = albedo.rgb * (0.035 * (1-ao));
+	//vec3 result = ambient;
+	//vec3 csmColorCode = vec3(0);
+	//int shadowCount = 0;
+	//for(int i = 0; i < globalLightCount; ++i)
+	//{
+	//	float shadowFactor = 1;
+	//	int shadowDataCount = globalLights[i].shadowParamA;
+	//	for(int c = 0; c < shadowDataCount; ++c)
+	//	{
+	//		if(-position.z <= globalShadowData[shadowCount+c].bounds.z)
+	//		{
+	//			//shadowFactor = CalcShadow(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, shadowMap[shadowCount+c], 0.0025, 0.002);
+	//			shadowFactor = CalcShadowArray(position, normal, -globalLights[i].directionRAB.xyz, globalShadowData[shadowCount+c].shadowMat, gCSMTexArray, shadowCount+c, 0.0025, 0.002);
+	//			csmColorCode = csmColor[c];
+	//			break;
+	//		}
+	//	}
+	//	shadowCount += shadowDataCount;
+	//	//shadowFactor = 0;
+	//	result += CalcLight(globalLights[i], normal, position, view, albedo.rgb, metallic, roughness) * min(shadowFactor, 1-ao);
+	//	//result = vec3(shadowFactor);
+	//}
 	//result = mix(result, csmColorCode, 0.05f);
 	color = vec4(result, 1.0f);
 	//color = vec4(vec3(1-albedo_ao.a), 1.0f);
