@@ -73,6 +73,7 @@ public:
 	static const GLuint LocalLightsShadowMatrixInfoBP = 2;
 	static const GLuint LightTileInfoBP = 3;
 	static const GLuint LightTileCullingResultInfoBP = 4;
+	static const GLuint TempLightTileCullingResultInfoBP = 5;
 
 	// deferred pass
 	static const GLuint gDepthStencilTexUnit = 0;

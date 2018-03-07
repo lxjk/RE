@@ -88,4 +88,13 @@ layout(std430) buffer LightTileCullingResultInfo
 	// else two uint per light, (light index, mask)
 	uint lightTileCullingResultInfo[];
 };
+
+layout(std430) buffer TempLightTileCullingResultInfo
+{
+	// layout as: 
+	// 0: reserved for increment
+	// if LIGHT_TILE_16_SLICES, two uint per light (prev index, then light index in higher bits, mask in lower bits)
+	// else three uint per light, (prev index, light index, mask)
+	uint tempLightTileCullingResultInfo[];
+};
 #endif

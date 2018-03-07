@@ -101,6 +101,7 @@ GLuint gSSBO_LocalLightsBounds = 0;
 GLuint gSSBO_LocalLightsShadowMatrices = 0;
 GLuint gSSBO_LightTileInfoData = 0;
 GLuint gSSBO_LightTileCullingResultInfoData = 0;
+GLuint gSSBO_TempLightTileCullingResultInfoData = 0;
 
 int gPrevLocalLightCapacity = 0;
 int gPrevLocalLightShadowMatCapacity = 0;
@@ -938,6 +939,10 @@ bool InitEngine()
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileCullingResultInfoData);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LightTileCullingResultInfoBP, gSSBO_LightTileCullingResultInfoData);
 
+	glGenBuffers(1, &gSSBO_TempLightTileCullingResultInfoData);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_TempLightTileCullingResultInfoData);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::TempLightTileCullingResultInfoBP, gSSBO_TempLightTileCullingResultInfoData);
+
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	
 	// shader
@@ -1189,8 +1194,8 @@ void Update(float deltaTime)
 	updateKeyboardInput(smoothDeltaTime);
 
 	// update spot light
-	if (gSpotLights.size() > 0)
-	//if(false)
+	//if (gSpotLights.size() > 0)
+	if(false)
 	{
 		static const float totalTime = 4.f;
 		static float spotLightLocalTime = 0.f;
@@ -1380,6 +1385,9 @@ void SetupLightTileBuffer(int tileCount)
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileCullingResultInfoData);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * tileCullingResultCount * tileCullingResultStride + RenderConsts::lightTileCullingResultOffset, 0, GL_DYNAMIC_DRAW);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_TempLightTileCullingResultInfoData);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * tileCullingResultCount * (tileCullingResultStride + 1) + RenderConsts::lightTileCullingResultOffset, 0, GL_DYNAMIC_DRAW);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }

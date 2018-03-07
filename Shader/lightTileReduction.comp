@@ -60,6 +60,7 @@ void main()
 		{
 			// initialize culling result
 			lightTileCullingResultInfo[0] = 0;
+			tempLightTileCullingResultInfo[0] = 0;
 		}
 	}
 }

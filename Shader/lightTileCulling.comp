@@ -4,12 +4,18 @@
 
 layout(local_size_x = 128) in;
 
+#define USE_TEMP_LIGHT_TILE_INFO 1
+
 void main() 
 {	
+#if !USE_TEMP_LIGHT_TILE_INFO
 #if LIGHT_SLICES_PER_TILE <= 16
 	uint tileLightIndices[MAX_TILE_LIGHTS];
 #else
 	uint tileLightIndices[MAX_TILE_LIGHTS * 2];
+#endif
+#else
+	uint prevIndex = 0xFFFFFFFF;
 #endif
 	uint tileLightCount = 0;
 	
@@ -56,7 +62,14 @@ void main()
 #if LIGHT_SLICES_PER_TILE <= 16
 	maxLocalLightCount = min(maxLocalLightCount, 0xFFFF);
 #endif
+
+	uint maxLightCount = tileCount * LIGHT_SLICES_PER_TILE * MAX_LIGHT_PER_SLICED_TILE;
+
+#if USE_TEMP_LIGHT_TILE_INFO
+	for(uint lightIdx = 0; lightIdx < maxLocalLightCount; ++lightIdx)
+#else
 	for(uint lightIdx = 0; lightIdx < maxLocalLightCount && tileLightCount < MAX_TILE_LIGHTS; ++lightIdx)
+#endif
 	{
 		vec4 lightBounds = localLightsBounds[lightIdx];		
 		vec3 boundCenter = lightBounds.xyz;
@@ -99,34 +112,70 @@ void main()
 				stepMaxDepth = stepMinDepth;
 				stepMinDepth -= stepIncDepth;
 			}
-			
-#if LIGHT_SLICES_PER_TILE <= 16
+#if USE_TEMP_LIGHT_TILE_INFO
+			uint insertIndex = atomicAdd(tempLightTileCullingResultInfo[0], 1);
+			if(insertIndex >= maxLightCount)
+				break;
+	#if LIGHT_SLICES_PER_TILE <= 16
+			uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + insertIndex * 2;
+			tempLightTileCullingResultInfo[baseIdx] = prevIndex;
+			tempLightTileCullingResultInfo[baseIdx + 1] = ((lightIdx << 16) | mask);
+			prevIndex = insertIndex;
+			++tileLightCount;
+	#else
+			uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + insertIndex * 3;
+			tempLightTileCullingResultInfo[baseIdx] = prevIndex;	
+			tempLightTileCullingResultInfo[baseIdx + 1] = lightIdx;			
+			tempLightTileCullingResultInfo[baseIdx + 2] = mask;
+			prevIndex = insertIndex;
+			++tileLightCount;
+	#endif
+#else
+	#if LIGHT_SLICES_PER_TILE <= 16
 			tileLightIndices[tileLightCount] = ((lightIdx << 16) | mask);
 			++tileLightCount;
-#else
+	#else
 			tileLightIndices[tileLightCount*2] = lightIdx;			
 			tileLightIndices[tileLightCount*2+1] = mask;
 			++tileLightCount;
+	#endif
 #endif
 		}
 	}
-	
+		
 	// write result
-	uint maxLightCount = tileCount * LIGHT_SLICES_PER_TILE * MAX_LIGHT_PER_SLICED_TILE;
 	uint tileLightListIdx = atomicAdd(lightTileCullingResultInfo[0], tileLightCount);
 	tileLightCount = max(min(maxLightCount - tileLightListIdx, tileLightCount), 0);
 	tileLightListIdx = min(tileLightListIdx, maxLightCount-1);
 	lightTileInfoData[tileInfoDataBase + 2] = tileLightListIdx;
 	lightTileInfoData[tileInfoDataBase + 3] = tileLightCount;
+#if USE_TEMP_LIGHT_TILE_INFO
 	for(uint i = 0; i < tileLightCount; ++i)
 	{
-#if LIGHT_SLICES_PER_TILE <= 16
+	#if LIGHT_SLICES_PER_TILE <= 16
+		uint readBaseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + prevIndex * 2;
+		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + tileLightListIdx + i;
+		prevIndex = tempLightTileCullingResultInfo[readBaseIdx];
+		lightTileCullingResultInfo[baseIdx] = tempLightTileCullingResultInfo[readBaseIdx + 1];
+	#else
+		uint readBaseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + prevIndex * 3;
+		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + (tileLightListIdx + i) * 2;
+		prevIndex = tempLightTileCullingResultInfo[readBaseIdx];
+		lightTileCullingResultInfo[baseIdx] = tempLightTileCullingResultInfo[readBaseIdx + 1];
+		lightTileCullingResultInfo[baseIdx + 1] = tempLightTileCullingResultInfo[readBaseIdx + 2];
+	#endif
+	}
+#else
+	for(uint i = 0; i < tileLightCount; ++i)
+	{
+	#if LIGHT_SLICES_PER_TILE <= 16
 		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + tileLightListIdx + i;
 		lightTileCullingResultInfo[baseIdx] = tileLightIndices[i];
-#else
+	#else
 		uint baseIdx = LIGHT_TILE_CULLING_RESULT_OFFSET + (tileLightListIdx + i) * 2;
 		lightTileCullingResultInfo[baseIdx] = tileLightIndices[i*2];
 		lightTileCullingResultInfo[baseIdx + 1] = tileLightIndices[i*2 + 1];
-#endif
+	#endif
 	}
+#endif
 }
