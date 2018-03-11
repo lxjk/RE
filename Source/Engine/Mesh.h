@@ -122,6 +122,12 @@ public:
 	{
 		return a.distToCamera > b.distToCamera;
 	}
+	static bool CompareOpaque(const MeshRenderData& a, const MeshRenderData& b)
+	{
+		return a.distToCamera < b.distToCamera;
+	}
+
+	void Draw(struct RenderContext& renderContext, Material* overrideMaterial = 0) const;
 };
 
 static void MakeCube(MeshData& meshData)

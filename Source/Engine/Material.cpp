@@ -49,7 +49,7 @@ void Material::DispatchCompute(struct RenderContext& renderContext, unsigned int
 	glDispatchCompute((GLuint)x, (GLuint)y, (GLuint)z);
 }
 
-void Material::SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type)
+void Material::SetParameter(const char* name, const char* data, int bytes, EMaterialParameterType type)
 {
 	MaterialParameter* params = 0;
 	int paramListSize = (int)parameterList.size();
@@ -86,5 +86,40 @@ void Material::SetParameter(const char* name, char* data, int bytes, EMaterialPa
 		assert(params->type == type);
 		params->bDirty = true;
 		memcpy_s(parameterData.data() + params->offset, params->count, data, bytes);
+	}
+}
+
+void Material::CopyParameter(const Material* otherMaterial, const REArray<char*>* names)
+{
+	assert(otherMaterial);
+	if (names)
+	{
+		for (int j = 0, nj = names->size(); j < nj; ++j)
+		{
+			const char* name = (*names)[j];
+			for (int i = 0, ni = otherMaterial->parameterList.size(); i < ni; ++i)
+			{
+				const MaterialParameter* params = &otherMaterial->parameterList[i];
+				if (strcmp(params->name, name) == 0)
+				{
+					SetParameter(name, otherMaterial->parameterData.data() + params->offset, params->count, params->type);
+					break;
+				}
+			}
+		}
+	}
+	else
+	{
+		// copy all
+		parameterList = otherMaterial->parameterList;
+		int dataSize = otherMaterial->parameterData.size();
+		parameterData.resize(dataSize);
+		memcpy_s(parameterData.data(), dataSize, otherMaterial->parameterData.data(), dataSize);
+		for (int i = 0, ni = parameterList.size(); i < ni; ++i)
+		{
+			MaterialParameter* params = &parameterList[i];
+			params->location = -1;
+			params->bDirty = true;
+		}
 	}
 }

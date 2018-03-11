@@ -95,3 +95,31 @@ void Mesh::Draw(RenderContext& renderContext, Material* overrideMaterial) const
 	if (drawMaterial->bBothSide && renderContext.currentRenderState->bCullFace)
 		glEnable(GL_CULL_FACE);
 }
+
+void MeshRenderData::Draw(RenderContext& renderContext, Material* overrideMaterial) const
+{
+	Material* drawMaterial = overrideMaterial ? overrideMaterial : material;
+
+	if (!drawMaterial || !drawMaterial->shader)
+		return;
+
+	drawMaterial->SetParameter("prevModelMat", prevModelMat);
+	drawMaterial->SetParameter("modelMat", modelMat);
+
+	//if(renderContext.currentMaterial != material)
+	drawMaterial->Use(renderContext);
+
+	if (VAO != renderContext.currentVAO)
+	{
+		renderContext.currentVAO = VAO;
+		glBindVertexArray(VAO);
+	}
+	if (drawMaterial->bBothSide && renderContext.currentRenderState->bCullFace)
+		glDisable(GL_CULL_FACE);
+	//glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_TRIANGLES, idxCount, GL_UNSIGNED_INT, 0);
+	//glBindVertexArray(0);
+
+	if (drawMaterial->bBothSide && renderContext.currentRenderState->bCullFace)
+		glEnable(GL_CULL_FACE);
+}

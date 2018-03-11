@@ -16,13 +16,13 @@
 #if PROFILE
 #define CPU_SCOPED_PROFILE(name) ScopedProfileTimerCPU _cpu_macro_profiler(name)
 #define GPU_SCOPED_PROFILE(name) ScopedProfileTimerGPU _gpu_macro_profiler(name)
-#define CPU_SCOPED_PROFILE(name, vname) ScopedProfileTimerCPU _cpu_macro_profiler_##vname(name)
-#define GPU_SCOPED_PROFILE(name, vname) ScopedProfileTimerGPU _gpu_macro_profiler_##vname(name)
+#define CPU_SCOPED_PROFILE_SUB(name, vname) ScopedProfileTimerCPU _cpu_macro_profiler_##vname(name)
+#define GPU_SCOPED_PROFILE_SUB(name, vname) ScopedProfileTimerGPU _gpu_macro_profiler_##vname(name)
 #else
 #define CPU_SCOPED_PROFILE(name) 
 #define GPU_SCOPED_PROFILE(name) 
-#define CPU_SCOPED_PROFILE(name, vname)
-#define GPU_SCOPED_PROFILE(name, vname)
+#define CPU_SCOPED_PROFILE_SUB(name, vname)
+#define GPU_SCOPED_PROFILE_SUB(name, vname)
 #endif
 
 extern double gInvPerformanceFreq;

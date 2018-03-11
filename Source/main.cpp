@@ -111,6 +111,8 @@ int gCurLocalLightShadowMatCount = 0;
 FrameBuffer gGBuffer;
 Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gVelocityTex, gDepthStencilTex;
 
+FrameBuffer gPreZBuffer;
+
 FrameBuffer gSSAOBuffer;
 
 FrameBuffer gSceneBuffer;
@@ -136,6 +138,7 @@ float* gDebugTexBuffer;
 
 // render globals
 REArray<MeshRenderData, 16> gOpaqueMeshRenderList;
+REArray<MeshRenderData, 16> gMaskedMeshRenderList;
 REArray<MeshRenderData, 16> gAlphaBlendMeshRenderList;
 REArray<LightRenderData> gVisibleLightList;
 
@@ -166,6 +169,7 @@ int gJitterIdx = 0;
 Shader gGBufferShader;
 Shader gAlphaBlendBasicShader;
 Shader gPrepassShader;
+Shader gPrepassMaskedShader;
 Shader gPrepassTiledShader;
 Shader gPrepassCubeShader;
 Shader gPrepassTetrahedronShader;
@@ -194,6 +198,7 @@ Shader gLightTileOnePassCompShader;
 Material* gGBufferMaterial;
 Material* gAlphaBlendBasicMaterial;
 Material* gPrepassMaterial;
+Material* gPrepassMaskedMaterial;
 Material* gPrepassTiledMaterial;
 Material* gPrepassCubeMaterial;
 Material* gPrepassTetrahedronMaterial;
@@ -755,6 +760,15 @@ void SetupFrameBuffers()
 		gGBuffer.TestComplete();
 	}
 
+	// PreZ Buffer
+	{
+		gPreZBuffer.StartSetup();
+		gPreZBuffer.SetupDepth(&gDepthStencilTex, true);
+		gPreZBuffer.FinishSetup();
+
+		gPreZBuffer.TestComplete();
+	}
+
 	// SSAO Buffer
 	{
 		gSSAOBuffer.StartSetup();
@@ -796,6 +810,7 @@ void LoadShaders(bool bReload)
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
 	gAlphaBlendBasicShader.Load("Shader/alphaBlendBasic.vert", "Shader/alphaBlendBasic.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
+	gPrepassMaskedShader.Load("Shader/prepassMasked.vert", "Shader/prepassMasked.frag", !bReload);
 	gPrepassTiledShader.Load("Shader/prepassTiled.vert", "Shader/prepass.frag", !bReload);
 	gPrepassCubeShader.Load("Shader/prepass.vert", "Shader/prepassCube.geom", "Shader/prepass.frag", !bReload);
 	gPrepassTetrahedronShader.Load("Shader/prepass.vert", "Shader/prepassTetrahedron.geom", "Shader/prepass.frag", !bReload);
@@ -909,39 +924,39 @@ bool InitEngine()
 	glGenBuffers(1, &gUBO_Matrices);
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_Matrices);
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(RenderInfo), NULL, GL_DYNAMIC_DRAW);
-	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::RenderInfoBP, gUBO_Matrices);
+	glBindBufferBase(GL_UNIFORM_BUFFER, (GLuint)EShaderBindingUBO::RenderInfo, gUBO_Matrices);
 	// global lights
 	glGenBuffers(1, &gUBO_GlobalLights);
 	glBindBuffer(GL_UNIFORM_BUFFER, gUBO_GlobalLights);
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(GlobalLightsRenderInfo), NULL, GL_DYNAMIC_DRAW);
-	glBindBufferBase(GL_UNIFORM_BUFFER, Shader::GlobalLightsRenderInfoBP, gUBO_GlobalLights);
+	glBindBufferBase(GL_UNIFORM_BUFFER, (GLuint)EShaderBindingUBO::GlobalLightsRenderInfo, gUBO_GlobalLights);
 
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	// ssbo
 	glGenBuffers(1, &gSSBO_LocalLights);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLights);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsRenderInfoBP, gSSBO_LocalLights);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)EShaderBindingSSBO::LocalLightsRenderInfo, gSSBO_LocalLights);
 
 	glGenBuffers(1, &gSSBO_LocalLightsBounds);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsBounds);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsCullingInfoBP, gSSBO_LocalLightsBounds);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)EShaderBindingSSBO::LocalLightsCullingInfo, gSSBO_LocalLightsBounds);
 
 	glGenBuffers(1, &gSSBO_LocalLightsShadowMatrices);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LocalLightsShadowMatrices);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LocalLightsShadowMatrixInfoBP, gSSBO_LocalLightsShadowMatrices);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)EShaderBindingSSBO::LocalLightsShadowMatrixInfo, gSSBO_LocalLightsShadowMatrices);
 
 	glGenBuffers(1, &gSSBO_LightTileInfoData);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileInfoData);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LightTileInfoBP, gSSBO_LightTileInfoData);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)EShaderBindingSSBO::LightTileInfo, gSSBO_LightTileInfoData);
 
 	glGenBuffers(1, &gSSBO_LightTileCullingResultInfoData);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_LightTileCullingResultInfoData);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::LightTileCullingResultInfoBP, gSSBO_LightTileCullingResultInfoData);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)EShaderBindingSSBO::LightTileCullingResultInfo, gSSBO_LightTileCullingResultInfoData);
 
 	glGenBuffers(1, &gSSBO_TempLightTileCullingResultInfoData);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gSSBO_TempLightTileCullingResultInfoData);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Shader::TempLightTileCullingResultInfoBP, gSSBO_TempLightTileCullingResultInfoData);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)EShaderBindingSSBO::TempLightTileCullingResultInfo, gSSBO_TempLightTileCullingResultInfoData);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	
@@ -954,6 +969,7 @@ bool InitEngine()
 	gGBufferMaterial = Material::Create(&gGBufferShader);
 	gAlphaBlendBasicMaterial = Material::Create(&gAlphaBlendBasicShader);
 	gPrepassMaterial = Material::Create(&gPrepassShader);
+	gPrepassMaskedMaterial = Material::Create(&gPrepassMaskedShader);
 	gPrepassTiledMaterial = Material::Create(&gPrepassTiledShader);
 	gPrepassCubeMaterial = Material::Create(&gPrepassCubeShader);
 	gPrepassTetrahedronMaterial = Material::Create(&gPrepassTetrahedronShader);
@@ -1001,6 +1017,9 @@ bool InitEngine()
 	gSkyboxMap->Load(skyboxMapNames, true);
 
 	// set default materials
+	gPrepassMaskedMaterial->bMasked = true;
+	gPrepassMaskedMaterial->bBothSide = true;
+
 	gGBufferMaterial->SetParameter("tintColor", Vector4(1.f), 4);
 	gGBufferMaterial->SetParameter("hasDiffuseTex", 1);
 	gGBufferMaterial->SetParameter("diffuseTex", gDiffuseMap);
@@ -1392,54 +1411,29 @@ void SetupLightTileBuffer(int tileCount)
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-void DrawMesh(RenderContext& renderContext, MeshRenderData& meshRenderData)
+void DrawMeshList(RenderContext& renderContext, const REArray<MeshRenderData, 16>& meshList, Material* overrideMaterial = 0, const REArray<char*>* copyParamNames = 0)
 {
-	if (!meshRenderData.material || !meshRenderData.material->shader)
-		return;
-
-	meshRenderData.material->SetParameter("prevModelMat", meshRenderData.prevModelMat);
-	meshRenderData.material->SetParameter("modelMat", meshRenderData.modelMat);
-	
-	//if(renderContext.currentMaterial != material)
-	meshRenderData.material->Use(renderContext);
-
-	if (meshRenderData.VAO != renderContext.currentVAO)
+	for (int i = 0, ni = (int)meshList.size(); i < ni; ++i)
 	{
-		renderContext.currentVAO = meshRenderData.VAO;
-		glBindVertexArray(meshRenderData.VAO);
+		if (overrideMaterial && copyParamNames)
+		{
+			overrideMaterial->CopyParameter(meshList[i].material, copyParamNames);
+		}
+		meshList[i].Draw(renderContext, overrideMaterial);
 	}
-	if (meshRenderData.material->bBothSide && renderContext.currentRenderState->bCullFace)
-		glDisable(GL_CULL_FACE);
-	//glDrawElements(GL_TRIANGLES, (GLsizei)meshData->indices.size(), GL_UNSIGNED_INT, 0);
-	glDrawElements(GL_TRIANGLES, meshRenderData.idxCount, GL_UNSIGNED_INT, 0);
-	//glBindVertexArray(0);
-
-	if (meshRenderData.material->bBothSide && renderContext.currentRenderState->bCullFace)
-		glEnable(GL_CULL_FACE);
 }
 
-void GeometryPass(RenderContext& renderContext)
+void CullMeshes(RenderContext& renderContext)
 {
-	GPU_SCOPED_PROFILE("geometry");
-
-	static const RenderState renderState;
-
-	renderState.Apply(renderContext);
-
-	// clear frame buffer
-	glClearColor(0, 0, 0, 0);
-	glClearDepth(1);
-	glClearStencil(0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	
 	// visibility
 	// clear list
 	gOpaqueMeshRenderList.clear();
+	gMaskedMeshRenderList.clear();
 	gAlphaBlendMeshRenderList.clear();
 	for (int i = 0, ni = (int)MeshComponent::gMeshComponentContainer.size(); i < ni; ++i)
 	{
 		MeshComponent* meshComp = MeshComponent::gMeshComponentContainer[i];
-		if(IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, renderContext.viewPoint.frustumPlanes, 6))
+		if (IsOBBIntersectFrustum(meshComp->OBB.permutedAxisCenter, meshComp->OBB.extent, renderContext.viewPoint.frustumPlanes, 6))
 		{
 			//meshComp->Draw(renderContext);
 			// add mesh to render list
@@ -1452,10 +1446,12 @@ void GeometryPass(RenderContext& renderContext)
 				Mesh* mesh = meshList[mi];
 
 				REArray<MeshRenderData, 16>* listPtr = 0;
-				if (!mesh->material->bAlphaBlend)
-					listPtr = &gOpaqueMeshRenderList;
-				else
+				if (mesh->material->bAlphaBlend)
 					listPtr = &gAlphaBlendMeshRenderList;
+				else if(mesh->material->bMasked)
+					listPtr = &gMaskedMeshRenderList;
+				else
+					listPtr = &gOpaqueMeshRenderList;
 
 				renderDataTmpl.material = mesh->material;
 				renderDataTmpl.VAO = mesh->meshData->VAO;
@@ -1468,12 +1464,62 @@ void GeometryPass(RenderContext& renderContext)
 			}
 		}
 	}
+	// sort
+	std::sort(gOpaqueMeshRenderList.begin(), gOpaqueMeshRenderList.end(), MeshRenderData::CompareOpaque);
+	std::sort(gMaskedMeshRenderList.begin(), gMaskedMeshRenderList.end(), MeshRenderData::CompareOpaque);
+	std::sort(gAlphaBlendMeshRenderList.begin(), gAlphaBlendMeshRenderList.end(), MeshRenderData::CompareAlphaBlend);
 
+}
+
+void PreZPass(RenderContext& renderContext)
+{
+	GPU_SCOPED_PROFILE("pre Z");
+
+	const static RenderState renderState([](RenderState& s) {
+		// only color write
+		s.bColorWrite = false;
+	});
+
+	renderState.Apply(renderContext);
+
+	// clear frame buffer
+	glClearDepth(1);
+	glClearStencil(0);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	
 	// draw mesh
-	for (int i = 0, ni = (int)gOpaqueMeshRenderList.size(); i < ni; ++i)
-	{
-		DrawMesh(renderContext, gOpaqueMeshRenderList[i]);
-	}
+	DrawMeshList(renderContext, gOpaqueMeshRenderList, gPrepassMaterial);
+
+	const REArray<char*> copyParamNames = {
+		"maskTex",
+		"tile"
+	};
+
+	DrawMeshList(renderContext, gMaskedMeshRenderList, gPrepassMaskedMaterial, &copyParamNames);
+}
+
+void GeometryPass(RenderContext& renderContext)
+{
+	GPU_SCOPED_PROFILE("geometry");
+
+	//const static RenderState renderState;
+	const static RenderState renderState([](RenderState& s) {
+		// no depth test, no depth write
+		s.depthTestFunc = GL_LEQUAL;
+	});
+
+	renderState.Apply(renderContext);
+
+	// clear frame buffer
+	glClearColor(0, 0, 0, 0);
+	//glClearDepth(1);
+	//glClearStencil(0);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT);
+	
+	// draw mesh
+	DrawMeshList(renderContext, gOpaqueMeshRenderList);
+	DrawMeshList(renderContext, gMaskedMeshRenderList);
 }
 
 void SSAOPass(RenderContext& renderContext)
@@ -1757,7 +1803,7 @@ void LightPass(RenderContext& renderContext)
 void TileInfoPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("light");
-	GPU_SCOPED_PROFILE("tile based culling", tileBasedCulling);
+	GPU_SCOPED_PROFILE_SUB("tile based culling", tileBasedCulling);
 
 	if (!gRenderSettings.bTileCullingCombined)
 	{
@@ -1784,7 +1830,7 @@ void TileInfoPass(RenderContext& renderContext)
 void TileBasedDeferredLightPass(RenderContext& renderContext)
 {
 	GPU_SCOPED_PROFILE("light");
-	GPU_SCOPED_PROFILE("tile based render", tileBasedRender);
+	GPU_SCOPED_PROFILE_SUB("tile based render", tileBasedRender);
 	
 	if (!gRenderSettings.bTileOnePass)
 	{
@@ -2451,16 +2497,8 @@ void AlphaBlendPass(RenderContext& renderContext)
 	glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
 
-	// sort
-	std::sort(gAlphaBlendMeshRenderList.begin(), gAlphaBlendMeshRenderList.end(), MeshRenderData::CompareAlphaBlend);
-
 	// draw mesh
-	for (int mi = 0, nmi = (int)gAlphaBlendMeshRenderList.size(); mi < nmi; ++mi)
-	{
-		Material* material = gAlphaBlendMeshRenderList[mi].material;
-
-		DrawMesh(renderContext, gAlphaBlendMeshRenderList[mi]);
-	}
+	DrawMeshList(renderContext, gAlphaBlendMeshRenderList);
 
 	glDisable(GL_BLEND);
 }
@@ -2650,7 +2688,7 @@ void PreparePostProcessPass(bool bClear = false)
 		glClear(GL_COLOR_BUFFER_BIT);
 	}
 }
-void PostProcessPassBeforeAlpa(RenderContext& renderContext)
+void PostProcessPassBeforeAlpha(RenderContext& renderContext)
 {
 	//GPU_SCOPED_PROFILE("post process before alpha");
 
@@ -2967,6 +3005,9 @@ void Render()
 	gDepthOnlyBuffer.Bind();
 	ShadowPass(renderContext);
 
+	// cull meshes
+	CullMeshes(renderContext);
+
 	glViewport(0, 0, gWindowWidth, gWindowHeight);
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -2999,10 +3040,13 @@ void Render()
 
 	if (gHasResetFrame)
 		SetupLightTileBuffer(gRenderInfo.TileCountX * gRenderInfo.TileCountY);
-	
+
+	// bind pre Z buffer
+	gPreZBuffer.Bind();
+	PreZPass(renderContext);
+
 	// bind G-buffer
 	gGBuffer.Bind();
-
 	GeometryPass(renderContext);
 
 	// copy depth to rbo
@@ -3051,7 +3095,7 @@ void Render()
 		SkyboxPass(renderContext);
 
 	// post process before alpha
-	PostProcessPassBeforeAlpa(renderContext);
+	PostProcessPassBeforeAlpha(renderContext);
 
 	// alpha blend
 	AlphaBlendPass(renderContext);

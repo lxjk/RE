@@ -155,16 +155,16 @@ void Shader::Load(const GLchar* vertexPath, const GLchar* geometryPath, const GL
 	programID = newProgramID;
 
 	// uniform block index
-	BindUniformBlock("RenderInfo", RenderInfoBP);
-	BindUniformBlock("GlobalLightsRenderInfo", GlobalLightsRenderInfoBP);
+	BindUniformBlock("RenderInfo", (GLuint)EShaderBindingUBO::RenderInfo);
+	BindUniformBlock("GlobalLightsRenderInfo", (GLuint)EShaderBindingUBO::GlobalLightsRenderInfo);
 
 	// shader storage buffer index
-	BindShaderStorageBlock("LocalLightsRenderInfo", LocalLightsRenderInfoBP);
-	BindShaderStorageBlock("LocalLightsCullingInfo", LocalLightsCullingInfoBP);
-	BindShaderStorageBlock("LocalLightsShadowMatrixInfo", LocalLightsShadowMatrixInfoBP);
-	BindShaderStorageBlock("LightTileInfo", LightTileInfoBP);
-	BindShaderStorageBlock("LightTileCullingResultInfo", LightTileCullingResultInfoBP);
-	BindShaderStorageBlock("TempLightTileCullingResultInfo", TempLightTileCullingResultInfoBP);
+	BindShaderStorageBlock("LocalLightsRenderInfo", (GLuint)EShaderBindingSSBO::LocalLightsRenderInfo);
+	BindShaderStorageBlock("LocalLightsCullingInfo", (GLuint)EShaderBindingSSBO::LocalLightsCullingInfo);
+	BindShaderStorageBlock("LocalLightsShadowMatrixInfo", (GLuint)EShaderBindingSSBO::LocalLightsShadowMatrixInfo);
+	BindShaderStorageBlock("LightTileInfo", (GLuint)EShaderBindingSSBO::LightTileInfo);
+	BindShaderStorageBlock("LightTileCullingResultInfo", (GLuint)EShaderBindingSSBO::LightTileCullingResultInfo);
+	BindShaderStorageBlock("TempLightTileCullingResultInfo", (GLuint)EShaderBindingSSBO::TempLightTileCullingResultInfo);
 
 	// process uniforms
 	nextTexUnit = 0;

@@ -175,6 +175,7 @@ void LoadMesh(REArray<Mesh*>& output, std::string path,
 			material->SetParameter("hasMaskTex", 1);
 			material->SetParameter("maskTex", tex);
 			// TEMP: here we assume masked material want to draw both side (foliage)
+			material->bMasked = true;
 			material->bBothSide = true;
 		}
 		else

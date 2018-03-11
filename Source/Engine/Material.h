@@ -116,6 +116,7 @@ public:
 
 	bool bBothSide = false;
 	bool bAlphaBlend = false;
+	bool bMasked = false;
 
 	Shader* shader;
 	REArray<char> parameterData;
@@ -146,7 +147,9 @@ public:
 
 	void DispatchCompute(struct RenderContext& renderContext, unsigned int x, unsigned int y = 1, unsigned int z = 1);
 
-	void SetParameter(const char* name, char* data, int bytes, EMaterialParameterType type);
+	void CopyParameter(const Material* otherMaterial, const REArray<char*>* names = 0);
+
+	void SetParameter(const char* name, const char* data, int bytes, EMaterialParameterType type);
 
 	inline void SetParameter(const char* name, Texture* tex, bool bAsImage = false)
 	{
