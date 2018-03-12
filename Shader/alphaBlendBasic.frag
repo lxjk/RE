@@ -10,7 +10,7 @@ in VS_OUT
 	vec3 normal;
 	vec4 tangent;
 	vec2 texCoords;
-	vec4 posVS;
+	vec3 posVS;
 } fs_in;
 
 
@@ -32,7 +32,7 @@ void main()
 	// recover normal
 	normal = normal * 2.f - 1.f;
 	
-	vec3 position = fs_in.posVS.rgb;
+	vec3 position = fs_in.posVS;
 	vec3 view = normalize(-position);
 	float metallic = material.r;
 	float roughness = material.g;

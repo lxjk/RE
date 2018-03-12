@@ -142,7 +142,7 @@ public:
 			shader->referenceMaterials.erase(this);
 	}
 
-	void Reload();
+	void Reload(Shader* inNewShader = 0);
 	void Use(struct RenderContext& renderContext);
 
 	void DispatchCompute(struct RenderContext& renderContext, unsigned int x, unsigned int y = 1, unsigned int z = 1);

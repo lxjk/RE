@@ -39,7 +39,7 @@ void GetBasicValue(in vec2 texCoords, in vec3 normal, in vec4 tangent,
 	//faceTangent = cross(faceBitangent, faceNormal) * tangent.w;
 	mat3 TBN = mat3(faceTangent, faceBitangent, faceNormal);
 	if(hasNormalTex > 0)
-		outNormal = (TBN * normalize(texture(normalTex, uv).rgb * 2.0f - 1.0f)) * 0.5f + 0.5f;
+		outNormal = normalize(TBN * (texture(normalTex, uv).rgb * 2.0f - 1.0f)) * 0.5f + 0.5f;
 	else
 		outNormal = faceNormal * 0.5f + 0.5f;
 	

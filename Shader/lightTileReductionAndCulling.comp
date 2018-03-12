@@ -30,7 +30,7 @@ void main()
 	
 	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 	
-	vec2 uv = vec2(pixel_coords) / (resolution.xy - 1);
+	vec2 uv = vec2(pixel_coords) / (resolution.xy);
 		
 	float depth = texture(gDepthStencilTex, uv).r;
 	
@@ -77,7 +77,7 @@ void main()
 	}
 	
 		
-	vec2 halfRes = (resolution.xy - 1) * 0.5;
+	vec2 halfRes = (resolution.xy) * 0.5;
 	vec2 wh = vec2(projMat[0][0], projMat[1][1]) * halfRes;
 
 	// top left

@@ -9,16 +9,24 @@ out VS_OUT
 	vec4 tangent;
 	vec2 texCoords;
 	vec3 posVS;
+	vec4 posCS;
+	vec4 prevPosCS;
 } vs_out;
 
+uniform mat4 prevModelMat;
 uniform mat4 modelMat;
-//uniform mat3 normalMat;
 
 void main()
 {
 	// output everything in view space	
 	vs_out.posVS = (viewMat * modelMat * vec4(position, 1.0f)).xyz;
-	gl_Position = viewProjMat * modelMat * vec4(position, 1.0f);
+	vs_out.posCS = viewProjMat * modelMat * vec4(position, 1.0f);
+	vs_out.prevPosCS = prevViewProjMat * prevModelMat * vec4(position, 1.0f);
+	gl_Position = vs_out.posCS;
+	
+	// unjitter
+	vs_out.posCS.xy += projMat[2].xy * vs_out.posCS.w;
+	vs_out.prevPosCS.xy += prevProjMat[2].xy * vs_out.prevPosCS.w;
 		
 	vec3 normalScalar = vec3(
 		dot(modelMat[0], modelMat[0]), 

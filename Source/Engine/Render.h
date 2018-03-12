@@ -110,6 +110,7 @@ struct RenderSettings
 	bool bSSAO					= true;
 	bool bSSR					= true;
 	bool bSkybox				= true;
+	bool bForward				= false;
 	bool bTileBasedDeferred		= true;
 	bool bTileOnePass			= false;
 	bool bTileCullingCombined	= false;

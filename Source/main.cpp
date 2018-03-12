@@ -109,9 +109,10 @@ int gCurLocalLightShadowMatCount = 0;
 
 // frame buffer
 FrameBuffer gGBuffer;
+FrameBuffer gPreZBuffer;
+FrameBuffer gForwardBuffer;
 Texture2D gNormalTex, gAlbedoTex, gMaterialTex, gVelocityTex, gDepthStencilTex;
 
-FrameBuffer gPreZBuffer;
 
 FrameBuffer gSSAOBuffer;
 
@@ -167,6 +168,7 @@ int gJitterIdx = 0;
 
 // shader
 Shader gGBufferShader;
+Shader gForwardShader;
 Shader gAlphaBlendBasicShader;
 Shader gPrepassShader;
 Shader gPrepassMaskedShader;
@@ -196,6 +198,7 @@ Shader gLightTileOnePassCompShader;
 
 // material
 Material* gGBufferMaterial;
+Material* gForwardMaterial;
 Material* gAlphaBlendBasicMaterial;
 Material* gPrepassMaterial;
 Material* gPrepassMaskedMaterial;
@@ -523,11 +526,11 @@ void MakeLights()
 #endif
 }
 
-void MakeMeshComponents()
+void MakeMeshComponents(Material* defaultMaterial)
 {
 
 	// box
-	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+	Mesh* boxMesh = Mesh::Create(&gCubeMeshData, Material::Create(defaultMaterial));
 	boxMesh->material->SetParameter("metallic", 1.0f);
 	boxMesh->material->SetParameter("roughness", 0.3f);
 	//boxMesh->material->SetParameter("tintColor", Vector4(1.f,1.f,1.f,0.8f), 4);
@@ -543,7 +546,7 @@ void MakeMeshComponents()
 	// sphere
 	for (int i = 0; i < 20; ++i)
 	{
-		Mesh* sphereMesh = Mesh::Create(&gSphereMeshData, Material::Create(gGBufferMaterial));
+		Mesh* sphereMesh = Mesh::Create(&gSphereMeshData, Material::Create(defaultMaterial));
 		sphereMesh->material->SetParameter("metallic", 1.f);
 		sphereMesh->material->SetParameter("roughness", i * 0.9f / 19.f + 0.1f);
 		MeshComponent* meshComp = MeshComponent::Create();
@@ -553,7 +556,7 @@ void MakeMeshComponents()
 
 	for (int i = 0; i < 20; ++i)
 	{
-		Mesh* sphereMesh = Mesh::Create(&gSphereMeshData, Material::Create(gGBufferMaterial));
+		Mesh* sphereMesh = Mesh::Create(&gSphereMeshData, Material::Create(defaultMaterial));
 		sphereMesh->material->SetParameter("metallic", i * 0.05f);
 		sphereMesh->material->SetParameter("roughness", 0.4f);
 		MeshComponent* meshComp = MeshComponent::Create();
@@ -633,7 +636,7 @@ void MakeMeshComponents()
 
 	// floor
 	{
-		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+		Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(defaultMaterial));
 		floorMesh->material->SetParameter("diffuseTex", gFloorDiffuseMap);
 		floorMesh->material->SetParameter("normalTex", gFloorNormalMap);
 		floorMesh->material->SetParameter("tile", Vector4(32, 32, 0, 0), 4);
@@ -647,7 +650,7 @@ void MakeMeshComponents()
 	}
 
 	//{
-	//	Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(gGBufferMaterial));
+	//	Mesh* floorMesh = Mesh::Create(&gCubeMeshData, Material::Create(defaultMaterial));
 	//	floorMesh->material->SetParameter("hasDiffuseTex", 0);
 	//	floorMesh->material->SetParameter("hasNormalTex", 0);
 	//	floorMesh->material->SetParameter("metallic", 0.f);
@@ -676,13 +679,13 @@ void AllocateRenderTarget(bool bCreate)
 		gNormalTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_BYTE);
 		// albedo
 		//gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
-		gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB, GL_RGB, GL_UNSIGNED_BYTE);
+		gAlbedoTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGB, GL_RGB, GL_UNSIGNED_BYTE, true);
 		// material: metallic + roughness + ? + ao
 		gMaterialTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
 		// velocity
 		gVelocityTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_RG16, GL_RG, GL_UNSIGNED_BYTE);
 		// depth stencil
-		gDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8);
+		gDepthStencilTex.AllocateForFrameBuffer(gWindowWidth, gWindowHeight, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, true);
 		
 		// == Scene Buffer ==
 		// HDR scene color
@@ -742,6 +745,15 @@ void AllocateRenderTarget(bool bCreate)
 
 void SetupFrameBuffers()
 {
+	// PreZ Buffer
+	{
+		gPreZBuffer.StartSetup();
+		gPreZBuffer.SetupDepth(&gDepthStencilTex, true);
+		gPreZBuffer.FinishSetup();
+
+		gPreZBuffer.TestComplete();
+	}
+
 	// G-Buffer
 	{
 		gGBuffer.StartSetup();
@@ -760,20 +772,27 @@ void SetupFrameBuffers()
 		gGBuffer.TestComplete();
 	}
 
-	// PreZ Buffer
-	{
-		gPreZBuffer.StartSetup();
-		gPreZBuffer.SetupDepth(&gDepthStencilTex, true);
-		gPreZBuffer.FinishSetup();
-
-		gPreZBuffer.TestComplete();
-	}
-
 	// SSAO Buffer
 	{
 		gSSAOBuffer.StartSetup();
 		gSSAOBuffer.SetupColor(&gMaterialTex);
 		gSSAOBuffer.FinishSetup();
+	}
+	
+	// Forward Buffer
+	{
+		gForwardBuffer.StartSetup();
+
+		Texture* colors[] =
+		{
+			0,					// reserve for scene color
+			//&gNormalTex,		// normal(RGB)
+			//&gMaterialTex,		// matellic(R) + roughness(B) + AO(A)
+			&gVelocityTex,
+		};
+		gForwardBuffer.SetupColors(colors, _countof(colors));
+		gForwardBuffer.SetupDepth(gSceneDepthStencilRBO, true);
+		gForwardBuffer.FinishSetup();
 	}
 
 	// Scene Buffer
@@ -808,6 +827,7 @@ void LoadShaders(bool bReload)
 	gShaderFileCache.clear();
 
 	gGBufferShader.Load("Shader/gbuffer.vert", "Shader/gbuffer.frag", !bReload);
+	gForwardShader.Load("Shader/forwardBasic.vert", "Shader/forwardBasic.frag", !bReload);
 	gAlphaBlendBasicShader.Load("Shader/alphaBlendBasic.vert", "Shader/alphaBlendBasic.frag", !bReload);
 	gPrepassShader.Load("Shader/prepass.vert", "Shader/prepass.frag", !bReload);
 	gPrepassMaskedShader.Load("Shader/prepassMasked.vert", "Shader/prepassMasked.frag", !bReload);
@@ -967,6 +987,7 @@ bool InitEngine()
 
 	// materials
 	gGBufferMaterial = Material::Create(&gGBufferShader);
+	gForwardMaterial = Material::Create(&gForwardShader);
 	gAlphaBlendBasicMaterial = Material::Create(&gAlphaBlendBasicShader);
 	gPrepassMaterial = Material::Create(&gPrepassShader);
 	gPrepassMaskedMaterial = Material::Create(&gPrepassMaskedShader);
@@ -992,6 +1013,19 @@ bool InitEngine()
 	gLightTileCullingCompMaterial = Material::Create(&gLightTileCullingCompShader);
 	gLightTileReductionAndCullingCompMaterial = Material::Create(&gLightTileReductionAndCullingCompShader);
 	gLightTileOnePassCompMaterial = Material::Create(&gLightTileOnePassCompShader);
+
+	Material* defaultOpaqueMaterial = 0;
+	Shader* defaultOpaqueShaderPtr = 0;
+	if (gRenderSettings.bForward)
+	{
+		defaultOpaqueShaderPtr = &gForwardShader;
+		defaultOpaqueMaterial = gForwardMaterial;
+	}
+	else
+	{
+		defaultOpaqueShaderPtr = &gGBufferShader;
+		defaultOpaqueMaterial = gGBufferMaterial;
+	}
 
 	// mesh data
 	MakeCube(gCubeMeshData);
@@ -1020,14 +1054,14 @@ bool InitEngine()
 	gPrepassMaskedMaterial->bMasked = true;
 	gPrepassMaskedMaterial->bBothSide = true;
 
-	gGBufferMaterial->SetParameter("tintColor", Vector4(1.f), 4);
-	gGBufferMaterial->SetParameter("hasDiffuseTex", 1);
-	gGBufferMaterial->SetParameter("diffuseTex", gDiffuseMap);
-	gGBufferMaterial->SetParameter("hasNormalTex", 1);
-	gGBufferMaterial->SetParameter("normalTex", gNormalMap);
-	gGBufferMaterial->SetParameter("hasRoughnessTex", 0);
-	gGBufferMaterial->SetParameter("hasMaskTex", 0);
-	gGBufferMaterial->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
+	defaultOpaqueMaterial->SetParameter("tintColor", Vector4(1.f), 4);
+	defaultOpaqueMaterial->SetParameter("hasDiffuseTex", 1);
+	defaultOpaqueMaterial->SetParameter("diffuseTex", gDiffuseMap);
+	defaultOpaqueMaterial->SetParameter("hasNormalTex", 1);
+	defaultOpaqueMaterial->SetParameter("normalTex", gNormalMap);
+	defaultOpaqueMaterial->SetParameter("hasRoughnessTex", 0);
+	defaultOpaqueMaterial->SetParameter("hasMaskTex", 0);
+	defaultOpaqueMaterial->SetParameter("tile", Vector4(1, 1, 0, 0), 4);
 	
 	gAlphaBlendBasicMaterial->SetParameter("tintColor", Vector4(1.f), 4);
 	gAlphaBlendBasicMaterial->SetParameter("hasDiffuseTex", 1);
@@ -1041,24 +1075,24 @@ bool InitEngine()
 	gAlphaBlendBasicMaterial->bAlphaBlend = true;
 	
 	// mesh
-	gCubeMesh = Mesh::Create(&gCubeMeshData, gGBufferMaterial);
-	gSphereMesh = Mesh::Create(&gSphereMeshData, gGBufferMaterial);
+	gCubeMesh = Mesh::Create(&gCubeMeshData, defaultOpaqueMaterial);
+	gSphereMesh = Mesh::Create(&gSphereMeshData, defaultOpaqueMaterial);
 
 	gFSQuadMesh = Mesh::Create(&gQuadMeshData);
 	gIcosahedronMesh = Mesh::Create(&gIcosahedronMeshData);
 	gConeMesh = Mesh::Create(&gConeMeshData);
 
-	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", &gGBufferShader, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
-	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", &gGBufferShader, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
+	LoadMesh(gNanosuitMeshes, "Content/Model/nanosuit/nanosuit.obj", defaultOpaqueShaderPtr, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
+	//LoadMesh(gNanosuitMeshes, "Content/Model/Lakecity/Lakecity.obj", defaultOpaqueShaderPtr, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
 #if LOAD_SCENE_MESH
-	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", &gGBufferShader, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
+	LoadMesh(gSceneMeshes, "Content/Model/sponza/sponza.obj", defaultOpaqueShaderPtr, &gAlphaBlendBasicShader, gSkyboxMap, EMeshConversion::YUpToZUP);
 #endif
 
 	// light
 	MakeLights();
 
 	// mesh components
-	MakeMeshComponents();
+	MakeMeshComponents(defaultOpaqueMaterial);
 	
 	// camera
 	gCamera.fov = 90.f;
@@ -1517,6 +1551,28 @@ void GeometryPass(RenderContext& renderContext)
 	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	glClear(GL_COLOR_BUFFER_BIT);
 	
+	// draw mesh
+	DrawMeshList(renderContext, gOpaqueMeshRenderList);
+	DrawMeshList(renderContext, gMaskedMeshRenderList);
+}
+
+void ForwardPass(RenderContext& renderContext)
+{
+	GPU_SCOPED_PROFILE("forward");
+
+	//const static RenderState renderState;
+	const static RenderState renderState([](RenderState& s) {
+		s.bDepthTest = true;
+		s.depthTestFunc = GL_LEQUAL;
+		s.bDepthWrite = false;
+	});
+
+	renderState.Apply(renderContext);
+
+	// clear frame buffer
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
 	// draw mesh
 	DrawMeshList(renderContext, gOpaqueMeshRenderList);
 	DrawMeshList(renderContext, gMaskedMeshRenderList);
@@ -2703,7 +2759,8 @@ void PostProcessPassBeforeAlpha(RenderContext& renderContext)
 	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 
 	// SSR
-	if (gRenderSettings.bSSR)
+	// don't support SSR for forward now
+	if (!gRenderSettings.bForward && gRenderSettings.bSSR)
 	{
 		GPU_SCOPED_PROFILE("SSR");
 
@@ -2941,6 +2998,7 @@ void UIPass()
 		ImGui::Checkbox("SSAO", &gRenderSettings.bSSAO);
 		ImGui::Checkbox("SSR", &gRenderSettings.bSSR);
 		ImGui::Checkbox("Skybox", &gRenderSettings.bSkybox);
+		ImGui::Checkbox("Forward", &gRenderSettings.bForward);
 		ImGui::Checkbox("Tile Based", &gRenderSettings.bTileBasedDeferred);
 		ImGui::Checkbox("Tile One Pass", &gRenderSettings.bTileOnePass);
 		ImGui::Checkbox("Tile Combined", &gRenderSettings.bTileCullingCombined);
@@ -3045,26 +3103,40 @@ void Render()
 	gPreZBuffer.Bind();
 	PreZPass(renderContext);
 
-	// bind G-buffer
-	gGBuffer.Bind();
-	GeometryPass(renderContext);
+	if (!gRenderSettings.bForward)
+	{
+		// bind G-buffer
+		gGBuffer.Bind();
+		GeometryPass(renderContext);
+	}
 
 	// copy depth to rbo
 	// gGBuffer is still binding to read buffer
 	gDepthCopyBuffer.Bind(GL_DRAW_FRAMEBUFFER);
 	glBlitFramebuffer(0, 0, gWindowWidth, gWindowHeight, 0, 0, gWindowWidth, gWindowHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 	
-	// bind deferred pass textures
-	gNormalTex.Bind(Shader::gNormalTexUnit);
-	gMaterialTex.Bind(Shader::gMaterialTexUnit);
+	// bind depth texture first
 	gDepthStencilTex.Bind(Shader::gDepthStencilTexUnit);
 
 	// run compute to fill in tile info right after we have depth buffer
-	if (gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileOnePass)
+	if (gRenderSettings.bForward || (gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileOnePass))
 		TileInfoPass(renderContext);
 
+	if (gRenderSettings.bForward)
+	{
+		// forward buffer
+		gForwardBuffer.Bind();
+		// attach write texture
+		gForwardBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
+		ForwardPass(renderContext);
+	}
+
+	// bind deferred pass textures
+	gNormalTex.Bind(Shader::gNormalTexUnit);
+	gMaterialTex.Bind(Shader::gMaterialTexUnit);
+
 	// bind SSAO-buffer
-	if (gRenderSettings.bSSAO)
+	if (!gRenderSettings.bForward && gRenderSettings.bSSAO)
 	{
 		gSSAOBuffer.Bind();
 		SSAOPass(renderContext);
@@ -3076,7 +3148,7 @@ void Render()
 	gShadowTiledTex.Bind(Shader::gShadowTiledTexUnit);
 	gShadowCubeTexArray.Bind(Shader::gShadowCubeTexArrayUnit);
 
-	if (gRenderSettings.bTileBasedDeferred && gRenderSettings.bTileOnePass)
+	if (!gRenderSettings.bForward && gRenderSettings.bTileBasedDeferred && gRenderSettings.bTileOnePass)
 		TileBasedDeferredLightPass(renderContext);
 
 	// bind Scene-buffer
@@ -3085,10 +3157,10 @@ void Render()
 	gSceneBuffer.AttachColor(&gSceneColorTex[gSceneColorWriteIdx], 0);
 	//gSceneBuffer.AttachDepth(&gSceneDepthStencilTex[gSceneDepthCurrentIdx], true);
 
-	if (gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileOnePass)
+	if (!gRenderSettings.bForward && gRenderSettings.bTileBasedDeferred && !gRenderSettings.bTileOnePass)
 		TileBasedDeferredLightPass(renderContext);
 
-	if (!gRenderSettings.bTileBasedDeferred)
+	if (!gRenderSettings.bForward && !gRenderSettings.bTileBasedDeferred)
 		LightPass(renderContext);
 
 	if(gRenderSettings.bSkybox)
@@ -3246,6 +3318,7 @@ int main(int argc, char **argv)
 			if(bCacheSimCaptureFrame)
 				cachesim.Start();
 #endif
+			bool bPrevForward = gRenderSettings.bForward;
 
 			ProcessShaderReload();
 
@@ -3254,6 +3327,29 @@ int main(int argc, char **argv)
 			Render();
 
 			SDL_GL_SwapWindow(gWindow);
+
+			// we changed pipeline, refresh materials
+			if (bPrevForward != gRenderSettings.bForward)
+			{
+				Shader* prevShaderPtr = 0;
+				Shader* newShaderPtr = 0;
+				if (gRenderSettings.bForward)
+				{
+					prevShaderPtr = &gGBufferShader;
+					newShaderPtr = &gForwardShader;
+				}
+				else
+				{
+					prevShaderPtr = &gForwardShader;
+					newShaderPtr = &gGBufferShader;
+				}
+				for (int i = 0, ni = (int)Material::gMaterialContainer.size(); i < ni; ++i)
+				{
+					Material* mat = Material::gMaterialContainer[i];
+					if(mat->shader == prevShaderPtr)
+						mat->Reload(newShaderPtr);
+				}
+			}
 			
 			// time
 			Uint64 newPerformanceCounter = SDL_GetPerformanceCounter();

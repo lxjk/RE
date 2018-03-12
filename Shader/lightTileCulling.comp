@@ -39,7 +39,7 @@ void main()
 		lightTileInfoData[tileInfoDataBase+1] = floatBitsToInt(minTileDepth);
 	}
 	
-	vec2 halfRes = (resolution.xy - 1) * 0.5;
+	vec2 halfRes = (resolution.xy) * 0.5;
 	vec2 wh = vec2(projMat[0][0], projMat[1][1]) * halfRes;
 
 	// top left

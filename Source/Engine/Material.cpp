@@ -5,8 +5,15 @@
 
 REArray<Material*> Material::gMaterialContainer;
 
-void Material::Reload()
+void Material::Reload(Shader* inNewShader)
 {
+	if (inNewShader)
+	{
+		shader->referenceMaterials.erase(this);
+		shader = inNewShader;
+		shader->referenceMaterials.insert(this);
+	}
+
 	for (int i = 0, ni = (int)parameterList.size(); i < ni; ++i)
 	{
 		parameterList[i].location = -1;

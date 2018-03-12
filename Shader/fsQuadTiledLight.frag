@@ -32,7 +32,7 @@ void main()
 	CalcGlobalLights(lightingResult, position, normal, view, albedo, metallic, roughness, ao);
 	
 	// local lights
-	CalcTiledLocalLights(lightingResult, uv * (resolution.xy - 1), position, normal, view, albedo, metallic, roughness, ao);
+	CalcTiledLocalLights(lightingResult, uv * (resolution.xy), position, normal, view, albedo, metallic, roughness, ao);
 
 	color = vec4(lightingResult, 0.0);
 	
