@@ -69,6 +69,7 @@
     </ClCompile>
     <ClCompile Include="Source\Engine\TextureCubeArray.cpp" />
     <ClCompile Include="Source\Engine\Texture2DArray.cpp" />
+    <ClCompile Include="Source\JobSystem\JobSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Engine\Camera.h">
@@ -185,6 +186,7 @@
     </ClInclude>
     <ClInclude Include="Source\Engine\TextureCubeArray.h" />
     <ClInclude Include="Source\Engine\Texture2DArray.h" />
+    <ClInclude Include="Source\JobSystem\JobSystem.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">

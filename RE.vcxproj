@@ -34,6 +34,7 @@
     <ClCompile Include="Source\imgui\imgui_demo.cpp" />
     <ClCompile Include="Source\imgui\imgui_draw.cpp" />
     <ClCompile Include="Source\imgui\imgui_impl.cpp" />
+    <ClCompile Include="Source\JobSystem\JobSystem.cpp" />
     <ClCompile Include="Source\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -68,6 +69,7 @@
     <ClInclude Include="Source\imgui\stb_rect_pack.h" />
     <ClInclude Include="Source\imgui\stb_textedit.h" />
     <ClInclude Include="Source\imgui\stb_truetype.h" />
+    <ClInclude Include="Source\JobSystem\JobSystem.h" />
     <ClInclude Include="Source\Math\MathAVX.h" />
     <ClInclude Include="Source\Math\MathSSE.h" />
     <ClInclude Include="Source\Math\MathUtil.h" />
@@ -171,6 +173,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;_SECURE_SCL=0;_HAS_ITERATOR_DEBUGGING=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(ProjectDir)\Source;..\3rdparty\sdl_image\include;..\3rdparty\sdl\include;..\3rdparty\glm;..\3rdparty\glew\include;..\3rdparty\assimp\include;..\3rdparty\CacheSim\source;C:\Program Files (x86)\Visual Leak Detector\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

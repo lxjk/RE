@@ -101,10 +101,10 @@ void Material::CopyParameter(const Material* otherMaterial, const REArray<char*>
 	assert(otherMaterial);
 	if (names)
 	{
-		for (int j = 0, nj = names->size(); j < nj; ++j)
+		for (int j = 0, nj = (int)names->size(); j < nj; ++j)
 		{
 			const char* name = (*names)[j];
-			for (int i = 0, ni = otherMaterial->parameterList.size(); i < ni; ++i)
+			for (int i = 0, ni = (int)otherMaterial->parameterList.size(); i < ni; ++i)
 			{
 				const MaterialParameter* params = &otherMaterial->parameterList[i];
 				if (strcmp(params->name, name) == 0)
@@ -119,10 +119,10 @@ void Material::CopyParameter(const Material* otherMaterial, const REArray<char*>
 	{
 		// copy all
 		parameterList = otherMaterial->parameterList;
-		int dataSize = otherMaterial->parameterData.size();
+		int dataSize = (int)otherMaterial->parameterData.size();
 		parameterData.resize(dataSize);
 		memcpy_s(parameterData.data(), dataSize, otherMaterial->parameterData.data(), dataSize);
-		for (int i = 0, ni = parameterList.size(); i < ni; ++i)
+		for (int i = 0, ni = (int)parameterList.size(); i < ni; ++i)
 		{
 			MaterialParameter* params = &parameterList[i];
 			params->location = -1;

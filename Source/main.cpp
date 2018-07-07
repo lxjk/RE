@@ -16,6 +16,8 @@
 // containers
 #include "Containers/Containers.h"
 
+#include "JobSystem/JobSystem.h"
+
 // std
 #include <stdlib.h>
 #include <stdio.h>
@@ -492,7 +494,7 @@ void MakeLights()
 	}
 
 
-	for (int i = 0; i < 1000; ++i)
+	for (int i = 0; i < 2000; ++i)
 	{
 		gPointLights.push_back(
 			Light(gIcosahedronMesh));
@@ -1128,6 +1130,9 @@ void Close()
 
 	//Quit SDL subsystems
 	SDL_Quit();
+
+	// shut down job system
+	StopJobSystem();
 }
 
 void updateMouseInput(float deltaTime)
@@ -1237,6 +1242,83 @@ void updateKeyboardInput(float deltaTime)
 
 }
 
+
+void UpdatePointLights(float deltaTime)
+{
+	static float timer = 0;
+	static const float period = 2.f;
+	static const float moveLength = 5.f;
+
+	//struct LightMoveData
+	//{
+	//	Vector4 basePos_index;
+	//	Vector4 dir_phase;
+
+	//	JOB_METHOD_ENTRY_POINT(UpdateOneLight)
+	//	{
+	//		LightMoveData* moveData = (LightMoveData*)jobParamPtr;
+
+	//		int index = *(int *)&moveData->basePos_index.w;
+	//		Light& light = gPointLights[index];
+	//		for (int j = 0; j < 1000; ++j)
+	//		{
+	//			Vector4_3 newPos = moveData->basePos_index + moveData->dir_phase *
+	//				(Sin((timer / period + moveData->dir_phase.w) * 2 * PI) * moveLength);
+	//			light.SetPosition(newPos);
+	//		}
+	//	}
+	//};
+
+	BEGIN_JOB_INLINE_TWO_PARAMS(LightMoveData, UpdateOneLight, Vector4, basePos_index, Vector4, dir_phase)
+	{
+		int index = *(int *)&basePos_index.w;
+		Light& light = gPointLights[index];
+		//for (int j = 0; j < 1000; ++j)
+		{
+			Vector4_3 newPos = basePos_index + dir_phase *
+				(Sin((timer / period + dir_phase.w) * 2 * PI) * moveLength);
+			light.SetPosition(newPos);
+		}
+	}
+	END_JOB_INLINE()
+
+	static REArray<LightMoveData, 16> lightMoveData;
+	if (lightMoveData.size() == 0)
+	{
+		lightMoveData.resize(gPointLights.size());
+		for (int i = 0, ni = (int)gPointLights.size(); i < ni; ++i)
+		{
+			lightMoveData[i].basePos_index = gPointLights[i].position;
+			lightMoveData[i].dir_phase = Vector4_3(RandF(), RandF(), RandF()).GetNormalized3();
+			lightMoveData[i].dir_phase.w = RandF();
+			lightMoveData[i].basePos_index.w = *(float*)&i;
+		}
+	}
+
+	timer += deltaTime;
+	if (timer >= period)
+		timer -= period;
+
+	//for (int i = 0, ni = (int)lightMoveData.size(); i < ni; ++i)
+	//{
+	//	LightMoveData& moveData = lightMoveData[i];
+	//	UpdateOneLight(&moveData);
+	//}
+
+	int jobCount = (int)lightMoveData.size();
+	JobDescriptor* jobDescs = new JobDescriptor[jobCount];
+	for (int i = 0; i < jobCount; ++i)
+	{
+		jobDescs[i] = JobDescriptor(&LightMoveData::UpdateOneLight, &lightMoveData[i]);
+	}
+
+	JobWaitingCounter* counterPtr = AcquireCounter();
+	RunJobs(jobDescs, jobCount, counterPtr);
+	delete[] jobDescs;
+
+	WaitOnCounter(counterPtr, 0);
+}
+
 void Update(float deltaTime)
 {
 	CPU_SCOPED_PROFILE("update");
@@ -1245,6 +1327,7 @@ void Update(float deltaTime)
 
 	updateMouseInput(smoothDeltaTime);
 	updateKeyboardInput(smoothDeltaTime);
+	UpdatePointLights(smoothDeltaTime);
 
 	// update spot light
 	//if (gSpotLights.size() > 0)
@@ -3257,7 +3340,7 @@ void ProcessShaderReload()
 	}
 }
 
-int main(int argc, char **argv)
+JOB_ENTRY_POINT(MainGameLoop)
 {
 	if (!Init())
 	{
@@ -3315,7 +3398,7 @@ int main(int argc, char **argv)
 			}
 
 #if LOAD_CACHE_SIM
-			if(bCacheSimCaptureFrame)
+			if (bCacheSimCaptureFrame)
 				cachesim.Start();
 #endif
 			bool bPrevForward = gRenderSettings.bForward;
@@ -3392,6 +3475,14 @@ int main(int argc, char **argv)
 	}
 
 	Close();
+}
+
+int main(int argc, char **argv)
+{
+	JobDescriptor startJobDesc(&MainGameLoop, 0, 0);
+
+	RunJobSystem(&startJobDesc);
+	//MainGameLoop(0);
 
 	return EXIT_SUCCESS;
 }

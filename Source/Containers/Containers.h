@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <set>
 #include <type_traits>
+#include <queue>
 
 #include "Memory/Memory.h"
 
@@ -46,3 +47,6 @@ using RESet = std::unordered_set<T, std::hash<T>, std::equal_to<T>, REAllocator<
 
 template<class T, int Alignment = 0>
 using RESortedSet = std::set<T, std::less<T>, REAllocator<T, Alignment>>;
+
+template<class T, int Alignment = 0>
+using REQueue = std::queue<T, std::deque<T, REAllocator<T, Alignment>>>;
