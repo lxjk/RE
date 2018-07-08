@@ -10,25 +10,27 @@ struct JobFiberData
 {
 	JobEntryPoint jobEntryPoint = 0;
 	void* jobDataPtr = 0;
-	void* schedulerFiber = 0;
+	void* prevFiber;
+	JobFiberData* prevFiberDataPtr;
 	JobWaitingCounter* counterPtr = 0;
 	JobWaitingCounter* waitingCounterPtr = 0;
 	int waitingCounterTarget = 0;
 	bool bAutoReleaseWaitingCounter = true;
-	int currentCore = 0;
-	int fixedCore = -1; // -1 means not fixed
+	int currentProcessor = 0;
+	int fixedProcessor = -1; // -1 means not fixed
 
 	void Reset()
 	{
 		jobEntryPoint = 0;
 		jobDataPtr = 0;
-		schedulerFiber = 0;
+		prevFiber = 0;
+		prevFiberDataPtr = 0;
 		counterPtr = 0;
 		waitingCounterPtr = 0;
 		waitingCounterTarget = 0;
 		bAutoReleaseWaitingCounter = true;
-		currentCore = 0;
-		fixedCore = -1;
+		currentProcessor = 0;
+		fixedProcessor = -1;
 	}
 };
 
@@ -47,7 +49,7 @@ public:
 
 	std::thread* threadPtr = 0;
 	void* fiber = 0;
-	int coreIndex = 0;
+	int processorIndex = 0;
 };
 
 bool bJobSystemRuning = false;
@@ -75,97 +77,24 @@ __forceinline void ReleaseSpinLock(std::atomic_flag& lock)
 	lock.clear(std::memory_order_release);
 }
 
-
-void GetNextJobFiber(void* schedulerFiber, int coreIndex, void*& outFiber, JobFiberData*& outFiberDataPtr)
+__forceinline bool CheckWaitingCounter(JobWaitingCounter* waitingCounterPtr, int waitingCounterTarget, bool bAutoRelease)
 {
-	outFiber = 0;
-	outFiberDataPtr = 0;
-
-	JobFiberListData nextFiberData;
-
-	// check waiting list first
-	AcquireSpinLock(gWaitingFiberListLock);
-
-	for (int i = 0, ni = (int)gWaitingFiberList.size(); i < ni; ++i)
+	if (waitingCounterPtr && waitingCounterPtr->load() == waitingCounterTarget)
 	{
-		const JobFiberListData& waitingData = gWaitingFiberList[i];
-		JobFiberData* fiberDataPtr = waitingData.fiberDataPtr;
-		if ((!fiberDataPtr->waitingCounterPtr || (*fiberDataPtr->waitingCounterPtr).load() == fiberDataPtr->waitingCounterTarget) &&
-			(fiberDataPtr->fixedCore < 0 || fiberDataPtr->fixedCore == coreIndex))
-		{
-			// assign fiber data
-			nextFiberData = waitingData;
-			// remove from list
-			gWaitingFiberList.erase(gWaitingFiberList.begin() + i);
-			break;
-		}
+		// we already reached the goal, simply resume
+		if (bAutoRelease)
+			delete waitingCounterPtr;
+
+		return true;
 	}
-
-	ReleaseSpinLock(gWaitingFiberListLock);
-
-	if (nextFiberData.fiber)
-	{
-		assert(nextFiberData.fiberDataPtr);
-		nextFiberData.fiberDataPtr->schedulerFiber = schedulerFiber;
-		nextFiberData.fiberDataPtr->currentCore = coreIndex;
-		// release counter
-		if (nextFiberData.fiberDataPtr->waitingCounterPtr && nextFiberData.fiberDataPtr->bAutoReleaseWaitingCounter)
-		{
-			delete nextFiberData.fiberDataPtr->waitingCounterPtr;
-			nextFiberData.fiberDataPtr->waitingCounterPtr = 0;
-		}
-		outFiber = nextFiberData.fiber;
-		outFiberDataPtr = nextFiberData.fiberDataPtr;
-
-		//printf("pick up waiting list thread ID: %x, current processor: %d\n", GetCurrentThreadId(), GetCurrentProcessorNumber());
-
-		return;
-	}
-
-	// no waiting fiber, try get a free fiber and a new job
-	JobDescriptor jobDesc;
-
-	AcquireSpinLock(gFreeFiberListLock);
-
-	if (!gFreeFiberList.empty())
-	{
-		AcquireSpinLock(gJobQueueLock);
-
-		// get job
-		if (!gJobQueue.empty())
-		{
-			// assign job desc
-			jobDesc = gJobQueue.front();
-			// remove job from queue
-			gJobQueue.pop();
-			// assign fiber
-			nextFiberData = gFreeFiberList.back();
-			// remove fiber
-			gFreeFiberList.pop_back();
-		}
-
-		ReleaseSpinLock(gJobQueueLock);
-	}
-
-	ReleaseSpinLock(gFreeFiberListLock);
-
-	// we have a valid job to execute
-	if (nextFiberData.fiber)
-	{
-		assert(nextFiberData.fiberDataPtr);
-
-		nextFiberData.fiberDataPtr->Reset();
-		nextFiberData.fiberDataPtr->jobEntryPoint = jobDesc.entryPoint;
-		nextFiberData.fiberDataPtr->jobDataPtr = jobDesc.dataPtr;
-		nextFiberData.fiberDataPtr->counterPtr = jobDesc.counterPtr;
-		nextFiberData.fiberDataPtr->schedulerFiber = schedulerFiber;
-		nextFiberData.fiberDataPtr->currentCore = coreIndex;
-		nextFiberData.fiberDataPtr->fixedCore = jobDesc.fixedCore;
-
-		outFiber = nextFiberData.fiber;
-		outFiberDataPtr = nextFiberData.fiberDataPtr;
-	}
+	return false;
 }
+
+__forceinline bool CheckWaitingCounter(JobFiberData* fiberDataPtr)
+{
+	return CheckWaitingCounter(fiberDataPtr->waitingCounterPtr, fiberDataPtr->waitingCounterTarget, fiberDataPtr->bAutoReleaseWaitingCounter);
+}
+
 
 void AddJobFiberToFreeList(void* fiber, void* dataPtr)
 {
@@ -198,9 +127,184 @@ void AddJobFiberToWaitingList(void* fiber, void* dataPtr)
 	ReleaseSpinLock(gWaitingFiberListLock);
 }
 
+void GetNextJobFiber(void* prevFiber, JobFiberData* prevFiberDataPtr, int processorIndex, 
+	void*& outFiber, JobFiberData*& outFiberDataPtr)
+{
+	outFiber = 0;
+	outFiberDataPtr = 0;
+
+	JobFiberListData nextFiberData;
+
+	// check waiting list first
+	AcquireSpinLock(gWaitingFiberListLock);
+
+	for (int i = 0, ni = (int)gWaitingFiberList.size(); i < ni; ++i)
+	{
+		const JobFiberListData& waitingData = gWaitingFiberList[i];
+		JobFiberData* fiberDataPtr = waitingData.fiberDataPtr;
+		if ((!fiberDataPtr->waitingCounterPtr || (*fiberDataPtr->waitingCounterPtr).load() == fiberDataPtr->waitingCounterTarget) &&
+			(fiberDataPtr->fixedProcessor < 0 || fiberDataPtr->fixedProcessor == processorIndex))
+		{
+			// assign fiber data
+			nextFiberData = waitingData;
+			// remove from list
+			gWaitingFiberList.erase(gWaitingFiberList.begin() + i);
+			break;
+		}
+	}
+
+	ReleaseSpinLock(gWaitingFiberListLock);
+
+	if (nextFiberData.fiber)
+	{
+		assert(nextFiberData.fiberDataPtr);
+		nextFiberData.fiberDataPtr->prevFiber = prevFiber;
+		nextFiberData.fiberDataPtr->prevFiberDataPtr = prevFiberDataPtr;
+		nextFiberData.fiberDataPtr->currentProcessor = processorIndex;
+		// release counter
+		if (nextFiberData.fiberDataPtr->waitingCounterPtr && nextFiberData.fiberDataPtr->bAutoReleaseWaitingCounter)
+			delete nextFiberData.fiberDataPtr->waitingCounterPtr;
+		// clear waiting status
+		nextFiberData.fiberDataPtr->waitingCounterPtr = 0;
+		nextFiberData.fiberDataPtr->waitingCounterTarget = 0;
+		outFiber = nextFiberData.fiber;
+		outFiberDataPtr = nextFiberData.fiberDataPtr;
+
+		//printf("pick up waiting list thread ID: %x, current processor: %d\n", GetCurrentThreadId(), GetCurrentProcessorNumber());
+
+		return;
+	}
+
+	// no waiting fiber, try get a free fiber and a new job
+	JobDescriptor jobDesc;
+
+	bool bCanUsePrevFiber = (prevFiber && prevFiberDataPtr && !prevFiberDataPtr->waitingCounterPtr);
+
+	if (bCanUsePrevFiber)
+	{
+		AcquireSpinLock(gJobQueueLock);
+
+		// get job
+		if (!gJobQueue.empty())
+		{
+			// assign job desc
+			jobDesc = gJobQueue.front();
+			// remove job from queue
+			gJobQueue.pop();
+			// assign fiber
+			nextFiberData.fiber = prevFiber;
+			nextFiberData.fiberDataPtr = prevFiberDataPtr;
+		}
+
+		ReleaseSpinLock(gJobQueueLock);
+	}
+	else
+	{
+		AcquireSpinLock(gFreeFiberListLock);
+
+		if (!gFreeFiberList.empty())
+		{
+			AcquireSpinLock(gJobQueueLock);
+
+			// get job
+			if (!gJobQueue.empty())
+			{
+				// assign job desc
+				jobDesc = gJobQueue.front();
+				// remove job from queue
+				gJobQueue.pop();
+				// assign fiber
+				nextFiberData = gFreeFiberList.back();
+				// remove fiber
+				gFreeFiberList.pop_back();
+			}
+
+			ReleaseSpinLock(gJobQueueLock);
+		}
+
+		ReleaseSpinLock(gFreeFiberListLock);
+	}
+
+	// we have a valid job to execute
+	if (nextFiberData.fiber)
+	{
+		assert(nextFiberData.fiberDataPtr);
+
+		nextFiberData.fiberDataPtr->Reset();
+		nextFiberData.fiberDataPtr->jobEntryPoint = jobDesc.entryPoint;
+		nextFiberData.fiberDataPtr->jobDataPtr = jobDesc.dataPtr;
+		nextFiberData.fiberDataPtr->counterPtr = jobDesc.counterPtr;
+		nextFiberData.fiberDataPtr->prevFiber = prevFiber;
+		nextFiberData.fiberDataPtr->prevFiberDataPtr = prevFiberDataPtr;
+		nextFiberData.fiberDataPtr->currentProcessor = processorIndex;
+		nextFiberData.fiberDataPtr->fixedProcessor = jobDesc.fixedProcessor;
+
+		outFiber = nextFiberData.fiber;
+		outFiberDataPtr = nextFiberData.fiberDataPtr;
+
+		//printf("pick up free list thread ID: %x, current processor: %d\n", GetCurrentThreadId(), GetCurrentProcessorNumber());
+	}
+}
+
+void PullNextJob(void* fiber, JobFiberData* fiberDataPtr, int processorIndex)
+{
+	// pull next job
+	void* nextJobFiber = 0;
+	JobFiberData* nextJobFiberDataPtr = 0;
+
+	while (bJobSystemRuning && !nextJobFiber)
+	{
+		// check waiting counter
+		if (fiberDataPtr && CheckWaitingCounter(fiberDataPtr))
+			return;
+
+		GetNextJobFiber(fiber, fiberDataPtr, processorIndex, nextJobFiber, nextJobFiberDataPtr);
+		if (nextJobFiber)
+		{
+			// core doesn't match, return to the waiting list
+			if (nextJobFiberDataPtr->fixedProcessor >= 0 && nextJobFiberDataPtr->fixedProcessor != processorIndex)
+			{
+				AddJobFiberToWaitingList(nextJobFiber, nextJobFiberDataPtr);
+				// clear job fiber, try again
+				nextJobFiber = 0;
+				nextJobFiberDataPtr = 0;
+			}
+		}
+		else
+			std::this_thread::yield();
+			//Sleep(1);
+	}
+
+	// we got a different fiber, switch
+	if (nextJobFiber && nextJobFiber != fiber)
+	{
+		//printf("before switch fiber thread ID: %x, current processor: %d, %x->%x\n", GetCurrentThreadId(), GetCurrentProcessorNumber(), fiber, nextJobFiber);
+		SwitchToFiber(nextJobFiber);
+		//printf("after switch fiber thread ID: %x, current processor: %d\n", GetCurrentThreadId(), GetCurrentProcessorNumber());
+	}
+}
+
+void ReturnPrevFiber(void* fiber, JobFiberData* fiberDataPtr)
+{
+	if (fiberDataPtr->prevFiber && fiberDataPtr->prevFiber != fiber)
+	{
+		assert(fiberDataPtr->prevFiberDataPtr);
+
+		if (fiberDataPtr->prevFiberDataPtr->waitingCounterPtr)
+		{
+			AddJobFiberToWaitingList(fiberDataPtr->prevFiber, fiberDataPtr->prevFiberDataPtr);
+		}
+		else
+		{
+			// we are done, return to free list
+			AddJobFiberToFreeList(fiberDataPtr->prevFiber, fiberDataPtr->prevFiberDataPtr);
+		}
+	}
+}
+
 void JobSystemWorker::Start(int inCoreIndex)
 {
-	coreIndex = inCoreIndex;
+	processorIndex = inCoreIndex;
 	threadPtr = new std::thread(&JobSystemWorker::Run, this);
 }
 
@@ -216,59 +320,27 @@ void JobSystemWorker::Stop()
 
 void JobSystemWorker::Run()
 {
-	SetThreadAffinityMask(GetCurrentThread(), 1i64 << coreIndex);
-	printf("START: thread ID: %x, current processor: %d\n", GetCurrentThreadId(), coreIndex);
+	SetThreadAffinityMask(GetCurrentThread(), 1i64 << processorIndex);
+	printf("START: thread ID: %x, current processor: %d\n", GetCurrentThreadId(), processorIndex);
 	fiber = ConvertThreadToFiber(0);
 	assert(fiber);
 
-	while (bJobSystemRuning)
-	{
-		//printf("thread ID: %x, current processor: %d\n", GetCurrentThreadId(), GetCurrentProcessorNumber());
-
-		// pull jobs
-		{
-			void* nextJobFiber = 0;
-			JobFiberData* nextJobFiberDataPtr = 0;
-			GetNextJobFiber(fiber, coreIndex, nextJobFiber, nextJobFiberDataPtr);
-			if (nextJobFiber)
-			{
-				//printf("Pick up job: thread ID: %x, current processor: %d\n", 
-				//	GetCurrentThreadId(), GetCurrentProcessorNumber());
-
-				bool bCoreMatch = true;
-				if (nextJobFiberDataPtr->fixedCore < 0 || nextJobFiberDataPtr->fixedCore == coreIndex)
-					SwitchToFiber(nextJobFiber);
-				else
-					bCoreMatch = false;
-
-				// we got switched back, now add the fiber to either free list or waiting list
-				// OR the job we got doesn't match our core index, just add it to waiting list
-				if (nextJobFiberDataPtr->waitingCounterPtr || !bCoreMatch)
-				{
-					AddJobFiberToWaitingList(nextJobFiber, nextJobFiberDataPtr);
-				}
-				else
-				{
-					// we are done, return to free list
-					AddJobFiberToFreeList(nextJobFiber, nextJobFiberDataPtr);
-				}
-			}
-			else
-				Sleep(1);
-		}
-	}
+	// start pulling next job
+	PullNextJob(0, 0, processorIndex);
 }
 
 
 void __stdcall JobFiberFunc(void* lpParameter)
 {
+	JobFiberData* fiberDataPtr = (JobFiberData*)lpParameter;
+	void* fiber = GetCurrentFiber();
 
-	while (1)
+	while (bJobSystemRuning)
 	{
-		JobFiberData* fiberDataPtr = (JobFiberData*)GetFiberData();
-
 		assert(fiberDataPtr->jobEntryPoint);
-		assert(fiberDataPtr->schedulerFiber);
+
+		// if we came from another fiber, return previous fiber
+		ReturnPrevFiber(fiber, fiberDataPtr);
 
 		// execute user function
 		fiberDataPtr->jobEntryPoint(fiberDataPtr->jobDataPtr);
@@ -279,9 +351,11 @@ void __stdcall JobFiberFunc(void* lpParameter)
 			--(*fiberDataPtr->counterPtr);
 		}
 
-		// switch back to sheduler fiber
-		SwitchToFiber(fiberDataPtr->schedulerFiber);
+		// pull the next job
+		PullNextJob(fiber, fiberDataPtr, fiberDataPtr->currentProcessor);
 	}
+
+	SwitchToFiber(gJobSystemWorkerList[fiberDataPtr->currentProcessor].fiber);
 }
 
 void RunJobSystem(JobDescriptor* startJobDescPtr)
@@ -314,7 +388,7 @@ void RunJobSystem(JobDescriptor* startJobDescPtr)
 	}
 
 	// get ready to run fiber on this thread as well
-	gJobSystemWorkerList[0].coreIndex = 0;
+	gJobSystemWorkerList[0].processorIndex = 0;
 
 	// add start job
 	RunJobs(startJobDescPtr);
@@ -322,7 +396,7 @@ void RunJobSystem(JobDescriptor* startJobDescPtr)
 	// start runing on job system for this thread
 	gJobSystemWorkerList[0].Run();
 
-	// the job system is stopped now, do clean up for all threads we spawned
+	// when we are back here the job system is stopped now, do clean up for all threads we spawned
 	for (int i = 1; i < gJobSystemWorkerThreadCount; ++i)
 	{
 		gJobSystemWorkerList[i].Stop();
@@ -385,40 +459,48 @@ void ReleaseCounter(JobWaitingCounter*& waitingCounterPtr)
 	}
 }
 
-
 void WaitOnCounter(JobWaitingCounter* waitingCounterPtr, int waitingCounterTarget, bool bAutoRelease)
 {
 #if USE_JOB_SYSTEM
-	if (waitingCounterPtr && waitingCounterPtr->load() == waitingCounterTarget)
-	{
-		// we already reached the goal, simply resume
-		if (bAutoRelease)
-			delete waitingCounterPtr;
-
+	if (CheckWaitingCounter(waitingCounterPtr, waitingCounterTarget, bAutoRelease))
 		return;
-	}
 
 	JobFiberData* fiberDataPtr = (JobFiberData*)GetFiberData();
 	fiberDataPtr->waitingCounterPtr = waitingCounterPtr;
 	fiberDataPtr->waitingCounterTarget = waitingCounterTarget;
 	fiberDataPtr->bAutoReleaseWaitingCounter = bAutoRelease;
 
+	void* fiber = GetCurrentFiber();
+
 	//printf("WaitOnAndFreeCounter thread ID: %x, current processor: %d\n", GetCurrentThreadId(), GetCurrentProcessorNumber());
 
-	// switch back to sheduler fiber
-	SwitchToFiber(fiberDataPtr->schedulerFiber);
+	// pull next job
+	PullNextJob(fiber, fiberDataPtr, fiberDataPtr->currentProcessor);
+
+	// check if we need to quit
+	if(!bJobSystemRuning)
+		SwitchToFiber(gJobSystemWorkerList[fiberDataPtr->currentProcessor].fiber);
+
+	// if we came back from another fiber, return previous fiber
+	ReturnPrevFiber(fiber, fiberDataPtr);
+
 #else
 	if(waitingCounterPtr && bAutoRelease)
 		delete waitingCounterPtr;
 #endif
 }
 
-int GetCurrentCore()
+int GetCurrentJobProcessor()
 {
 #if USE_JOB_SYSTEM
 	JobFiberData* fiberDataPtr = (JobFiberData*)GetFiberData();
-	return fiberDataPtr->currentCore;
+	return fiberDataPtr->currentProcessor;
 #else
 	return 0;
 #endif
+}
+
+void AssertFreeFiber()
+{
+	assert(gFreeFiberList.size() == 26);
 }

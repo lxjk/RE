@@ -38,12 +38,12 @@ struct JobDescriptor
 	void* dataPtr = 0;
 	JobWaitingCounter* counterPtr = 0;
 	int stackSize = 0;
-	int fixedCore = -1;
+	int fixedProcessor = -1;
 
 	JobDescriptor() {}
 
-	JobDescriptor(JobEntryPoint inEntryPoint, void* inDataPtr = 0, int inFixedCore = -1)
-		: entryPoint(inEntryPoint), dataPtr(inDataPtr), fixedCore(inFixedCore)
+	JobDescriptor(JobEntryPoint inEntryPoint, void* inDataPtr = 0, int inFixedProcessor = -1)
+		: entryPoint(inEntryPoint), dataPtr(inDataPtr), fixedProcessor(inFixedProcessor)
 	{}
 };
 
@@ -56,4 +56,6 @@ extern void RunJobs(JobDescriptor* jobDescPtr, int count = 1, JobWaitingCounter*
 extern JobWaitingCounter* AcquireCounter();
 extern void ReleaseCounter(JobWaitingCounter*& waitingCounterPtr);
 extern void WaitOnCounter(JobWaitingCounter* waitingCounterPtr, int waitingCounterTarget, bool bAutoRelease = true);
-extern int GetCurrentCore();
+extern int GetCurrentJobProcessor();
+
+extern void AssertFreeFiber();
