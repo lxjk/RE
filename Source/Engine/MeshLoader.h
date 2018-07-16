@@ -8,6 +8,8 @@
 #include "TextureCube.h"
 #include "Mesh.h"
 
+#include "Profiler.h"
+
 enum class EMeshConversion
 {
 	None,
@@ -80,6 +82,8 @@ void LoadMesh(REArray<Mesh*>& output, std::string path,
 	Shader* defaultShader, Shader* defaultAlphaBlendShader, TextureCube* skyTex,
 	EMeshConversion conversion = EMeshConversion::None)
 {
+	//CPU_SCOPED_PROFILE_PRINT("LoadMesh");
+
 	Assimp::Importer import;
 	const aiScene* scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene ->mRootNode)

@@ -187,6 +187,7 @@
     <ClInclude Include="Source\Engine\TextureCubeArray.h" />
     <ClInclude Include="Source\Engine\Texture2DArray.h" />
     <ClInclude Include="Source\JobSystem\JobSystem.h" />
+    <ClInclude Include="Source\JobSystem\Locks.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">

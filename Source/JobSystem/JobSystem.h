@@ -2,52 +2,96 @@
 
 #include <thread>
 #include <atomic>
+#include <functional>
 
 #include "Containers/Containers.h"
 
 #define USE_JOB_SYSTEM 1
 
-typedef void(*JobEntryPoint)(void* jobParamPtr);
+typedef void(*JobEntryPoint)(void* customDataPtr);
+//typedef std::function<void(void*)> JobEntryPoint;
 
-#define JOB_ENTRY_POINT(funcName) void funcName(void* jobParamPtr)
-#define JOB_METHOD_ENTRY_POINT(funcName) static void funcName(void* jobParamPtr)
+#define JOB_ENTRY_POINT(funcName) void funcName(void* customDataPtr)
+#define JOB_METHOD_ENTRY_POINT(funcName) static void funcName(void* customDataPtr)
+#define JOB_LAMBDA_ENTRY_POINT(lambdaName) auto lambdaName = [=](void* customDataPtr)
 
-#define BEGIN_JOB_INLINE(structName, funcName) struct structName { JOB_METHOD_ENTRY_POINT(funcName) {
+template<class TLambda>
+struct JobLambdaWrapper
+{
+	const TLambda& func;
+	void* dataPtr;
 
-#define BEGIN_JOB_INLINE_ONE_PARAM(structName, funcName, type0, name0, type1, name1) struct structName {\
-	type0 name0;\
-	JOB_METHOD_ENTRY_POINT(funcName) {\
-		structName * structPtr = ( structName * ) jobParamPtr;\
-		type0 & name0 = structPtr->name0;
+	JobLambdaWrapper(const TLambda& inFunc, void* inDataPtr)
+		: func(inFunc), dataPtr(inDataPtr)
+	{}
 
-#define BEGIN_JOB_INLINE_TWO_PARAMS(structName, funcName, type0, name0, type1, name1) struct structName {\
-	type0 name0;\
-	type1 name1;\
-	JOB_METHOD_ENTRY_POINT(funcName) {\
-		structName * structPtr = ( structName * ) jobParamPtr;\
-		type0 & name0 = structPtr->name0;\
-		type1 & name1 = structPtr->name1;
+	JOB_METHOD_ENTRY_POINT(Callback)
+	{
+		JobLambdaWrapper* wrapper = (JobLambdaWrapper*)customDataPtr;
+		wrapper->func(wrapper->dataPtr);
+	}
+};
 
-#define END_JOB_INLINE() }};
+enum class EJobPriority
+{
+	High = 0,
+	Normal,
+	Low,
+	// only for init value
+	Count,
+	// special priority for render thread
+	Render = Count,
+};
 
-typedef std::atomic<int> JobWaitingCounter;
+
+class JobWaitingCounter
+{
+public:
+	__forceinline int Get() { return counter.load(std::memory_order_relaxed); }
+	__forceinline void Set(int value) { counter.store(value, std::memory_order_relaxed); }
+	__forceinline int Add(int value) { return counter.fetch_add(value, std::memory_order_relaxed); }
+	__forceinline int Sub(int value) { return counter.fetch_sub(value, std::memory_order_relaxed); }
+protected:
+	std::atomic<int> counter = 0;
+};
 
 struct JobDescriptor
 {
 	JobEntryPoint entryPoint = 0;
 	void* dataPtr = 0;
-	JobWaitingCounter* counterPtr = 0;
 	int stackSize = 0;
-	int fixedProcessor = -1;
+	EJobPriority priority = EJobPriority::Normal;
+
+	// counter is assigned by job system call
+	JobWaitingCounter* counterPtr = 0;
 
 	JobDescriptor() {}
 
-	JobDescriptor(JobEntryPoint inEntryPoint, void* inDataPtr = 0, int inFixedProcessor = -1)
-		: entryPoint(inEntryPoint), dataPtr(inDataPtr), fixedProcessor(inFixedProcessor)
+	JobDescriptor(const JobEntryPoint& inEntryPoint, void* inDataPtr = 0, EJobPriority inPriority = EJobPriority::Normal)
+		: entryPoint(inEntryPoint), dataPtr(inDataPtr), priority(inPriority)
 	{}
 };
 
+#define RUN_INLINE_JOB(priority, counterPtr, inCustomDataPtr, code) \
+{\
+JOB_LAMBDA_ENTRY_POINT(lambda) { code };\
+JobLambdaWrapper<decltype(lambda)> wrapper(lambda, inCustomDataPtr);\
+JobDescriptor desc(&decltype(wrapper)::Callback, &wrapper, priority);\
+RunJobs(&desc, 1, counterPtr);\
+}
+
+// will block current job until this new job is done (same as wait on a new counter)
+#define RUN_INLINE_JOB_BLOCK(priority, inCustomDataPtr, code) \
+{\
+JobWaitingCounter counter;\
+RUN_INLINE_JOB(priority, &counter, inCustomDataPtr, code);\
+WaitOnCounter(&counter);\
+}
+
+
+
 const int gJobSystemWorkerThreadCount = 6;
+const int gRenderProcessorIndex = 0;
 
 extern void RunJobSystem(JobDescriptor* startJobDescPtr);
 extern void StopJobSystem();
@@ -55,7 +99,7 @@ extern void StopJobSystem();
 extern void RunJobs(JobDescriptor* jobDescPtr, int count = 1, JobWaitingCounter* waitingCounterPtr = 0);
 extern JobWaitingCounter* AcquireCounter();
 extern void ReleaseCounter(JobWaitingCounter*& waitingCounterPtr);
-extern void WaitOnCounter(JobWaitingCounter* waitingCounterPtr, int waitingCounterTarget, bool bAutoRelease = true);
+extern void WaitOnCounter(JobWaitingCounter* waitingCounterPtr, int waitingCounterTarget = 0);
 extern int GetCurrentJobProcessor();
 
 extern void AssertFreeFiber();

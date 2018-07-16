@@ -6,15 +6,13 @@
 
 #include <string>
 
+#include "JobSystem/JobSystem.h"
 #include "Texture2D.h"
 
 REArray<Texture2D*> Texture2D::gContainer;
 
 void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLint minFilter, GLint magFilter)
 {
-	if (textureID == GL_INVALID_VALUE)
-		glGenTextures(1, &textureID);
-
 	SDL_Surface* image = IMG_Load(name);
 	if (!image)
 	{
@@ -57,14 +55,40 @@ void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLi
 	this->height = image->h;
 	strcpy_s(path, name);
 
-	glBindTexture(textureType, textureID);
-	glTexImage2D(textureType, 0, internalFormat, image->w, image->h, 0, format, type, image->pixels);
-	glGenerateMipmap(textureType);
-	glTexParameteri(textureType, GL_TEXTURE_WRAP_S, wrapS);
-	glTexParameteri(textureType, GL_TEXTURE_WRAP_T, wrapT);
-	glTexParameteri(textureType, GL_TEXTURE_MIN_FILTER, minFilter);
-	glTexParameteri(textureType, GL_TEXTURE_MAG_FILTER, magFilter);
-	glBindTexture(textureType, 0);
+	//auto lambda = [=](void* dataPtr)
+	//{
+	//	if (textureID == GL_INVALID_VALUE)
+	//		glGenTextures(1, &textureID);
+	//	glBindTexture(textureType, textureID);
+	//	glTexImage2D(textureType, 0, internalFormat, image->w, image->h, 0, format, type, image->pixels);
+	//	glGenerateMipmap(textureType);
+	//	glTexParameteri(textureType, GL_TEXTURE_WRAP_S, wrapS);
+	//	glTexParameteri(textureType, GL_TEXTURE_WRAP_T, wrapT);
+	//	glTexParameteri(textureType, GL_TEXTURE_MIN_FILTER, minFilter);
+	//	glTexParameteri(textureType, GL_TEXTURE_MAG_FILTER, magFilter);
+	//	glBindTexture(textureType, 0);
+	//};
+	////lambda(0);
+	//JobLambdaWrapper<decltype(lambda)> wrapper(lambda, 0);
+	//JobDescriptor desc(&decltype(wrapper)::Callback, &wrapper, EJobPriority::Render);
+	//JobWaitingCounter counter;
+	//RunJobs(&desc, 1, &counter);
+	//WaitOnCounter(&counter);
+
+	RUN_INLINE_JOB_BLOCK(EJobPriority::Render, 0,
+	{
+		if (textureID == GL_INVALID_VALUE)
+			glGenTextures(1, &textureID);
+		glBindTexture(textureType, textureID);
+		glTexImage2D(textureType, 0, internalFormat, image->w, image->h, 0, format, type, image->pixels);
+		glGenerateMipmap(textureType);
+		glTexParameteri(textureType, GL_TEXTURE_WRAP_S, wrapS);
+		glTexParameteri(textureType, GL_TEXTURE_WRAP_T, wrapT);
+		glTexParameteri(textureType, GL_TEXTURE_MIN_FILTER, minFilter);
+		glTexParameteri(textureType, GL_TEXTURE_MAG_FILTER, magFilter);
+		glBindTexture(textureType, 0);
+	});
+
 	SDL_FreeSurface(image);
 }
 

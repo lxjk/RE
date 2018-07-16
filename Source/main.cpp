@@ -274,6 +274,8 @@ bool InitEngine();
 
 bool Init()
 {
+	CPU_SCOPED_PROFILE_PRINT("init");
+
 	// init sdl
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
 	{
@@ -388,19 +390,6 @@ bool Init()
 		printf("Unable to initialize Engine!\n");
 		return false;
 	}
-
-	// set key states
-	gKeyStates = SDL_GetKeyboardState(NULL);
-
-	// time
-	gInvPerformanceFreq = (double)1 / (double)SDL_GetPerformanceFrequency();
-	gTime = 0;
-	gLastDeltaTime = 0;
-	gAverageDeltaTime = 0.03f;
-	gDeltaTimeAccum = 0.f;
-	gDeltaTimeBufferCount = _countof(gDeltaTimeBuffer);
-	memset(gDeltaTimeBuffer, 0, sizeof(float) * gDeltaTimeBufferCount);
-	gDeltaTimeBufferIdx = 0;
 
 	if(windowSurface)
 	{
@@ -543,6 +532,14 @@ void MakeMeshComponents(Material* defaultMaterial)
 		meshComp->SetPosition(Vector4_3(-10.f + i * 10.f, 0.f, 0.f));
 		meshComp->SetRotation(Vector4_3(0.f, 0.f, 45.f));
 		meshComp->SetScale(Vector4_3(1.5f, 1.2f, 1.f));
+	}
+
+	for (int i = 0; i < 10000; ++i)
+	{
+		MeshComponent* meshComp = MeshComponent::Create();
+		meshComp->AddMesh(boxMesh);
+		meshComp->SetPosition(Vector4_3(RandRange(-50.f, 50.f), RandRange(-35.f, 25.f), RandRange(0.f, 50.f)));
+		meshComp->SetScale(Vector4_3(0.3f, 0.3f, 0.3f));
 	}
 
 	// sphere
@@ -922,7 +919,20 @@ void InitializeLightOmniViewMat()
 }
 
 bool InitEngine()
-{
+{	
+	// set key states
+	gKeyStates = SDL_GetKeyboardState(NULL);
+
+	// time
+	gInvPerformanceFreq = (double)1 / (double)SDL_GetPerformanceFrequency();
+	gTime = 0;
+	gLastDeltaTime = 0;
+	gAverageDeltaTime = 0.03f;
+	gDeltaTimeAccum = 0.f;
+	gDeltaTimeBufferCount = _countof(gDeltaTimeBuffer);
+	memset(gDeltaTimeBuffer, 0, sizeof(float) * gDeltaTimeBufferCount);
+	gDeltaTimeBufferIdx = 0;
+
 	gHasResetFrame = true;
 
 #if JITTER_HALTON
@@ -1249,38 +1259,27 @@ void UpdatePointLights(float deltaTime)
 	static const float period = 2.f;
 	static const float moveLength = 5.f;
 
-	//struct LightMoveData
-	//{
-	//	Vector4 basePos_index;
-	//	Vector4 dir_phase;
-
-	//	JOB_METHOD_ENTRY_POINT(UpdateOneLight)
-	//	{
-	//		LightMoveData* moveData = (LightMoveData*)jobParamPtr;
-
-	//		int index = *(int *)&moveData->basePos_index.w;
-	//		Light& light = gPointLights[index];
-	//		for (int j = 0; j < 1000; ++j)
-	//		{
-	//			Vector4_3 newPos = moveData->basePos_index + moveData->dir_phase *
-	//				(Sin((timer / period + moveData->dir_phase.w) * 2 * PI) * moveLength);
-	//			light.SetPosition(newPos);
-	//		}
-	//	}
-	//};
-
-	BEGIN_JOB_INLINE_TWO_PARAMS(LightMoveData, UpdateOneLight, Vector4, basePos_index, Vector4, dir_phase)
+	struct LightMoveData
 	{
-		int index = *(int *)&basePos_index.w;
-		Light& light = gPointLights[index];
-		//for (int j = 0; j < 1000; ++j)
+		Vector4 basePos_index;
+		Vector4 dir_phase;
+
+		JOB_METHOD_ENTRY_POINT(UpdateOneLight)
 		{
-			Vector4_3 newPos = basePos_index + dir_phase *
-				(Sin((timer / period + dir_phase.w) * 2 * PI) * moveLength);
-			light.SetPosition(newPos);
+			LightMoveData* moveData = (LightMoveData*)customDataPtr;
+
+			int index = *(int *)&moveData->basePos_index.w;
+			Light& light = gPointLights[index];
+			for (int j = 0; j < 1000; ++j)
+			{
+				Vector4_3 newPos = moveData->basePos_index + moveData->dir_phase *
+					(Sin((timer / period + moveData->dir_phase.w) * 2 * PI) * moveLength);
+				light.SetPosition(newPos);
+			}
 		}
-	}
-	END_JOB_INLINE()
+	};
+
+	const JobEntryPoint& entryPoint = &LightMoveData::UpdateOneLight;
 
 	static REArray<LightMoveData, 16> lightMoveData;
 	if (lightMoveData.size() == 0)
@@ -1309,14 +1308,14 @@ void UpdatePointLights(float deltaTime)
 	JobDescriptor* jobDescs = new JobDescriptor[jobCount];
 	for (int i = 0; i < jobCount; ++i)
 	{
-		jobDescs[i] = JobDescriptor(&LightMoveData::UpdateOneLight, &lightMoveData[i]);
+		jobDescs[i] = JobDescriptor(entryPoint, &lightMoveData[i]);
 	}
 
-	JobWaitingCounter* counterPtr = AcquireCounter();
-	RunJobs(jobDescs, jobCount, counterPtr);
+	JobWaitingCounter counter;
+	RunJobs(jobDescs, jobCount, &counter);
 	delete[] jobDescs;
 
-	WaitOnCounter(counterPtr, 0);
+	WaitOnCounter(&counter, 0);
 }
 
 void Update(float deltaTime)
@@ -3479,10 +3478,9 @@ JOB_ENTRY_POINT(MainGameLoop)
 
 int main(int argc, char **argv)
 {
-	JobDescriptor startJobDesc(&MainGameLoop, 0, 0);
+	JobDescriptor startJobDesc(&MainGameLoop, 0, EJobPriority::Render);
 
 	RunJobSystem(&startJobDesc);
-	//MainGameLoop(0);
 
 	return EXIT_SUCCESS;
 }

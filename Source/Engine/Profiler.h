@@ -18,11 +18,15 @@
 #define GPU_SCOPED_PROFILE(name) ScopedProfileTimerGPU _gpu_macro_profiler(name)
 #define CPU_SCOPED_PROFILE_SUB(name, vname) ScopedProfileTimerCPU _cpu_macro_profiler_##vname(name)
 #define GPU_SCOPED_PROFILE_SUB(name, vname) ScopedProfileTimerGPU _gpu_macro_profiler_##vname(name)
+
+#define CPU_SCOPED_PROFILE_PRINT(name) ScopedProfilePrintTimerCPU _cpu_macro_profiler_print(name)
 #else
 #define CPU_SCOPED_PROFILE(name) 
 #define GPU_SCOPED_PROFILE(name) 
 #define CPU_SCOPED_PROFILE_SUB(name, vname)
 #define GPU_SCOPED_PROFILE_SUB(name, vname)
+
+#define CPU_SCOPED_PROFILE_PRINT(name)
 #endif
 
 extern double gInvPerformanceFreq;
@@ -30,6 +34,28 @@ extern double gInvPerformanceFreq;
 struct TimestampPair
 {
 	GLuint m[2];
+};
+
+class ScopedProfilePrintTimerCPU
+{
+	Uint64 start;
+
+public:
+	char fullName[1024];
+
+	ScopedProfilePrintTimerCPU(const char* inName)
+	{
+		strcpy_s(fullName, inName);
+
+		start = SDL_GetPerformanceCounter();
+	}
+
+	~ScopedProfilePrintTimerCPU()
+	{
+		Uint64 end = SDL_GetPerformanceCounter();
+		double deltaTime = (double)((end - start) * 1000) * gInvPerformanceFreq;
+		printf("%s : %fms\n", fullName, deltaTime);
+	}
 };
 
 class ScopedProfileTimerCPU
