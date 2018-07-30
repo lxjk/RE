@@ -75,8 +75,7 @@ void Texture2D::Load(const char* name, bool bSRGB, GLint wrapS, GLint wrapT, GLi
 	//RunJobs(&desc, 1, &counter);
 	//WaitOnCounter(&counter);
 
-	RUN_INLINE_JOB_BLOCK(EJobPriority::Render, 0,
-	{
+	RUN_INLINE_RENDER_JOB_BLOCK({
 		if (textureID == GL_INVALID_VALUE)
 			glGenTextures(1, &textureID);
 		glBindTexture(textureType, textureID);

@@ -6,7 +6,6 @@
 #include "Locks.h"
 #include "JobSystem.h"
 
-
 struct JobFiberData
 {
 	JobEntryPoint jobEntryPoint = 0;
@@ -63,6 +62,8 @@ ThreadProtected<REArray<JobFiberListData>, SpinLock> gWaitingFiberList;
 
 // spin locks
 SpinLock gJobQueueLock;
+
+JobWaitingCounter gRenderFrameSyncCounter;
 
 __forceinline bool CheckWaitingCounter(JobWaitingCounter* waitingCounterPtr, int waitingCounterTarget)
 {
@@ -128,7 +129,7 @@ void GetNextJobFiber(void* prevFiber, JobFiberData* prevFiberDataPtr, int proces
 			const JobFiberListData& waitingData = gWaitingFiberListRef[i];
 			JobFiberData* fiberDataPtr = waitingData.fiberDataPtr;
 			if ((!fiberDataPtr->waitingCounterPtr || (*fiberDataPtr->waitingCounterPtr).Get() == fiberDataPtr->waitingCounterTarget) &&
-				(fiberDataPtr->fixedProcessor < 0 || fiberDataPtr->fixedProcessor == processorIndex))
+				((processorIndex != gRenderProcessorIndex && fiberDataPtr->fixedProcessor < 0) || fiberDataPtr->fixedProcessor == processorIndex))
 			{
 				// assign fiber data
 				nextFiberData = waitingData;
