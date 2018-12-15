@@ -383,10 +383,19 @@ void __stdcall JobFiberFunc(void* lpParameter)
 	SwitchToFiber(gJobSystemWorkerList[fiberDataPtr->currentProcessor].fiber);
 }
 
+
+int gJobSystemWorkerThreadCount = 6;
+int gRenderProcessorIndex = gJobSystemWorkerThreadCount - 1;
+
 void RunJobSystem(JobDescriptor* startJobDescPtr)
 {
 #if USE_JOB_SYSTEM
 	assert(gJobSystemWorkerList.size() == 0);
+
+	gJobSystemWorkerThreadCount = std::thread::hardware_concurrency() - 2;
+	gRenderProcessorIndex = gJobSystemWorkerThreadCount - 1;
+
+	assert(gJobSystemWorkerThreadCount > 1);
 
 	gJobSystemWorkerList.resize(gJobSystemWorkerThreadCount);
 

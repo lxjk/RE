@@ -22,7 +22,7 @@ inline __declspec(allocator) void* _Aligned_Allocate(size_t _Count, size_t _Sz, 
 
 	{	// allocate normal block
 		_Ptr = _aligned_malloc(_User_size, _Alignment);
-		_SCL_SECURE_ALWAYS_VALIDATE(_Ptr != 0);
+		_STL_VERIFY(_Ptr != 0, "invalid argument");	// validate even in release since we're doing p[-1]
 	}
 	return (_Ptr);
 }
@@ -56,12 +56,12 @@ public:
 	typedef std::true_type propagate_on_container_move_assignment;
 	typedef std::true_type is_always_equal;
 	
-	pointer address(reference _Val) const _NOEXCEPT
+	pointer address(reference _Val) const noexcept
 	{	// return address of mutable _Val
 		return (_STD addressof(_Val));
 	}
 
-	const_pointer address(const_reference _Val) const _NOEXCEPT
+	const_pointer address(const_reference _Val) const noexcept
 	{	// return address of nonmutable _Val
 		return (_STD addressof(_Val));
 	}
@@ -79,7 +79,7 @@ public:
 		_Ptr->~_Uty();
 	}
 
-	size_t max_size() const _NOEXCEPT
+	size_t max_size() const noexcept
 	{	// estimate maximum array size
 		return ((size_t)(-1) / sizeof(T));
 	}
@@ -95,16 +95,16 @@ public:
 		typedef REAllocator<_Other, Alignment> other;
 	};
 
-	REAllocator() _THROW0()
+	REAllocator() noexcept
 	{	// construct default REAllocator (do nothing)
 	}
 
-	REAllocator(const REAllocator<T, Alignment>&) _THROW0()
+	REAllocator(const REAllocator<T, Alignment>&) noexcept
 	{	// construct by copying (do nothing)
 	}
 
 	template<class _Other>
-	REAllocator(const REAllocator<_Other, Alignment>&) _THROW0()
+	REAllocator(const REAllocator<_Other, Alignment>&) noexcept
 	{	// construct from a related REAllocator (do nothing)
 	}
 
@@ -127,14 +127,14 @@ public:
 
 template<class _Ty,	class _Other, int Alignment> inline
 	bool operator==(const REAllocator<_Ty, Alignment>&,
-		const REAllocator<_Other, Alignment>&) _THROW0()
+		const REAllocator<_Other, Alignment>&) noexcept
 {	// test for allocator equality
 	return (true);
 }
 
 template<class _Ty,	class _Other, int Alignment> inline
 	bool operator!=(const REAllocator<_Ty, Alignment>& _Left,
-		const REAllocator<_Other, Alignment>& _Right) _THROW0()
+		const REAllocator<_Other, Alignment>& _Right) noexcept
 {	// test for allocator inequality
 	return (false);
 }
@@ -149,16 +149,16 @@ public:
 		typedef REAllocator<_Other, 0> other;
 	};
 
-	REAllocator() _THROW0()
+	REAllocator() noexcept
 	{	// construct default REAllocator (do nothing)
 	}
 
-	REAllocator(const REAllocator<T, 0>&) _THROW0()
+	REAllocator(const REAllocator<T, 0>&) noexcept
 	{	// construct by copying (do nothing)
 	}
 
 	template<class _Other>
-	REAllocator(const REAllocator<_Other, 0>&) _THROW0()
+	REAllocator(const REAllocator<_Other, 0>&) noexcept
 	{	// construct from a related REAllocator (do nothing)
 	}
 
@@ -170,25 +170,27 @@ public:
 
 	void deallocate(pointer _Ptr, size_type _Count)
 	{	// deallocate object at _Ptr
-		std::_Deallocate(_Ptr, _Count, sizeof(T));
+		// std::_Deallocate(_Ptr, _Count * sizeof(T));
+		std::_Deallocate<std::_New_alignof<value_type>>(_Ptr, sizeof(value_type) * _Count);
 	}
 
 	__declspec(allocator) pointer allocate(size_type _Count, const void * hint = 0)
 	{	// allocate array of _Count elements, ignore hint
-		return (static_cast<pointer>(std::_Allocate(_Count, sizeof(T))));
+		//return (static_cast<pointer>(std::_Allocate(_Count * sizeof(T))));
+		return (static_cast<pointer>(std::_Allocate<std::_New_alignof<value_type>>(std::_Get_size_of_n<sizeof(value_type)>(_Count))));
 	}
 };
 
 template<class _Ty, class _Other> inline
 bool operator==(const REAllocator<_Ty, 0>&,
-	const REAllocator<_Other, 0>&) _THROW0()
+	const REAllocator<_Other, 0>&) noexcept
 {	// test for allocator equality
 	return (true);
 }
 
 template<class _Ty, class _Other> inline
 bool operator!=(const REAllocator<_Ty, 0>& _Left,
-	const REAllocator<_Other, 0>& _Right) _THROW0()
+	const REAllocator<_Other, 0>& _Right) noexcept
 {	// test for allocator inequality
 	return (false);
 }

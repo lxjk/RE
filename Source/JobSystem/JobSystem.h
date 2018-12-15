@@ -8,8 +8,8 @@
 
 #define USE_JOB_SYSTEM 1
 
-const int gJobSystemWorkerThreadCount = 6;
-const int gRenderProcessorIndex = gJobSystemWorkerThreadCount - 1;
+extern int gJobSystemWorkerThreadCount;
+extern int gRenderProcessorIndex;
 
 typedef void(*JobEntryPoint)(void* customDataPtr);
 //typedef std::function<void(void*)> JobEntryPoint;
