@@ -155,7 +155,7 @@ public:
 		return VecXor(m128, QuatInverseSignMask);
 	}
 
-	//   v + 2(q x (q x v + w*p))
+	//   v + 2(q x (q x v + w*v))
 	// = v + q x (2(q x v)) + w*(2(q x v))
 	inline Vector4_3 Rotate(const Vector4_3& v) const
 	{

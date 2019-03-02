@@ -32,7 +32,7 @@ class SpinLockReaderWriter
 public:
 	__forceinline void LockReadWrite()
 	{
-		int state = lock.load(std::memory_order_relaxed);
+		int state = lock.load(std::memory_order_acquire);
 		while (1)
 		{
 			// if no writer and no reader (all 0 other than waiting bit)
@@ -48,42 +48,48 @@ public:
 				// we don't care if we failed here
 				lock.compare_exchange_strong(state, state | MASK_WRITER_WAITING_BIT, std::memory_order_acq_rel);
 			}
+			else
+			{
+				state = lock.load(std::memory_order_acquire);
+			}
 		}
 	}
 	__forceinline void UnlockReadWrite()
 	{
-		int state = lock.load(std::memory_order_relaxed);
 		// only keep waiting bit in case other writer want to get in
-		lock.store(state & MASK_WRITER_WAITING_BIT, std::memory_order_release);
+		int prevState = lock.fetch_and(MASK_WRITER_WAITING_BIT, std::memory_order_acq_rel);
+		if ((prevState & MASK_READER_BITS) != 0)
+		{
+			// this happens when we unlock with some readers
+			assert(false);
+			return;
+		}
 	}
 	__forceinline void LockReadOnly()
 	{
-		int state = lock.load(std::memory_order_relaxed);
+		int state = lock.load(std::memory_order_acquire);
 		while (1)
 		{
 			// make sure we don't have writer, and we are not over max reader
-			if ((state & MASK_WRITER_BITS) == 0 && (state & MASK_READER_BITS) < MAX_READERS)
+			if ((state & MASK_WRITER_BITS) == 0 && (state & MASK_READER_BITS) < MASK_READER_BITS)
 			{
 				if (lock.compare_exchange_strong(state, state + 1, std::memory_order_acq_rel))
 					return;
+			}
+			else
+			{
+				state = lock.load(std::memory_order_acquire);
 			}
 		}
 	}
 	__forceinline void UnlockReadOnly()
 	{
-		int state = lock.load(std::memory_order_relaxed);
-		while (1)
+		int prevState = lock.fetch_sub(1, std::memory_order_acq_rel);// make sure we have reader
+		if ((prevState & MASK_READER_BITS) == MASK_READER_BITS)
 		{
-			// make sure we have reader
-			if ((state & MASK_READER_BITS) == 0)
-			{
-				assert(false);
-				return;
-			}
-			if (lock.compare_exchange_strong(state,
-				((state & MASK_READER_BITS) - 1) | (state & MASK_WRITER_WAITING_BIT),
-				std::memory_order_release))
-				return;
+			// this happens when we unlock without any reader
+			assert(false);
+			return;
 		}
 	}
 
@@ -94,7 +100,6 @@ protected:
 	const int MASK_WRITER_WAITING_BIT = 0x40000000;
 	const int MASK_WRITER_BITS = MASK_WRITER_LOCK_BIT | MASK_WRITER_WAITING_BIT;
 	const int MASK_READER_BITS = ~MASK_WRITER_BITS;
-	const int MAX_READERS = 0x3FFFFFFF;
 };
 
 template<class T, class TLock>

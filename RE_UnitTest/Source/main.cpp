@@ -85,9 +85,9 @@ void Bench()
 	unsigned __int64 acc_t0 = 0, acc_t1 = 0, acc_t2 = 0, acc_tt = 0;
 	LARGE_INTEGER pc0, pc1, pc2, pc3;
 
-	//Vector4 v1(RandF(), RandF(), RandF(), RandF());
-	//Vector4 v2(RandF(), RandF(), RandF(), RandF());
-	//float f = RandF();
+	//Vector4 v1(RandFloat(), RandFloat(), RandFloat(), RandFloat());
+	//Vector4 v2(RandFloat(), RandFloat(), RandFloat(), RandFloat());
+	//float f = RandFloat();
 
 	BenchData* d = (BenchData*)_aligned_malloc(sizeof(BenchData) * count, 16);
 
@@ -101,11 +101,11 @@ void Bench()
 		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
 		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) },
 		//	{ RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR), RandRangeF(minR, maxR) } };
-		d[i].v1 = Vector4(RandF(), RandF(), RandF(), RandF());
-		//d[i].v2 = Vector4(RandF(), RandF(), RandF(), RandF());
+		d[i].v1 = Vector4(RandFloat(), RandFloat(), RandFloat(), RandFloat());
+		//d[i].v2 = Vector4(RandFloat(), RandFloat(), RandFloat(), RandFloat());
 		//d[i].q1 = RandQuat();
 		//d[i].q2 = RandQuat();
-		//d[i].f = RandF();
+		//d[i].f = RandFloat();
 	}
 
 	// -- warmup
@@ -346,7 +346,7 @@ int main(int argc, char **argv)
 	//	-1000, 1000, 20000, 3
 	//	);
 
-	//Vector4 v3(RandF(), RandF(), RandF(), RandF());
+	//Vector4 v3(RandFloat(), RandFloat(), RandFloat(), RandFloat());
 	//Vector4 v2(5, 6, 7, 8);
 
 	//v3.Normalize();
@@ -414,8 +414,14 @@ int main(int argc, char **argv)
 	//Vec128 mantisa = VecLog2(test);
 	//PrintValue(Vector4(mantisa));
 
-	Matrix4 mat = MakeMatrixFromForward(Vector4(1.f, 0.f, 0.f));
+	Matrix4 mat = Matrix4(
+		Vector4(1.f, 0.f, 0.f, 0.f),
+		Vector4(0.f, 0.f, 1.f, 0.f),
+		Vector4(0.f, 1.f, 0.f, 0.f),
+		Vector4(0.f, 0.f, 0.f, 1.f)
+		);
 	PrintValue(mat);
+	PrintValue(mat.GetInverse());
 
 	//printf("log: %f", log2(4.5f));
 

@@ -503,6 +503,7 @@ void WaitOnCounter(JobWaitingCounter* waitingCounterPtr, int waitingCounterTarge
 
 	// check if we need to quit
 	if(!bJobSystemRuning)
+		// after this call, we will be suspended
 		SwitchToFiber(gJobSystemWorkerList[fiberDataPtr->currentProcessor].fiber);
 
 	// if we came back from another fiber, return previous fiber

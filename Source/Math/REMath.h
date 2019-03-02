@@ -738,25 +738,25 @@ inline bool IsSphereIntersectFrustum(const Vector4_3& center, float radius, Plan
 
 // outPackedVerts must contain at least 6 elements
 // aspectRatio = height / width
-inline void MakeFrustumPackedVerts(const Matrix4& invViewMat, float near, float far, float tanHalfAngle, float aspectRatio, Vector4* outPackedVerts)
+inline void MakeFrustumPackedVerts(const Matrix4& invViewMat, float inNear, float inFar, float tanHalfAngle, float aspectRatio, Vector4* outPackedVerts)
 {
-	float x0 = near * tanHalfAngle;
+	float x0 = inNear * tanHalfAngle;
 	float y0 = x0 * aspectRatio;
-	float x1 = far * tanHalfAngle;
+	float x1 = inFar * tanHalfAngle;
 	float y1 = x1 * aspectRatio;
 	Matrix4 tmp;
-	tmp.mLine[0] = invViewMat.TransformPoint(Vector4_3(x0, y0, -near));
-	tmp.mLine[1] = invViewMat.TransformPoint(Vector4_3(-x0, y0, -near));
-	tmp.mLine[2] = invViewMat.TransformPoint(Vector4_3(x0, -y0, -near));
-	tmp.mLine[3] = invViewMat.TransformPoint(Vector4_3(-x0, -y0, -near));
+	tmp.mLine[0] = invViewMat.TransformPoint(Vector4_3(x0, y0, -inNear));
+	tmp.mLine[1] = invViewMat.TransformPoint(Vector4_3(-x0, y0, -inNear));
+	tmp.mLine[2] = invViewMat.TransformPoint(Vector4_3(x0, -y0, -inNear));
+	tmp.mLine[3] = invViewMat.TransformPoint(Vector4_3(-x0, -y0, -inNear));
 	tmp = tmp.GetTransposed43();
 	outPackedVerts[0] = tmp.mLine[0];
 	outPackedVerts[1] = tmp.mLine[1];
 	outPackedVerts[2] = tmp.mLine[2];
-	tmp.mLine[0] = invViewMat.TransformPoint(Vector4_3(x1, y1, -far));
-	tmp.mLine[1] = invViewMat.TransformPoint(Vector4_3(-x1, y1, -far));
-	tmp.mLine[2] = invViewMat.TransformPoint(Vector4_3(x1, -y1, -far));
-	tmp.mLine[3] = invViewMat.TransformPoint(Vector4_3(-x1, -y1, -far));
+	tmp.mLine[0] = invViewMat.TransformPoint(Vector4_3(x1, y1, -inFar));
+	tmp.mLine[1] = invViewMat.TransformPoint(Vector4_3(-x1, y1, -inFar));
+	tmp.mLine[2] = invViewMat.TransformPoint(Vector4_3(x1, -y1, -inFar));
+	tmp.mLine[3] = invViewMat.TransformPoint(Vector4_3(-x1, -y1, -inFar));
 	tmp = tmp.GetTransposed43();
 	outPackedVerts[3] = tmp.mLine[0];
 	outPackedVerts[4] = tmp.mLine[1];

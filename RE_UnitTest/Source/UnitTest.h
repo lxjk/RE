@@ -307,7 +307,7 @@ void ExhaustTest()
 	printf("done\n");
 }
 
-inline float RandF()
+inline float RandFloat()
 {
 	// http://en.cppreference.com/w/cpp/numeric/random/RAND_MAX
 	// RAND_MAX is at least 0x7FFF, so we use 15 bits
@@ -347,10 +347,10 @@ inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float max
 }
 
 #define RandVectorIdx(idx) Vector4(\
-	idx + 0 < FloatSpecialNum ? FloatSpecials[idx + 0].f : RandF(),\
-	idx + 1 < FloatSpecialNum ? FloatSpecials[idx + 1].f : RandF(),\
-	idx + 2 < FloatSpecialNum ? FloatSpecials[idx + 2].f : RandF(),\
-	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandF())
+	idx + 0 < FloatSpecialNum ? FloatSpecials[idx + 0].f : RandFloat(),\
+	idx + 1 < FloatSpecialNum ? FloatSpecials[idx + 1].f : RandFloat(),\
+	idx + 2 < FloatSpecialNum ? FloatSpecials[idx + 2].f : RandFloat(),\
+	idx + 3 < FloatSpecialNum ? FloatSpecials[idx + 3].f : RandFloat())
 
 #define RandRangeVectorIdx(idx, minR, maxR) Vector4(\
 	idx + 0 < FloatSpecialNum ? FloatSpecials[idx + 0].f : RandRangeF(minR, maxR),\
@@ -385,7 +385,7 @@ inline Matrix4 RandTransformMatrix(float minT, float maxT, float minS, float max
 { Vector4 name = RandRangeVectorIdx(idx, minR, maxR);
 
 #define FloatLoopBegin(idx, count, name) for(int idx = 0; idx < (count); ++idx)\
-{ float name = idx < FloatSpecialNum ? FloatSpecials[idx].f : RandF();
+{ float name = idx < FloatSpecialNum ? FloatSpecials[idx].f : RandFloat();
 
 #define FloatRangeLoopBegin(idx, count, name, minR, maxR) for(int idx = 0; idx < (count); ++idx)\
 { float name = idx < FloatSpecialNum ? FloatSpecials[idx].f : RandRangeF(minR, maxR);
