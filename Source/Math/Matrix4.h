@@ -303,12 +303,12 @@ public:
 		Vec128 B = VecShuffle_0101(m128[2], m128[3]);
 		Vec128 D = VecShuffle_2323(m128[2], m128[3]);
 
+#if 0
 		Vec128 detA = VecSet1(m[0][0] * m[1][1] - m[0][1] * m[1][0]);
 		Vec128 detC = VecSet1(m[0][2] * m[1][3] - m[0][3] * m[1][2]);
 		Vec128 detB = VecSet1(m[2][0] * m[3][1] - m[2][1] * m[3][0]);
 		Vec128 detD = VecSet1(m[2][2] * m[3][3] - m[2][3] * m[3][2]);
-
-#if 0 // for determinant, float version is faster
+#else
 		// determinant as (|A| |C| |B| |D|)
 		Vec128 detSub = VecSub(
 			VecMul(VecShuffle(m128[0], m128[2], 0,2,0,2), VecShuffle(m128[1], m128[3], 1,3,1,3)),
@@ -697,10 +697,14 @@ public:
 		Vec128 B = VecShuffle_0101(m128[2], m128[3]);
 		Vec128 D = VecShuffle_2323(m128[2], m128[3]);
 
-		float detA = (m[0][0] * m[1][1] - m[0][1] * m[1][0]);
-		float detC = (m[0][2] * m[1][3] - m[0][3] * m[1][2]);
-		float detB = (m[2][0] * m[3][1] - m[2][1] * m[3][0]);
-		float detD = (m[2][2] * m[3][3] - m[2][3] * m[3][2]);
+		// determinant as (|A| |C| |B| |D|)
+		Vec128 detSub = VecSub(
+			VecMul(VecShuffle(m128[0], m128[2], 0, 2, 0, 2), VecShuffle(m128[1], m128[3], 1, 3, 1, 3)),
+			VecMul(VecShuffle(m128[0], m128[2], 1, 3, 1, 3), VecShuffle(m128[1], m128[3], 0, 2, 0, 2))
+		);
+		// |A|*|D|, |B|*|C|, |B|*|C|, |A|*|D|
+		Vec128 detMul = VecMul(detSub, VecSwizzle(detSub, 3, 2, 1, 0));
+		Vec128 detSum = VecAdd(detMul, VecSwizzle_1133(detMul));
 
 		// D#C
 		Vec128 D_C = Mat2AdjMul_CM(D, C);
@@ -708,10 +712,10 @@ public:
 		Vec128 A_B = Mat2AdjMul_CM(A, B);
 
 		// |M| = |A|*|D| + |B|*|C| - tr((A#B)(D#C)
-		return detA * detD + detB * detC - VecDot(A_B, VecSwizzle(D_C, 0, 2, 1, 3));
+		return VecToFloat(detSum) - VecDot(A_B, VecSwizzle(D_C, 0, 2, 1, 3));
 	}
 
-#if 0 // direct SIMD version, slower than float version
+#if 0 // direct SIMD version, slower than above
 	inline float GetDeterminant() const
 	{
 		Vec128 a = VecMul(	VecSwizzle(m128[1], 1,2,3,3),

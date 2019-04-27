@@ -103,12 +103,17 @@ namespace VecConst {
 #define MakeShuffleMask(x,y,z,w)			(x | (y<<2) | (z<<4) | (w<<6))
 
 // vec(0, 1, 2, 3) -> (vec[x], vec[y], vec[z], vec[w])
-#define VecSwizzle(vec, x, y, z, w)			_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,y,z,w))
-#define VecSwizzle1(vec, x)					_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,x,x,x))
-#define VecSwizzleMask(vec, mask)			_mm_shuffle_ps(vec, vec, mask)
+//#define VecSwizzle(vec, x, y, z, w)			_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,y,z,w))
+//#define VecSwizzle1(vec, x)					_mm_shuffle_ps(vec, vec, MakeShuffleMask(x,x,x,x))
+//#define VecSwizzleMask(vec, mask)			_mm_shuffle_ps(vec, vec, mask)
+#define VecSwizzleMask(vec, mask)			CastVeciToVec(_mm_shuffle_epi32(CastVecToVeci(vec), mask))
+#define VecSwizzle(vec, x, y, z, w)			VecSwizzleMask(vec, MakeShuffleMask(x,y,z,w))
+#define VecSwizzle1(vec, x)					VecSwizzleMask(vec, MakeShuffleMask(x,x,x,x))
 // special swizzle
-#define VecSwizzle_0101(vec)				_mm_movelh_ps(vec, vec)
-#define VecSwizzle_2323(vec)				_mm_movehl_ps(vec, vec)
+//#define VecSwizzle_0101(vec)				_mm_movelh_ps(vec, vec)
+//#define VecSwizzle_2323(vec)				_mm_movehl_ps(vec, vec)
+#define VecSwizzle_0101(vec)				VecSwizzle(vec, 0,1,0,1)
+#define VecSwizzle_2323(vec)				VecSwizzle(vec, 2,3,2,3)
 #define VecSwizzle_0022(vec)				_mm_moveldup_ps(vec)
 #define VecSwizzle_1133(vec)				_mm_movehdup_ps(vec)
 
