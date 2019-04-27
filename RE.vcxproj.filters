@@ -23,6 +23,9 @@
     <Filter Include="Source\Memory">
       <UniqueIdentifier>{d895e919-7001-4cdd-9e1f-1eced22dfbec}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\JobSystem">
+      <UniqueIdentifier>{0d30c2a6-b14d-459d-8426-3595de21b091}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\imgui\imgui.cpp">
@@ -67,9 +70,15 @@
     <ClCompile Include="Source\Engine\FileWatcher.cpp">
       <Filter>Source\Engine</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Engine\TextureCubeArray.cpp" />
-    <ClCompile Include="Source\Engine\Texture2DArray.cpp" />
-    <ClCompile Include="Source\JobSystem\JobSystem.cpp" />
+    <ClCompile Include="Source\JobSystem\JobSystem.cpp">
+      <Filter>Source\JobSystem</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\Texture2DArray.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Engine\TextureCubeArray.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Engine\Camera.h">
@@ -184,10 +193,18 @@
     <ClInclude Include="Source\Containers\Containers.h">
       <Filter>Source\Containers</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Engine\TextureCubeArray.h" />
-    <ClInclude Include="Source\Engine\Texture2DArray.h" />
-    <ClInclude Include="Source\JobSystem\JobSystem.h" />
-    <ClInclude Include="Source\JobSystem\Locks.h" />
+    <ClInclude Include="Source\JobSystem\JobSystem.h">
+      <Filter>Source\JobSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\JobSystem\Locks.h">
+      <Filter>Source\JobSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\Texture2DArray.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\TextureCubeArray.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
